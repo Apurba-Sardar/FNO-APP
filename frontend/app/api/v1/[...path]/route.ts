@@ -14,6 +14,8 @@ async function proxyRequest(request: NextRequest, pathParams: string[]) {
   const incomingHeaders = new Headers(request.headers);
   incomingHeaders.delete("host");
 
+  let lastError = "";
+
   for (const baseUrl of targets) {
     const targetUrl = `${baseUrl}/api/v1/${pathStr}${search}`;
     try {
@@ -21,6 +23,7 @@ async function proxyRequest(request: NextRequest, pathParams: string[]) {
         method: request.method,
         headers: incomingHeaders,
         cache: "no-store",
+        signal: AbortSignal.timeout(60000),
       };
 
       if (request.method !== "GET" && request.method !== "HEAD") {
@@ -36,14 +39,14 @@ async function proxyRequest(request: NextRequest, pathParams: string[]) {
           "content-type": res.headers.get("content-type") ?? "application/json",
         },
       });
-    } catch {
-      // Try next target
+    } catch (err: any) {
+      lastError = err?.message ?? String(err);
       continue;
     }
   }
 
   return NextResponse.json(
-    { status: "offline", error: "Backend service unavailable on port 8000" },
+    { status: "offline", error: `Backend service unavailable on port 8000 (${lastError})` },
     { status: 503 }
   );
 }

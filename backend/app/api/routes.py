@@ -350,6 +350,8 @@ async def run_scanner(request: Request, settings: SettingsDependency) -> dict:
         stats = await scanner_runtime_from(request).run_once()
     except ScanAlreadyRunning as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"scanner execution error: {exc}") from exc
     return stats.model_dump(mode="json")
 
 
