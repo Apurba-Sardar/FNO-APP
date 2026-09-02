@@ -50,8 +50,8 @@ class CoinDCXSigner:
     def __init__(self, api_key: str, api_secret: str):
         if not api_key or not api_secret:
             raise ValueError("CoinDCX API credentials are required")
-        self._api_key = api_key
-        self._secret = api_secret.encode("utf-8")
+        self._api_key = api_key.strip()
+        self._secret = api_secret.strip().encode("utf-8")
 
     @staticmethod
     def serialize(payload: dict[str, Any]) -> bytes:

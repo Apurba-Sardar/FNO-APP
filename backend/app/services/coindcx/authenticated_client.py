@@ -92,7 +92,8 @@ class AuthenticatedCoinDCXClient(CoinDCXClient):
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
-                raise CoinDCXError(f"CoinDCX HTTP {response.status_code}: {safe_path}") from exc
+                body_msg = response.text.strip()
+                raise CoinDCXError(f"CoinDCX HTTP {response.status_code}: {safe_path} ({body_msg})") from exc
             self.log.info(
                 "COINDCX_AUTH_RESPONSE",
                 path=safe_path,
