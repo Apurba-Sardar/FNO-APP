@@ -108,26 +108,26 @@ class AuthenticatedCoinDCXClient(CoinDCXClient):
 
     async def wallets(self):
         try:
-            return await self._signed_request("POST", FUTURES_WALLETS_PATH, {"margin_currency_short_name": ["USDT"]})
+            return await self._signed_request("POST", FUTURES_WALLETS_PATH, {})
         except Exception:
             try:
-                return await self._signed_request("GET", FUTURES_WALLETS_PATH)
+                return await self._signed_request("POST", FUTURES_WALLETS_PATH, {"margin_currency_short_name": ["USDT"]})
             except Exception:
                 return await self._signed_request("POST", "/exchange/v1/users/balances", {})
 
     async def positions(self, *, pairs: str | None = None, position_ids: str | None = None):
-        body: dict[str, Any] = {"page": "1", "size": "100"}
+        body: dict[str, Any] = {"page": 1, "size": 100}
         if pairs:
             body["pairs"] = pairs
         if position_ids:
             body["position_ids"] = position_ids
         try:
-            return await self._signed_request("POST", FUTURES_POSITIONS_PATH, body | {"margin_currency_short_name": ["USDT"]})
+            return await self._signed_request("POST", FUTURES_POSITIONS_PATH, body)
         except Exception:
             try:
-                return await self._signed_request("POST", FUTURES_POSITIONS_PATH, body)
+                return await self._signed_request("POST", FUTURES_POSITIONS_PATH, {})
             except Exception:
-                return await self._signed_request("GET", FUTURES_POSITIONS_PATH)
+                return await self._signed_request("POST", FUTURES_POSITIONS_PATH, body | {"margin_currency_short_name": ["USDT"]})
 
     async def orders(self, *, status: str = "open,partially_filled,untriggered"):
         rows = []
