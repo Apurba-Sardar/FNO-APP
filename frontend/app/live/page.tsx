@@ -4,7 +4,14 @@ import { Card } from "@/components/ui/card";
 import { TradingViewChart } from "@/components/tradingview-chart";
 import { useCallback, useEffect, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+const getApiUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined") {
+    return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
+  }
+  return "http://localhost:8000/api/v1";
+};
+
 type Row = Record<string, any>;
 
 export default function LivePage() {
@@ -22,8 +29,9 @@ export default function LivePage() {
 
   const load = useCallback(async () => {
     try {
+      const apiBase = getApiUrl();
       const results = await Promise.all(["status", "account", "positions", "orders"].map(async path => {
-        const response = await fetch(`${API}/live/${path}`, { headers: headers(), cache: "no-store" });
+        const response = await fetch(`${apiBase}/live/${path}`, { headers: headers(), cache: "no-store" });
         if (!response.ok) throw new Error((await response.json()).detail ?? "Live API unavailable");
         return response.json();
       }));
@@ -40,8 +48,9 @@ export default function LivePage() {
   }, [load]);
 
   const command = async (path: string, body: Row, emergency = false) => {
+    const apiBase = getApiUrl();
     const requestHeaders = emergency ? { "Content-Type": "application/json", "x-live-emergency-token": emergencyToken } : headers();
-    const response = await fetch(`${API}/live/${path}`, { method: "POST", headers: requestHeaders, body: JSON.stringify(body) });
+    const response = await fetch(`${apiBase}/live/${path}`, { method: "POST", headers: requestHeaders, body: JSON.stringify(body) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail ?? "Command rejected");
     return result;
