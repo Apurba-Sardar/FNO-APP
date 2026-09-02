@@ -298,7 +298,10 @@ def authorize_scanner_control(request: Request, settings: Settings) -> None:
 
 @router.get("/scanner/status")
 async def scanner_status(request: Request) -> dict:
-    return scanner_runtime_from(request).state.snapshot().model_dump(mode="json")
+    try:
+        return scanner_runtime_from(request).state.snapshot().model_dump(mode="json")
+    except Exception as exc:
+        return {"status": "idle", "scheduled": False, "last_scan_at": None, "stats": None, "error": str(exc)}
 
 
 @router.get("/scanner/candidates")
@@ -307,15 +310,18 @@ async def scanner_candidates(
     eligible_only: bool = False,
     limit: Annotated[int, Query(ge=1, le=1000)] = 1000,
 ) -> dict:
-    candidates = list(scanner_runtime_from(request).state.candidates.values())
-    if eligible_only:
-        candidates = [item for item in candidates if item.status == CandidateStatus.ELIGIBLE]
-    candidates.sort(key=lambda item: item.symbol)
-    summaries = [ScannerCandidateSummary.from_candidate(item) for item in candidates[:limit]]
-    return {
-        "count": len(summaries),
-        "items": [item.model_dump(mode="json") for item in summaries],
-    }
+    try:
+        candidates = list(scanner_runtime_from(request).state.candidates.values())
+        if eligible_only:
+            candidates = [item for item in candidates if item.status == CandidateStatus.ELIGIBLE]
+        candidates.sort(key=lambda item: item.symbol)
+        summaries = [ScannerCandidateSummary.from_candidate(item) for item in candidates[:limit]]
+        return {
+            "count": len(summaries),
+            "items": [item.model_dump(mode="json") for item in summaries],
+        }
+    except Exception as exc:
+        return {"count": 0, "items": [], "error": str(exc)}
 
 
 @router.get("/scanner/candidates/{symbol}")
@@ -374,15 +380,18 @@ async def opportunities(
     eligible_only: bool = False,
     limit: Annotated[int, Query(ge=1, le=1000)] = 1000,
 ) -> dict:
-    items = list(opportunity_runtime_from(request).state.opportunities.values())
-    if eligible_only:
-        items = [item for item in items if item.eligible]
-    items.sort(key=lambda item: (not item.eligible, item.current_rank or 10**9, item.symbol))
-    summaries = [OpportunitySummary.from_opportunity(item) for item in items[:limit]]
-    return {
-        "count": len(summaries),
-        "items": [item.model_dump(mode="json") for item in summaries],
-    }
+    try:
+        items = list(opportunity_runtime_from(request).state.opportunities.values())
+        if eligible_only:
+            items = [item for item in items if item.eligible]
+        items.sort(key=lambda item: (not item.eligible, item.current_rank or 10**9, item.symbol))
+        summaries = [OpportunitySummary.from_opportunity(item) for item in items[:limit]]
+        return {
+            "count": len(summaries),
+            "items": [item.model_dump(mode="json") for item in summaries],
+        }
+    except Exception as exc:
+        return {"count": 0, "items": [], "error": str(exc)}
 
 
 @router.get("/opportunities/top")
@@ -391,30 +400,36 @@ async def top_opportunities(
     settings: SettingsDependency,
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
 ) -> dict:
-    maximum = min(
-        limit or settings.scoring.maximum_displayed_opportunities,
-        settings.scoring.maximum_displayed_opportunities,
-    )
-    items = sorted(
-        (
-            item
-            for item in opportunity_runtime_from(request).state.opportunities.values()
-            if item.eligible
-        ),
-        key=lambda item: (item.current_rank or 10**9, item.symbol),
-    )[:maximum]
-    return {
-        "count": len(items),
-        "items": [
-            OpportunitySummary.from_opportunity(item).model_dump(mode="json") for item in items
-        ],
-    }
+    try:
+        maximum = min(
+            limit or settings.scoring.maximum_displayed_opportunities,
+            settings.scoring.maximum_displayed_opportunities,
+        )
+        items = sorted(
+            (
+                item
+                for item in opportunity_runtime_from(request).state.opportunities.values()
+                if item.eligible
+            ),
+            key=lambda item: (item.current_rank or 10**9, item.symbol),
+        )[:maximum]
+        return {
+            "count": len(items),
+            "items": [
+                OpportunitySummary.from_opportunity(item).model_dump(mode="json") for item in items
+            ],
+        }
+    except Exception as exc:
+        return {"count": 0, "items": [], "error": str(exc)}
 
 
 @router.get("/opportunities/stats")
 async def opportunity_stats(request: Request) -> dict:
-    stats = opportunity_runtime_from(request).state.stats
-    return {"stats": None if stats is None else stats.model_dump(mode="json")}
+    try:
+        stats = opportunity_runtime_from(request).state.stats
+        return {"stats": None if stats is None else stats.model_dump(mode="json")}
+    except Exception as exc:
+        return {"stats": None, "error": str(exc)}
 
 
 @router.get("/opportunities/config")
