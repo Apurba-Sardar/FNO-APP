@@ -5,8 +5,8 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { BacktestChart } from "@/components/backtest-chart";
 import { Card } from "@/components/ui/card";
+import { getApiUrl } from "@/lib/api";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Point = { timestamp: string; equity: number; drawdown: number };
 type Trade = { trade_id: string; exit_time: string; symbol: string; strategy: string; direction: string; opportunity_score: number; setup_score: number; entry: number; stop: number; target: number; exit: number; r_multiple: number; gross_pnl: number; fees: number; slippage: number; net_pnl: number; duration_minutes: number; exit_reason: string; factor_snapshot: unknown; risk_decision: unknown; maximum_favorable_excursion: number; maximum_adverse_excursion: number };
 type Result = { backtest_id: string; status: string; performance: null | Record<string, number | null>; execution_metrics: null | Record<string, number | boolean>; counters: Record<string, number>; equity_curve: Point[]; trades: Trade[]; warnings: string[]; error: string | null };
@@ -30,7 +30,7 @@ export default function BacktestsPage() {
   const [selected, setSelected] = useState<Trade | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const loadRuns = () => fetch(`${API}/api/v1/backtests`).then((response) => response.json()).then((body) => setRuns(body.items ?? [])).catch(() => undefined);
+  const loadRuns = () => { const api = getApiUrl(); fetch(`${api}/backtests`).then((response) => response.json()).then((body) => setRuns(body.items ?? [])).catch(() => undefined); };
   useEffect(() => { void loadRuns(); }, []);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setResult(null);
@@ -43,10 +43,11 @@ export default function BacktestsPage() {
       risk: { risk_per_trade_percent: risk, minimum_risk_reward: minRR },
     };
     try {
-      const created = await fetch(`${API}/api/v1/backtests`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ configuration }) });
+      const api = getApiUrl();
+      const created = await fetch(`${api}/backtests`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ configuration }) });
       if (!created.ok) throw new Error(await created.text());
       const record = await created.json();
-      const response = await fetch(`${API}/api/v1/backtests/${record.backtest_id}/run`, { method: "POST" });
+      const response = await fetch(`${api}/backtests/${record.backtest_id}/run`, { method: "POST" });
       if (!response.ok) throw new Error(await response.text());
       setResult(await response.json()); await loadRuns();
     } catch (cause) { setError(String(cause)); } finally { setBusy(false); }
@@ -54,7 +55,8 @@ export default function BacktestsPage() {
   async function viewRun(identifier: string) {
     setError("");
     try {
-      const response = await fetch(`${API}/api/v1/backtests/${identifier}`);
+      const api = getApiUrl();
+      const response = await fetch(`${api}/backtests/${identifier}`);
       if (!response.ok) throw new Error(await response.text());
       setResult(await response.json()); setSelected(null);
     } catch (cause) { setError(String(cause)); }

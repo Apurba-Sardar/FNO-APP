@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Card } from "@/components/ui/card";
+import { getApiUrl } from "@/lib/api";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TIMEFRAMES = ["1w", "1d", "4h", "1h", "15m", "5m"];
 
 type Market = { symbol: string; base_asset: string; quote_asset: string; status: string };
@@ -70,9 +70,10 @@ export default function MarketDataPage() {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
 
   useEffect(() => {
+    const api = getApiUrl();
     Promise.all([
-      fetch(`${API}/api/v1/markets`).then((response) => response.json()),
-      fetch(`${API}/api/v1/health/market-data`).then((response) => response.json()),
+      fetch(`${api}/markets`).then((response) => response.json()),
+      fetch(`${api}/health/market-data`).then((response) => response.json()),
     ])
       .then(([marketData, healthData]) => {
         setMarkets(marketData.items ?? []);
@@ -86,14 +87,15 @@ export default function MarketDataPage() {
     if (!selected) return;
     setLoadingAnalysis(true);
     setError("");
+    const api = getApiUrl();
     Promise.all([
-      fetch(`${API}/api/v1/markets/${encodeURIComponent(selected)}/multi-timeframe?limit=200`).then(
+      fetch(`${api}/markets/${encodeURIComponent(selected)}/multi-timeframe?limit=200`).then(
         (response) => response.json(),
       ),
-      fetch(`${API}/api/v1/markets/${encodeURIComponent(selected)}/ticker`).then((response) =>
+      fetch(`${api}/markets/${encodeURIComponent(selected)}/ticker`).then((response) =>
         response.json(),
       ),
-      fetch(`${API}/api/v1/analysis/${encodeURIComponent(selected)}`).then((response) => {
+      fetch(`${api}/analysis/${encodeURIComponent(selected)}`).then((response) => {
         if (!response.ok) throw new Error(`analysis request failed (${response.status})`);
         return response.json();
       }),

@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { Card } from "@/components/ui/card";
+import { getApiUrl } from "@/lib/api";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Setup = {
   symbol: string;
   strategy: string;
@@ -28,7 +27,7 @@ export default function SetupsPage() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
-    fetch(`${API}/api/v1/setups?limit=500`)
+    fetch(`${getApiUrl()}/setups?limit=500`)
       .then((response) => {
         if (!response.ok) throw new Error(`setup request failed (${response.status})`);
         return response.json();

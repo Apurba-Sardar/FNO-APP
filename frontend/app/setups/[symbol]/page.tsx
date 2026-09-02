@@ -6,8 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { SetupChart } from "@/components/setup-chart";
 import { Card } from "@/components/ui/card";
+import { getApiUrl } from "@/lib/api";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Result = { strategy: string; status: string; direction: string; setup_quality_score: number; quality: string; entry_zone: { low: number; high: number } | null; trigger_price: number | null; hypothetical_entry: number | null; hypothetical_stop: number | null; hypothetical_target: number | null; risk_reward: number | null; expires_at: string | null; conditions: Array<{ name: string; met: boolean; explanation: string }>; explanations: string[]; warnings: string[] };
 type Analysis = { symbol: string; evaluation_timestamp: string; opportunity_score: number; current_price: number | null; timeframe_trends: Record<string, string>; relative_volume: number | null; atr: number | null; spread_percent: number | null; estimated_slippage_percent: number | null; results: Record<string, Result>; best_setup: Result | null; chart: Array<{ timestamp: string; open: number; high: number; low: number; close: number; ema20: number | null; ema50: number | null; vwap: number | null }>; support_levels: number[]; resistance_levels: number[]; warnings: string[] };
 const show = (value: number | null | undefined) => value == null ? "—" : value.toLocaleString(undefined, { maximumFractionDigits: 6 });
@@ -18,7 +18,7 @@ export default function SetupDetailPage() {
   const [data, setData] = useState<Analysis | null>(null);
   const [selected, setSelected] = useState("trend_pullback");
   const [error, setError] = useState("");
-  useEffect(() => { fetch(`${API}/api/v1/setups/${encodeURIComponent(symbol)}`).then((response) => { if (!response.ok) throw new Error(`setup request failed (${response.status})`); return response.json(); }).then((value) => { setData(value); if (value.best_setup) setSelected(value.best_setup.strategy); }).catch((cause) => setError(String(cause))); }, [symbol]);
+  useEffect(() => { fetch(`${getApiUrl()}/setups/${encodeURIComponent(symbol)}`).then((response) => { if (!response.ok) throw new Error(`setup request failed (${response.status})`); return response.json(); }).then((value) => { setData(value); if (value.best_setup) setSelected(value.best_setup.strategy); }).catch((cause) => setError(String(cause))); }, [symbol]);
   const result = data?.results[selected];
   const levels = useMemo(() => ({ entryLow: result?.entry_zone?.low, entryHigh: result?.entry_zone?.high, trigger: result?.trigger_price, stop: result?.hypothetical_stop, target: result?.hypothetical_target, support: data?.support_levels ?? [], resistance: data?.resistance_levels ?? [] }), [data, result]);
   return <main className="mx-auto max-w-7xl p-4 sm:p-6">

@@ -2,9 +2,9 @@
 
 import { Card } from "@/components/ui/card";
 import { PaperChart } from "@/components/paper-chart";
+import { getApiUrl } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 type AnyRow = Record<string, any>;
 type ChartPoint = { timestamp: string; [key: string]: string | number };
 const money = (value: unknown) => Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -21,12 +21,13 @@ export default function PaperPage() {
   const [resetArmed, setResetArmed] = useState(false);
   const load = useCallback(async () => {
     try {
-      const [s, a, p, t, perf, eq, h] = await Promise.all(["status", "account", "positions?open_only=true", "trades", "performance", "equity", "health"].map((path) => fetch(`${API}/paper/${path}`, { cache: "no-store" }).then((r) => r.json())));
+      const api = getApiUrl();
+      const [s, a, p, t, perf, eq, h] = await Promise.all(["status", "account", "positions?open_only=true", "trades", "performance", "equity", "health"].map((path) => fetch(`${api}/paper/${path}`, { cache: "no-store" }).then((r) => r.json())));
       setStatus(s); setAccount(a); setPositions(p.items ?? []); setTrades(t.items ?? []); setPerformance(perf); setCurve((eq.items ?? []) as ChartPoint[]); setHealth(h); setMessage("");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Paper API unavailable"); }
   }, []);
   useEffect(() => { load(); const timer = setInterval(load, 5000); return () => clearInterval(timer); }, [load]);
-  const action = async (path: string) => { const response = await fetch(`${API}/paper/${path}`, { method: "POST" }); const body = await response.json(); setMessage(response.ok ? `${path.split("?")[0]} completed` : body.detail ?? "Request failed"); await load(); };
+  const action = async (path: string) => { const api = getApiUrl(); const response = await fetch(`${api}/paper/${path}`, { method: "POST" }); const body = await response.json(); setMessage(response.ok ? `${path.split("?")[0]} completed` : body.detail ?? "Request failed"); await load(); };
   const metrics = performance.metrics ?? {};
   const daily = useMemo(() => {
     const values = new Map<string, number>();

@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { Card } from "@/components/ui/card";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { getApiUrl } from "@/lib/api";
 
 type Opportunity = {
   symbol: string;
@@ -51,8 +49,8 @@ export default function OpportunitiesPage() {
   const refresh = useCallback(async () => {
     try {
       const [topResponse, statsResponse] = await Promise.all([
-        fetch(`${API}/api/v1/opportunities/top`, { cache: "no-store" }),
-        fetch(`${API}/api/v1/opportunities/stats`, { cache: "no-store" }),
+        fetch(`${getApiUrl()}/opportunities/top`, { cache: "no-store" }),
+        fetch(`${getApiUrl()}/opportunities/stats`, { cache: "no-store" }),
       ]);
       if (!topResponse.ok || !statsResponse.ok) throw new Error("Opportunity service is unavailable");
       setItems((await topResponse.json()).items ?? []);
@@ -73,7 +71,7 @@ export default function OpportunitiesPage() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`${API}/api/v1/opportunities/recalculate`, { method: "POST" });
+      const response = await fetch(`${getApiUrl()}/opportunities/recalculate`, { method: "POST" });
       if (!response.ok) throw new Error(`Recalculation failed (${response.status})`);
       await refresh();
     } catch (cause) {

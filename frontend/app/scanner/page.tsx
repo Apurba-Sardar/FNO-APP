@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card } from "@/components/ui/card";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { getApiUrl } from "@/lib/api";
 const FRAMES = ["1w", "1d", "4h", "1h", "15m", "5m"];
 
 type Candidate = {
@@ -55,8 +55,8 @@ export default function ScannerPage() {
   const refresh = useCallback(async () => {
     try {
       const [statusResponse, candidatesResponse] = await Promise.all([
-        fetch(`${API}/api/v1/scanner/status`, { cache: "no-store" }),
-        fetch(`${API}/api/v1/scanner/candidates`, { cache: "no-store" }),
+        fetch(`${getApiUrl()}/scanner/status`, { cache: "no-store" }),
+        fetch(`${getApiUrl()}/scanner/candidates`, { cache: "no-store" }),
       ]);
       setStatus(await statusResponse.json());
       setItems((await candidatesResponse.json()).items ?? []);
@@ -75,7 +75,7 @@ export default function ScannerPage() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`${API}/api/v1/scanner/${action}`, { method: "POST" });
+      const response = await fetch(`${getApiUrl()}/scanner/${action}`, { method: "POST" });
       if (!response.ok) throw new Error(`scanner ${action} failed (${response.status})`);
       await refresh();
     } catch (cause) {

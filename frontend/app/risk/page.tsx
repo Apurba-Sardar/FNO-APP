@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Card } from "@/components/ui/card";
+import { getApiUrl } from "@/lib/api";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 type Account = { account_equity: number | null; available_balance: number | null; consecutive_losses: number; open_positions: unknown[] };
 type State = { account: Account; daily_pnl: number; daily_loss_percent: number; total_exposure: number; exposure_percent: number; trading_lock: string; block_reasons: string[] };
 type Config = { risk_per_trade_percent: number; max_daily_loss_percent: number; max_consecutive_losses: number; max_open_positions: number; max_total_exposure_percent: number };
@@ -17,7 +17,7 @@ export default function RiskCenterPage() {
   const [config, setConfig] = useState<Config | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [error, setError] = useState("");
-  useEffect(() => { Promise.all([fetch(`${API}/api/v1/risk/status`).then((r) => r.json()), fetch(`${API}/api/v1/risk/config`).then((r) => r.json()), fetch(`${API}/api/v1/risk/decisions?limit=500`).then((r) => r.json())]).then(([status, settings, rows]) => { setState(status.state); setConfig(settings); setDecisions(rows.items ?? []); }).catch((cause) => setError(String(cause))); }, []);
+  useEffect(() => { const api = getApiUrl(); Promise.all([fetch(`${api}/risk/status`).then((r) => r.json()), fetch(`${api}/risk/config`).then((r) => r.json()), fetch(`${api}/risk/decisions?limit=500`).then((r) => r.json())]).then(([status, settings, rows]) => { setState(status.state); setConfig(settings); setDecisions(rows.items ?? []); }).catch((cause) => setError(String(cause))); }, []);
   return <main className="mx-auto max-w-7xl p-4 sm:p-6">
     <p className="text-xs font-semibold uppercase tracking-[.2em] text-cyan-400">Phase 7 · non-executable</p>
     <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold">Risk Center</h1><p className="text-sm text-slate-400">Central portfolio guard and hypothetical sizing authority.</p></div><span className={`rounded-full px-4 py-2 text-sm font-semibold uppercase ${state?.trading_lock === "open" ? "bg-emerald-950 text-emerald-300" : "bg-red-950 text-red-300"}`}>{state?.trading_lock ?? "loading"}</span></div>
