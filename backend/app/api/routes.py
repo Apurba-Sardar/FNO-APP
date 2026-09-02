@@ -950,13 +950,25 @@ async def live_health(request: Request, settings: SettingsDependency) -> dict:
 @router.get("/live/account")
 async def live_account(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
-    return live_runtime_from(request).account.model_dump(mode="json")
+    runtime = live_runtime_from(request)
+    if runtime.client:
+        try:
+            await runtime.refresh_account()
+        except Exception:
+            pass
+    return runtime.account.model_dump(mode="json")
 
 
 @router.get("/live/positions")
 async def live_positions(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
-    rows = list(live_runtime_from(request).positions.values())
+    runtime = live_runtime_from(request)
+    if runtime.client:
+        try:
+            await runtime.reconcile(actor="api")
+        except Exception:
+            pass
+    rows = list(runtime.positions.values())
     return {"count": len(rows), "items": [item.model_dump(mode="json") for item in rows]}
 
 

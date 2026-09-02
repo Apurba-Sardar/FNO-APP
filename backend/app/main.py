@@ -49,8 +49,7 @@ settings = get_settings()
 
 def create_authenticated_live_client(configuration):
     if not (
-        configuration.trading_mode == "live"
-        and configuration.coindcx_api_key
+        configuration.coindcx_api_key
         and configuration.coindcx_api_secret
     ):
         return None
