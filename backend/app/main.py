@@ -147,28 +147,36 @@ async def lifespan(application: FastAPI):
     application.state.live_runtime = live_runtime
     try:
         await initialize_database()
-    except Exception as exc:  # noqa: BLE001 - health reports an unavailable database
+    except Exception as exc:
         structlog.get_logger().error("DATABASE_INITIALIZATION_ERROR", error=str(exc))
-    await scanner_state.load()
-    await opportunity_state.load()
-    await strategy_state.load()
-    await risk_state.load()
-    await backtest_state.load()
-    await paper_runtime.load()
-    risk_state.update_account(paper_runtime.risk_account(datetime.now(UTC)), datetime.now(UTC))
-    await risk_state.persist()
-    await runtime.start()
-    await live_runtime.start()
-    await scanner_runtime.start_runtime()
-    if settings.paper.auto_start:
-        await paper_runtime.start()
+
+    try:
+        await scanner_state.load()
+        await opportunity_state.load()
+        await strategy_state.load()
+        await risk_state.load()
+        await backtest_state.load()
+        await paper_runtime.load()
+        risk_state.update_account(paper_runtime.risk_account(datetime.now(UTC)), datetime.now(UTC))
+        await risk_state.persist()
+        await runtime.start()
+        await live_runtime.start()
+        await scanner_runtime.start_runtime()
+        if settings.paper.auto_start:
+            await paper_runtime.start()
+    except Exception as exc:
+        structlog.get_logger().error("LIFESPAN_STARTUP_WARNING", error=str(exc))
+
     try:
         yield
     finally:
-        await live_runtime.shutdown()
-        await paper_runtime.shutdown()
-        await scanner_runtime.shutdown()
-        await runtime.stop()
+        try:
+            await live_runtime.shutdown()
+            await paper_runtime.shutdown()
+            await scanner_runtime.shutdown()
+            await runtime.stop()
+        except Exception as exc:
+            structlog.get_logger().error("LIFESPAN_SHUTDOWN_ERROR", error=str(exc))
 
 
 app = FastAPI(
