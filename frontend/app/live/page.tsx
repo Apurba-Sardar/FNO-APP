@@ -2,15 +2,8 @@
 
 import { Card } from "@/components/ui/card";
 import { TradingViewChart } from "@/components/tradingview-chart";
+import { getApiUrl } from "@/lib/api";
 import { useCallback, useEffect, useState } from "react";
-
-const getApiUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (typeof window !== "undefined") {
-    return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
-  }
-  return "http://localhost:8000/api/v1";
-};
 
 type Row = Record<string, any>;
 
