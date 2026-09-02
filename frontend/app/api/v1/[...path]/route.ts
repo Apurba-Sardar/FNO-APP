@@ -5,7 +5,7 @@ async function proxyRequest(request: NextRequest, pathParams: string[]) {
   const search = request.nextUrl.search;
   
   // Try internal Docker backend name first, fallback to localhost:8000 if local
-  const isLocal = process.env.NODE_ENV === "development" || !process.env.INTERNAL_BACKEND_URL;
+  const isLocal = process.env.NODE_ENV === "development";
   const primaryBackend = process.env.INTERNAL_BACKEND_URL ?? "http://backend:8000";
   const fallbackBackend = "http://localhost:8000";
 
@@ -13,21 +13,26 @@ async function proxyRequest(request: NextRequest, pathParams: string[]) {
 
   const incomingHeaders = new Headers(request.headers);
   incomingHeaders.delete("host");
+  const body = request.method !== "GET" && request.method !== "HEAD" ? await request.text() : undefined;
 
   let lastError = "";
 
   for (const baseUrl of targets) {
     const targetUrl = `${baseUrl}/api/v1/${pathStr}${search}`;
     try {
+      // A full all-market scan currently takes several minutes. Keep the
+      // ordinary proxy timeout short, but allow this explicit operator action
+      // to finish instead of incorrectly reporting the healthy API as offline.
+      const timeoutMs = request.method === "POST" && pathStr === "scanner/run" ? 600_000 : 60_000;
       const init: RequestInit = {
         method: request.method,
         headers: incomingHeaders,
         cache: "no-store",
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(timeoutMs),
       };
 
-      if (request.method !== "GET" && request.method !== "HEAD") {
-        init.body = await request.text();
+      if (body !== undefined) {
+        init.body = body;
       }
 
       const res = await fetch(targetUrl, init);
