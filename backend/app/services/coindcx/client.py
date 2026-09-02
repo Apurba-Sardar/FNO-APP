@@ -48,6 +48,7 @@ class CoinDCXClient:
         self._throttle = AsyncRequestThrottle(requests_per_second)
         self._max_retries = max_retries
         self._sleep = sleeper
+        self.request_count = 0
         self.log = structlog.get_logger()
 
     async def __aenter__(self) -> Self:
@@ -63,6 +64,7 @@ class CoinDCXClient:
         safe_path = httpx.URL(url).path
         for attempt in range(self._max_retries + 1):
             await self._throttle.acquire()
+            self.request_count += 1
             self.log.info("COINDCX_REQUEST", method="GET", path=safe_path, attempt=attempt + 1)
             try:
                 response = await self._http.get(url, params=params)
@@ -94,6 +96,9 @@ class CoinDCXClient:
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
+                self.log.warning(
+                    "COINDCX_RESPONSE_ERROR", path=safe_path, status=response.status_code
+                )
                 raise CoinDCXError(f"CoinDCX HTTP {response.status_code}: {safe_path}") from exc
             try:
                 return response.json()

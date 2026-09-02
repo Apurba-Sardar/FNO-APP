@@ -54,6 +54,10 @@ class RedisMarketDataStore:
             self.latest_ttl_seconds,
         )
 
+    async def get_orderbook(self, symbol: str) -> OrderBookSnapshot | None:
+        raw = await self._get(f"market:{symbol}:orderbook")
+        return OrderBookSnapshot.model_validate_json(raw) if raw else None
+
     async def append_trade(self, trade: MarketTrade, maximum: int = 100) -> None:
         if not self.available:
             return
@@ -66,6 +70,16 @@ class RedisMarketDataStore:
                 await pipe.execute()
         except RedisError as exc:
             self._disable("trade_write", exc)
+
+    async def get_latest_trade(self, symbol: str) -> MarketTrade | None:
+        if not self.available:
+            return None
+        try:
+            raw = await self.redis.lindex(f"market:{symbol}:trades", 0)
+            return MarketTrade.model_validate_json(raw) if raw else None
+        except (RedisError, ValueError) as exc:
+            self._disable("trade_read", exc)
+            return None
 
     async def ping(self) -> bool:
         try:

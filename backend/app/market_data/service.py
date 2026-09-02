@@ -57,7 +57,14 @@ class MarketDataService:
         return MultiTimeframeResult(symbol=symbol, results=results, errors=errors)
 
     async def get_ticker(self, symbol: str) -> Ticker | None:
-        if self.cache and (ticker := await self.cache.get_ticker(symbol)):
+        # CoinDCX WebSocket updates may be sparse and omit the last/mark price.
+        # Use such updates for health timing, but refresh before serving a
+        # price-less ticker to API consumers.
+        if (
+            self.cache
+            and (ticker := await self.cache.get_ticker(symbol))
+            and (ticker.last_price is not None or ticker.mark_price is not None)
+        ):
             return ticker
         snapshot = await self.client.current_prices()
         values = snapshot.prices.get(symbol)

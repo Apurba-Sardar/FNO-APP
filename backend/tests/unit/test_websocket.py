@@ -56,3 +56,74 @@ async def test_malformed_websocket_message_is_isolated():
     client = CoinDCXWebSocketClient("wss://stream.test", socket=socket)
     await client._on_trade({"data": {"bad": "payload"}})
     assert client.last_message_at is None
+
+
+class RecordingStore:
+    def __init__(self):
+        self.tickers = []
+        self.candles = []
+        self.trades = []
+
+    async def set_ticker(self, ticker):
+        self.tickers.append(ticker)
+
+    async def set_latest_candle(self, candle):
+        self.candles.append(candle)
+
+    async def append_trade(self, trade):
+        self.trades.append(trade)
+
+
+async def test_public_websocket_messages_are_normalized():
+    store = RecordingStore()
+    client = CoinDCXWebSocketClient("wss://stream.test", socket=FakeSocket(), store=store)
+    await client._on_current_prices(
+        {
+            "data": {
+                "ts": 1_735_689_600_000,
+                "prices": {"B-BTC_USDT": {"ls": 100, "mp": 101}},
+            }
+        }
+    )
+    await client._on_candlestick(
+        {
+            "data": {
+                "data": [
+                    {
+                        "pair": "B-BTC_USDT",
+                        "duration": "15m",
+                        "open_time": 1_735_689_600,
+                        "open": 100,
+                        "high": 110,
+                        "low": 90,
+                        "close": 105,
+                        "volume": 10,
+                    }
+                ]
+            }
+        }
+    )
+    await client._on_trade(
+        {
+            "data": {
+                "T": 1_735_689_600_000,
+                "p": "100",
+                "q": "2",
+                "m": 1,
+                "s": "B-BTC_USDT",
+                "pr": "f",
+            }
+        }
+    )
+    assert store.tickers[0].last_price == 100
+    assert store.candles[0].timeframe.value == "15m"
+    assert store.trades[0].quantity == 2
+
+
+async def test_string_encoded_websocket_data_is_decoded():
+    store = RecordingStore()
+    client = CoinDCXWebSocketClient("wss://stream.test", socket=FakeSocket(), store=store)
+    await client._on_current_prices(
+        {"data": '{"ts":1735689600000,"prices":{"B-BTC_USDT":{"ls":100}}}'}
+    )
+    assert store.tickers[0].symbol == "B-BTC_USDT"

@@ -1,0 +1,25 @@
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+
+import { Card } from "@/components/ui/card";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+type Check = { name: string; passed: boolean; value: unknown; threshold: unknown; severity: string; explanation: string };
+type Decision = { strategy: string; direction: string; allowed: boolean; status: string; risk_amount: number; risk_percent: number; position_quantity: number; position_notional: number; estimated_leverage: number; required_margin: number; estimated_fees: number; estimated_slippage_cost: number; stop_loss_risk: number; maximum_loss: number; estimated_reward: number; estimated_rr: number; rejection_reasons: string[]; warnings: string[]; checks: Check[] };
+type Setup = { hypothetical_entry: number | null; hypothetical_stop: number | null; hypothetical_target: number | null; status: string };
+const show = (value: unknown) => typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: 6 }) : value == null ? "—" : Array.isArray(value) ? value.join("–") : String(value);
+
+export default function RiskDetailPage() {
+  const params = useParams<{ symbol: string }>();
+  const symbol = decodeURIComponent(params.symbol);
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+  const [setups, setSetups] = useState<Record<string, Setup>>({});
+  const [selected, setSelected] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => { Promise.all([fetch(`${API}/api/v1/risk/check/${encodeURIComponent(symbol)}`).then((r) => { if (!r.ok) throw new Error(`risk request failed (${r.status})`); return r.json(); }), fetch(`${API}/api/v1/setups/${encodeURIComponent(symbol)}`).then((r) => r.json())]).then(([risk, setup]) => { setDecisions(risk.decisions); setSetups(setup.results ?? {}); setSelected(Object.keys(risk.decisions)[0] ?? ""); }).catch((cause) => setError(String(cause))); }, [symbol]);
+  const decision = decisions[selected]; const setup = setups[selected];
+  return <main className="mx-auto max-w-7xl p-4 sm:p-6"><Link className="text-sm text-cyan-300" href="/risk">← Risk Center</Link><p className="mt-4 text-xs font-semibold uppercase tracking-[.2em] text-amber-300">HYPOTHETICAL · NON-EXECUTABLE</p><h1 className="text-2xl font-semibold">{symbol} risk decision</h1>{error && <p className="mt-4 rounded-lg bg-red-950 p-3 text-red-300">{error}</p>}<div className="mt-4 flex gap-2">{Object.keys(decisions).map((name) => <button className={`rounded px-4 py-2 text-sm ${name === selected ? "bg-cyan-500 text-slate-950" : "bg-slate-800"}`} key={name} onClick={() => setSelected(name)}>{name.replaceAll("_", " ")}</button>)}</div>{decision ? <div className="mt-4 space-y-4"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-slate-500">Decision</p><p className={`text-2xl font-semibold uppercase ${decision.allowed ? "text-emerald-300" : "text-red-300"}`}>{decision.status.replaceAll("_", " ")}</p></div><p className="text-sm">{decision.direction.toUpperCase()} · {decision.strategy.replaceAll("_", " ")}</p></div></Card><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[["Entry", setup?.hypothetical_entry],["Stop", setup?.hypothetical_stop],["Target", setup?.hypothetical_target],["Structural R:R", decision.estimated_rr],["Risk budget", decision.risk_amount],["Quantity", decision.position_quantity],["Notional", decision.position_notional],["Maximum loss", decision.maximum_loss],["Stop risk", decision.stop_loss_risk],["Estimated fees", decision.estimated_fees],["Slippage cost", decision.estimated_slippage_cost],["Estimated reward", decision.estimated_reward],["Required margin", decision.required_margin],["Required leverage", decision.estimated_leverage]].map(([label, value]) => <Card key={String(label)}><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-lg">{show(value)}</p></Card>)}</div><Card><h2 className="font-medium">Risk checks</h2><div className="mt-3 grid gap-3 lg:grid-cols-2">{decision.checks.map((check) => <div className="rounded-lg border border-slate-800 p-3" key={check.name}><p className={check.passed ? "text-emerald-300" : "text-red-300"}>{check.passed ? "✓" : "✕"} {check.name.replaceAll("_", " ")}</p><p className="text-xs text-slate-500">Value {show(check.value)} · Threshold {show(check.threshold)}</p><p className="mt-1 text-xs text-slate-400">{check.explanation}</p></div>)}</div></Card>{decision.rejection_reasons.length ? <Card><h2 className="font-medium text-red-300">Rejection reasons</h2>{decision.rejection_reasons.map((reason) => <p className="mt-2 text-sm" key={reason}>✕ {reason}</p>)}</Card> : null}<Card><p className="text-sm text-slate-300">This decision cannot place, cancel, or modify any order or position. No execution control exists on this page.</p></Card></div> : <Card className="mt-4">Loading risk analysis…</Card>}</main>;
+}

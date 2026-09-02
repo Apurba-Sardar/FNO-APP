@@ -1,27 +1,16 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-class ScoreWeights(BaseModel):
-    weekly_trend: float = 10
-    daily_trend: float = 15
-    four_hour_trend: float = 15
-    one_hour_momentum: float = 10
-    fifteen_minute_setup: float = 15
-    volume_expansion: float = 10
-    liquidity_order_book: float = 10
-    volatility_atr: float = 5
-    support_resistance: float = 5
-    risk_reward: float = 5
-
-    @model_validator(mode="after")
-    def total_is_100(self) -> "ScoreWeights":
-        if abs(sum(self.model_dump().values()) - 100) > 1e-9:
-            raise ValueError("opportunity score weights must total 100")
-        return self
+from app.execution.config import LiveExecutionConfig
+from app.indicators.models import IndicatorParameters
+from app.paper_trading.config import PaperExecutionModel, PaperMarkPrice, PaperTradingConfig
+from app.risk.config import RiskConfig
+from app.scanner.config import ScannerConfig
+from app.scoring.config import ScoreWeights, ScoringConfig
+from app.strategy.config import StrategyConfig
 
 
 class ScannerSettings(BaseModel):
@@ -56,8 +45,91 @@ class Settings(BaseSettings):
     latest_market_data_ttl_seconds: int = Field(default=120, ge=1)
     request_timeout_seconds: float = Field(default=10, gt=0)
     candle_cache_ttl_seconds: int = Field(default=30, ge=1)
+    analysis_history_limit: int = Field(default=220, ge=20, le=1000)
+    analysis: IndicatorParameters = IndicatorParameters()
+    market_scanner: ScannerConfig = ScannerConfig()
+    scoring: ScoringConfig = ScoringConfig()
+    strategy: StrategyConfig = StrategyConfig()
+    risk: RiskConfig = RiskConfig()
+    paper_initial_equity: float = Field(default=100_000, gt=0)
+    paper_execution_model: PaperExecutionModel = PaperExecutionModel.SLIPPAGE_ADJUSTED
+    paper_entry_slippage_bps: float = Field(default=5, ge=0)
+    paper_exit_slippage_bps: float = Field(default=5, ge=0)
+    paper_symbol_cooldown_minutes: int = Field(default=30, ge=0)
+    paper_max_stale_seconds: int = Field(default=45, ge=1)
+    paper_position_mark_price: PaperMarkPrice = PaperMarkPrice.EXIT_SIDE
+    paper_reset_requires_confirmation: bool = True
+    paper_funding_enabled: bool = False
+    paper_auto_start: bool = False
+    live_trading_enabled: bool = False
+    live_trading_confirmation: str = ""
+    live_operator_token: str = ""
+    live_emergency_token: str = ""
+    live_stage: int = Field(default=0, ge=0, le=5)
+    live_max_orders_per_day: int = Field(default=3, ge=1)
+    live_max_trades_per_day: int = Field(default=1, ge=1)
+    live_max_notional_per_trade: float = Field(default=25, gt=0)
+    live_max_daily_loss_percent: float = Field(default=0.25, gt=0)
+    live_max_open_positions: int = Field(default=1, ge=1)
+    live_max_total_exposure: float = Field(default=25, gt=0)
+    live_max_order_retries: int = Field(default=1, ge=0, le=3)
+    live_order_timeout_seconds: float = Field(default=10, gt=0)
+    live_max_entry_drift_percent: float = Field(default=0.15, ge=0)
+    live_max_risk_decision_age_seconds: int = Field(default=30, ge=1)
+    live_require_tpsl_confirmation: bool = True
+    live_emergency_stop: bool = False
+    live_allow_leverage_change: bool = False
+    live_auto_execution: bool = False
+    live_margin_mode: Literal["isolated", "crossed"] = "isolated"
+    live_confirmation_ttl_seconds: int = Field(default=30, ge=5, le=120)
+    live_reconciliation_interval_seconds: int = Field(default=15, ge=5)
+    live_max_consecutive_api_failures: int = Field(default=3, ge=1)
     scanner: ScannerSettings = ScannerSettings()
     score_weights: ScoreWeights = ScoreWeights()
+
+    @property
+    def paper(self) -> PaperTradingConfig:
+        return PaperTradingConfig(
+            initial_equity=self.paper_initial_equity,
+            execution_model=self.paper_execution_model,
+            entry_slippage_bps=self.paper_entry_slippage_bps,
+            exit_slippage_bps=self.paper_exit_slippage_bps,
+            symbol_cooldown_minutes=self.paper_symbol_cooldown_minutes,
+            max_stale_seconds=self.paper_max_stale_seconds,
+            position_mark_price=self.paper_position_mark_price,
+            reset_requires_confirmation=self.paper_reset_requires_confirmation,
+            funding_enabled=self.paper_funding_enabled,
+            auto_start=self.paper_auto_start,
+        )
+
+    @property
+    def live(self) -> LiveExecutionConfig:
+        return LiveExecutionConfig(
+            trading_mode=self.trading_mode,
+            enabled=self.live_trading_enabled,
+            confirmation=self.live_trading_confirmation,
+            operator_token=self.live_operator_token,
+            emergency_token=self.live_emergency_token,
+            stage=self.live_stage,
+            max_orders_per_day=self.live_max_orders_per_day,
+            max_trades_per_day=self.live_max_trades_per_day,
+            max_notional_per_trade=self.live_max_notional_per_trade,
+            max_daily_loss_percent=self.live_max_daily_loss_percent,
+            max_open_positions=self.live_max_open_positions,
+            max_total_exposure=self.live_max_total_exposure,
+            max_order_retries=self.live_max_order_retries,
+            order_timeout_seconds=self.live_order_timeout_seconds,
+            max_entry_drift_percent=self.live_max_entry_drift_percent,
+            max_risk_decision_age_seconds=self.live_max_risk_decision_age_seconds,
+            require_tpsl_confirmation=self.live_require_tpsl_confirmation,
+            emergency_stop=self.live_emergency_stop,
+            allow_leverage_change=self.live_allow_leverage_change,
+            auto_execution=self.live_auto_execution,
+            margin_mode=self.live_margin_mode,
+            confirmation_ttl_seconds=self.live_confirmation_ttl_seconds,
+            reconciliation_interval_seconds=self.live_reconciliation_interval_seconds,
+            max_consecutive_api_failures=self.live_max_consecutive_api_failures,
+        )
 
 
 @lru_cache

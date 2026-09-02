@@ -18,3 +18,13 @@ WEBSOCKET_CANDLE_INTERVALS: Final = frozenset(
 )
 CURRENT_PRICES_CHANNEL: Final = "currentPrices@futures@rt"
 CURRENT_PRICES_EVENT: Final = "currentPrices@futures#update"
+
+# Authenticated futures endpoints from the official CoinDCX API reference.
+FUTURES_ORDERS_PATH: Final = "/exchange/v1/derivatives/futures/orders"
+FUTURES_CREATE_ORDER_PATH: Final = "/exchange/v1/derivatives/futures/orders/create"
+FUTURES_CANCEL_ORDER_PATH: Final = "/exchange/v1/derivatives/futures/orders/cancel"
+FUTURES_POSITIONS_PATH: Final = "/exchange/v1/derivatives/futures/positions"
+FUTURES_EXIT_POSITION_PATH: Final = "/exchange/v1/derivatives/futures/positions/exit"
+FUTURES_CREATE_TPSL_PATH: Final = "/exchange/v1/derivatives/futures/positions/create_tpsl"
+FUTURES_TRADES_PATH: Final = "/exchange/v1/derivatives/futures/trades"
+FUTURES_WALLETS_PATH: Final = "/exchange/v1/derivatives/futures/wallets"

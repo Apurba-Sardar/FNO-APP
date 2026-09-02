@@ -1,14 +1,22 @@
 import asyncio
 from datetime import UTC, datetime
+from typing import Any, Protocol
 
-from app.analysis.multi_timeframe import MultiTimeframeAnalyzer
+from app.analysis.multi_timeframe import LegacyMultiTimeframeAnalyzer
 from app.clients.coindcx import CoinDCXPublicClient
 from app.config import ScannerSettings
 from app.domain.analysis import Opportunity
 from app.domain.market import Instrument, Timeframe
 from app.market_data.orderbook import InsufficientDepthError, analyze_order_book
-from app.scoring.engine import OpportunityScorer
 from app.services.candles import CandleService
+
+
+class LegacyScorer(Protocol):
+    """Injected Phase 1 compatibility boundary for the retired scanner adapter."""
+
+    weights: Any
+
+    def score(self, inputs: Any) -> tuple[float, dict[str, float]]: ...
 
 
 class MarketRejected(ValueError):
@@ -22,8 +30,8 @@ class MarketScanner:
         self,
         client: CoinDCXPublicClient,
         candles: CandleService,
-        analyzer: MultiTimeframeAnalyzer,
-        scorer: OpportunityScorer,
+        analyzer: LegacyMultiTimeframeAnalyzer,
+        scorer: LegacyScorer,
         config: ScannerSettings,
         concurrency: int = 5,
     ) -> None:

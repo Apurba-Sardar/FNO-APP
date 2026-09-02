@@ -1,3 +1,5 @@
+import asyncio
+
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,10 +11,21 @@ from .models import NormalizedCandle
 class CandleRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+        # A multi-timeframe request fetches frames concurrently. SQLAlchemy
+        # sessions are transaction-scoped and must never be used concurrently.
+        self._write_lock = asyncio.Lock()
 
     async def save(self, candles: list[NormalizedCandle]) -> int:
         if not candles:
             return 0
+        async with self._write_lock:
+            try:
+                return await self._save(candles)
+            except Exception:
+                await self.session.rollback()
+                raise
+
+    async def _save(self, candles: list[NormalizedCandle]) -> int:
         symbols = sorted({item.symbol for item in candles})
         instrument_rows = [
             {"pair": symbol, "status": "active", "margin_currency": "USDT", "metadata_json": {}}

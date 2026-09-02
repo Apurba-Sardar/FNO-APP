@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -181,12 +182,23 @@ class CoinDCXWebSocketClient:
         self, kind: str, payload: dict, handler: Callable[[dict], Awaitable[None]]
     ) -> None:
         try:
-            await handler(payload)
+            await handler(self._decode_payload(payload))
             self.last_message_at = datetime.now(UTC)
             if self.status == WebSocketStatus.STALE:
                 self.status = WebSocketStatus.CONNECTED
         except Exception as exc:  # noqa: BLE001 - malformed events are isolated by design
             self.log.warning("COINDCX_WEBSOCKET_MESSAGE_ERROR", kind=kind, error=str(exc))
+
+    @classmethod
+    def _decode_payload(cls, payload: Any) -> dict:
+        decoded = payload
+        while isinstance(decoded, (str, bytes, bytearray)):
+            decoded = json.loads(decoded)
+        if not isinstance(decoded, dict):
+            raise TypeError("WebSocket payload is not an object")
+        if "data" in decoded and isinstance(decoded["data"], (str, bytes, bytearray)):
+            decoded = {**decoded, "data": cls._decode_payload(decoded["data"])}
+        return decoded
 
     async def _store_tickers(self, payload: dict) -> None:
         tickers = normalize_tickers(payload)

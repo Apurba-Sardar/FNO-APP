@@ -1,0 +1,478 @@
+import asyncio
+import hashlib
+import secrets
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
+
+import structlog
+
+from app.risk.models import AccountSnapshot, OpenPosition
+from app.strategy.models import StrategyName
+
+from .audit import LiveAuditLogger
+from .coindcx_executor import CoinDCXTradeExecutor
+from .config import ExecutionStage, LiveExecutionConfig
+from .exceptions import (
+    LiveConfigurationError,
+    ProtectionFailure,
+    SafetyGateRejected,
+    UnknownOrderState,
+)
+from .idempotency import ExecutionIdempotencyGuard
+from .models import (
+    AuditEvent,
+    ConfirmationGrant,
+    ExecutionIntent,
+    ExecutionState,
+    HealthState,
+    LiveAccount,
+    LiveRuntimeState,
+    ProtectionStatus,
+)
+from .order_manager import CoinDCXOrderRequestBuilder
+from .reconciliation import PositionReconciliationService
+from .safety import EmergencyStop, ExecutionCircuitBreaker, LiveSafetyGate
+
+
+class LiveExecutionRuntime:
+    def __init__(
+        self,
+        config: LiveExecutionConfig,
+        repository,
+        *,
+        client=None,
+        strategy_runtime=None,
+        risk_runtime=None,
+        market_runtime=None,
+    ):
+        self.config = config
+        self.repository = repository
+        self.client = client
+        self.strategy_runtime = strategy_runtime
+        self.risk_runtime = risk_runtime
+        self.market_runtime = market_runtime
+        self.executor = CoinDCXTradeExecutor(client, repository) if client else None
+        self.reconciler = PositionReconciliationService(client, repository) if client else None
+        self.audit = LiveAuditLogger(repository)
+        self.safety = LiveSafetyGate(config)
+        self.emergency_stop = EmergencyStop(config.emergency_stop)
+        self.circuit_breaker = ExecutionCircuitBreaker(config.max_consecutive_api_failures)
+        self.state = LiveRuntimeState.DISABLED
+        self.intents: dict[UUID, ExecutionIntent] = {}
+        self.orders = {}
+        self.positions = {}
+        self.account = LiveAccount()
+        self.confirmations: dict[UUID, ConfirmationGrant] = {}
+        self.last_reconciliation = None
+        self.last_report = None
+        self.last_api_error: str | None = None
+        self.last_successful_order: datetime | None = None
+        self.reconciliation_task: asyncio.Task | None = None
+
+    def validate_startup(self) -> None:
+        if self.config.trading_mode != "live":
+            return
+        missing = []
+        if not self.config.enabled:
+            missing.append("LIVE_TRADING_ENABLED=true")
+        if not self.config.confirmation:
+            missing.append("LIVE_TRADING_CONFIRMATION")
+        if self.config.stage == ExecutionStage.PAPER_ONLY:
+            missing.append("LIVE_STAGE>=1")
+        if self.client is None:
+            missing.append("CoinDCX API credentials")
+        if missing:
+            raise LiveConfigurationError("live executor unavailable: " + ", ".join(missing))
+
+    async def load(self) -> None:
+        intents, orders, positions, runtime = await self.repository.load()
+        self.intents = {item.execution_request_id: item for item in intents}
+        self.orders = {item.order_id: item for item in orders}
+        self.positions = {item.position_id: item for item in positions}
+        if runtime.get("emergency_stop") == "triggered":
+            self.emergency_stop.trigger()
+        # Restart is deliberately fail-closed; persisted READY/ARMED is ignored.
+        self.state = LiveRuntimeState.DISABLED
+
+    async def start(self) -> None:
+        self.validate_startup()
+        await self.load()
+        if self.config.trading_mode != "live":
+            return
+        self.state = LiveRuntimeState.RECONCILING
+        await self._persist_runtime()
+        try:
+            await self.refresh_account()
+            await self.reconcile(actor="startup")
+        except Exception as exc:  # noqa: BLE001 - startup must fail closed for any exchange error
+            self.last_api_error = type(exc).__name__
+            self.state = LiveRuntimeState.BLOCKED
+            self.circuit_breaker.failure()
+            await self._persist_runtime()
+            structlog.get_logger().error("LIVE_STARTUP_RECONCILIATION_FAILED", error_type=type(exc).__name__)
+            return
+        self.reconciliation_task = asyncio.create_task(self._reconciliation_loop(), name="live-reconciliation")
+
+    async def shutdown(self) -> None:
+        if self.reconciliation_task:
+            self.reconciliation_task.cancel()
+            await asyncio.gather(self.reconciliation_task, return_exceptions=True)
+        self.state = LiveRuntimeState.DISABLED
+        await self._persist_runtime()
+        if self.client:
+            await self.client.close()
+
+    async def _reconciliation_loop(self):
+        while True:
+            await asyncio.sleep(self.config.reconciliation_interval_seconds)
+            try:
+                await self.refresh_account()
+                await self.reconcile(actor="system")
+            except Exception as exc:  # noqa: BLE001 - monitoring must survive and block entries
+                self.last_api_error = type(exc).__name__
+                self.circuit_breaker.failure()
+                if self.circuit_breaker.state.value == "open":
+                    self.state = LiveRuntimeState.BLOCKED
+
+    async def refresh_account(self) -> LiveAccount:
+        if self.client is None:
+            return self.account
+        wallets = await self.client.wallets()
+        wallet = next((row for row in wallets if row.get("currency_short_name") == "USDT"), None)
+        if wallet is None:
+            raise LiveConfigurationError("USDT futures wallet was not returned")
+        balance = float(wallet.get("balance") or 0)
+        locked = float(wallet.get("locked_balance") or 0)
+        self.account = LiveAccount(
+            equity=balance + locked,
+            available_balance=balance,
+            locked_margin=locked,
+            cross_order_margin=float(wallet.get("cross_order_margin") or 0),
+            cross_user_margin=float(wallet.get("cross_user_margin") or 0),
+            daily_pnl=self.risk_runtime.state.risk_state.daily_pnl if self.risk_runtime else 0,
+            timestamp=datetime.now(UTC),
+        )
+        if self.risk_runtime:
+            now = datetime.now(UTC)
+            self.risk_runtime.state.update_account(self._risk_account(now), now)
+            await self.risk_runtime.state.persist()
+        return self.account
+
+    async def reconcile(self, *, actor: str = "operator"):
+        if self.reconciler is None:
+            raise LiveConfigurationError("authenticated client is unavailable")
+        self.state = LiveRuntimeState.RECONCILING
+        report = await self.reconciler.reconcile(self.orders, self.positions)
+        self.last_report = report
+        self.last_reconciliation = report.timestamp
+        self.state = LiveRuntimeState.RECONCILED if report.healthy else LiveRuntimeState.BLOCKED
+        self.circuit_breaker.success() if report.healthy else self.circuit_breaker.failure()
+        await self._persist_runtime()
+        await self.audit.record(AuditEvent(
+            actor=actor, event_type="RECONCILED", result="healthy" if report.healthy else "mismatch",
+            metadata=report.model_dump(mode="json"),
+        ))
+        return report
+
+    async def arm(self, safety_confirmation: str) -> None:
+        if self.state != LiveRuntimeState.RECONCILED:
+            raise SafetyGateRejected(["successful reconciliation is required before arming"])
+        if not secrets.compare_digest(safety_confirmation, self.config.confirmation):
+            raise SafetyGateRejected(["invalid live safety confirmation"])
+        if self.emergency_stop.triggered:
+            raise SafetyGateRejected(["emergency stop is active"])
+        self.state = LiveRuntimeState.ARMED
+        await self._persist_runtime()
+        await self.audit.record(AuditEvent(actor="operator", event_type="LIVE_ARMED", result="armed"))
+
+    async def emergency(self, actor="operator") -> None:
+        self.emergency_stop.trigger()
+        self.state = LiveRuntimeState.BLOCKED
+        await self._persist_runtime()
+        await self.audit.record(AuditEvent(actor=actor, event_type="EMERGENCY_STOP", result="new_entries_blocked"))
+
+    async def resume(self, safety_confirmation: str) -> None:
+        if not secrets.compare_digest(safety_confirmation, self.config.confirmation):
+            raise SafetyGateRejected(["invalid live safety confirmation"])
+        report = await self.reconcile(actor="operator")
+        if not report.healthy:
+            raise SafetyGateRejected(["reconciliation mismatches must be resolved before resume"])
+        self.emergency_stop.resume()
+        self.state = LiveRuntimeState.ARMED
+        self.circuit_breaker.success()
+        await self._persist_runtime()
+        await self.audit.record(AuditEvent(actor="operator", event_type="LIVE_RESUMED", result="armed"))
+
+    async def request_execution(self, setup_id: str):
+        existing = ExecutionIdempotencyGuard.find_existing(self.intents, setup_id)
+        if existing:
+            return existing, None
+        if self.config.stage < ExecutionStage.VALIDATION_ONLY:
+            raise SafetyGateRejected(["rollout stage does not permit live validation"])
+        now = datetime.now(UTC)
+        symbol, strategy_value, _ = setup_id.split(":", 2)
+        strategy = StrategyName(strategy_value)
+        analysis = await self.strategy_runtime.evaluate_symbol(symbol, now)
+        setup = analysis.results[strategy]
+        candidate = self.risk_runtime.scanner_state.candidates.get(symbol)
+        if candidate is None or candidate.instrument is None:
+            raise SafetyGateRejected(["validated instrument metadata is unavailable"])
+        account = self._risk_account(now)
+        risk_analysis = await self.risk_runtime.evaluate_symbol(
+            symbol, now, account=account, instrument=candidate.instrument, strategy=strategy
+        )
+        decision = risk_analysis.decisions[strategy]
+        if not decision.allowed:
+            raise SafetyGateRejected(decision.rejection_reasons or ["Phase 7 rejected execution"])
+        built = CoinDCXOrderRequestBuilder().build_market(
+            setup, decision, candidate.instrument, margin_mode=self.config.margin_mode.value
+        )
+        intent = ExecutionIntent(
+            setup_id=setup_id,
+            risk_decision_id=f"{symbol}:{strategy.value}:{decision.evaluation_timestamp.isoformat()}",
+            symbol=symbol,
+            exchange_pair=built.pair,
+            strategy=strategy,
+            direction=setup.direction,
+            quantity=built.quantity,
+            expected_entry=float(setup.hypothetical_entry),
+            stop=float(setup.hypothetical_stop),
+            target=float(setup.hypothetical_target),
+            leverage=decision.estimated_leverage,
+            notional=decision.position_notional,
+            risk_amount=decision.risk_amount,
+            estimated_fees=decision.estimated_fees,
+            estimated_slippage=decision.estimated_slippage_cost,
+            setup_timestamp=setup.evaluation_timestamp,
+            risk_timestamp=decision.evaluation_timestamp,
+            strategy_version="phase6-v1",
+            risk_version="phase7-v1",
+            state=ExecutionState.VALIDATING,
+        )
+        await self.repository.save_intent(intent)
+        self.intents[intent.execution_request_id] = intent
+        if self.config.stage == ExecutionStage.VALIDATION_ONLY:
+            return intent, None
+        token = secrets.token_urlsafe(32)
+        grant = ConfirmationGrant(
+            execution_request_id=intent.execution_request_id,
+            token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            expires_at=now + timedelta(seconds=self.config.confirmation_ttl_seconds),
+        )
+        self.confirmations[intent.execution_request_id] = grant
+        return intent, token
+
+    async def confirm_execution(self, request_id: UUID, token: str, phrase: str):
+        intent = self.intents.get(request_id)
+        grant = self.confirmations.get(request_id)
+        now = datetime.now(UTC)
+        if intent is None or grant is None:
+            raise SafetyGateRejected(["execution intent or confirmation is unavailable"])
+        valid_token = secrets.compare_digest(hashlib.sha256(token.encode()).hexdigest(), grant.token_hash)
+        if not valid_token or grant.consumed_at is not None or now >= grant.expires_at:
+            raise SafetyGateRejected(["execution confirmation is invalid, stale, or consumed"])
+        if phrase != "EXECUTE REAL TRADE":
+            raise SafetyGateRejected(["explicit real-money confirmation phrase is required"])
+        grant.consumed_at = now
+        if self.executor is None:
+            raise SafetyGateRejected(["authenticated CoinDCX executor is unavailable"])
+        # A complete strategy and risk calculation is repeated immediately before submission.
+        analysis = await self.strategy_runtime.evaluate_symbol(intent.symbol, now)
+        setup = analysis.results[intent.strategy]
+        candidate = self.risk_runtime.scanner_state.candidates[intent.symbol]
+        risk_analysis = await self.risk_runtime.evaluate_symbol(
+            intent.symbol, now, account=self._risk_account(now), instrument=candidate.instrument,
+            strategy=intent.strategy,
+        )
+        decision = risk_analysis.decisions[intent.strategy]
+        position_settings = await self.client.positions(pairs=intent.exchange_pair)
+        configured_position = next(
+            (row for row in position_settings if str(row.get("pair")) == intent.exchange_pair), None
+        )
+        leverage_verified = bool(
+            configured_position
+            and float(configured_position.get("leverage") or 0) == intent.leverage
+        )
+        configured_margin = (
+            str(configured_position.get("margin_type") or "isolated").lower()
+            if configured_position
+            else None
+        )
+        gate = self.safety.evaluate(
+            confirmation=self.config.confirmation,
+            emergency_stop=self.emergency_stop,
+            circuit_breaker=self.circuit_breaker,
+            runtime_ready=self.state in {LiveRuntimeState.ARMED, LiveRuntimeState.READY},
+            risk_lock=self.risk_runtime.state.risk_state.trading_lock,
+            account=self.account,
+            setup=setup,
+            decision=decision,
+            current_price=candidate.market.last_price,
+            market_fresh=candidate.market.fresh,
+            market_active=candidate.instrument is not None and candidate.instrument.status == "active",
+            api_healthy=self.last_api_error is None,
+            credentials_available=self.client is not None,
+            open_positions=list(self.positions.values()),
+            orders_today=self._today_count(self.orders.values()),
+            trades_today=sum(1 for item in self.intents.values() if item.state == ExecutionState.CLOSED and item.created_at.date() == now.date()),
+            total_exposure=sum(item.quantity * (item.mark_price or item.average_price) for item in self.positions.values() if item.status == "open"),
+            quantity_valid=abs(decision.position_quantity - intent.quantity) < 1e-12,
+            prices_valid=(setup.hypothetical_stop == intent.stop and setup.hypothetical_target == intent.target),
+            instrument_valid=candidate.instrument is not None and candidate.instrument.symbol == intent.exchange_pair,
+            leverage_verified=leverage_verified,
+            margin_mode_verified=configured_margin == self.config.margin_mode.value,
+            now=now,
+        )
+        if not gate.passed:
+            rejected = intent.model_copy(update={"state": ExecutionState.REJECTED, "rejection_reasons": gate.reasons})
+            self.intents[request_id] = rejected
+            await self.repository.save_intent(rejected)
+            await self.audit.record(AuditEvent(
+                actor="operator", event_type="RISK_BLOCKED", execution_request_id=request_id,
+                setup_id=intent.setup_id, symbol=intent.symbol, result="rejected",
+                rejection_reason="; ".join(gate.reasons),
+            ))
+            raise SafetyGateRejected(gate.reasons)
+        built = CoinDCXOrderRequestBuilder().build_market(
+            setup, decision, candidate.instrument, margin_mode=self.config.margin_mode.value
+        )
+        submitting = intent.model_copy(update={"state": ExecutionState.RISK_RECHECK, "risk_timestamp": decision.evaluation_timestamp})
+        self.intents[request_id] = submitting
+        await self.repository.save_intent(submitting)
+        try:
+            result = await self.executor.execute_entry(submitting, built.payload)
+        except UnknownOrderState as exc:
+            self.circuit_breaker.failure()
+            self.intents[request_id] = submitting.model_copy(
+                update={"state": ExecutionState.ORDER_UNKNOWN, "updated_at": datetime.now(UTC)}
+            )
+            await self.audit.record(AuditEvent(
+                actor="operator", event_type="ORDER_UNKNOWN",
+                execution_request_id=request_id, setup_id=intent.setup_id,
+                risk_decision_id=intent.risk_decision_id, symbol=intent.symbol,
+                direction=intent.direction.value, quantity=intent.quantity,
+                expected_price=intent.expected_entry, result="reconciliation_required",
+                rejection_reason=str(exc), strategy_version=intent.strategy_version,
+                risk_version=intent.risk_version,
+            ))
+            raise
+        except ProtectionFailure as exc:
+            self.circuit_breaker.failure()
+            self.state = LiveRuntimeState.CRITICAL
+            self.intents[request_id] = submitting.model_copy(
+                update={"state": ExecutionState.CRITICAL, "updated_at": datetime.now(UTC)}
+            )
+            await self._persist_runtime()
+            await self.audit.record(AuditEvent(
+                actor="system", event_type="PROTECTION_FAILURE",
+                execution_request_id=request_id, setup_id=intent.setup_id,
+                risk_decision_id=intent.risk_decision_id, symbol=intent.symbol,
+                direction=intent.direction.value, quantity=intent.quantity,
+                expected_price=intent.expected_entry, result="emergency_policy",
+                rejection_reason=str(exc), strategy_version=intent.strategy_version,
+                risk_version=intent.risk_version,
+            ))
+            raise
+        except Exception as exc:
+            self.circuit_breaker.failure()
+            failed = submitting.model_copy(update={
+                "state": ExecutionState.FAILED,
+                "rejection_reasons": [type(exc).__name__],
+                "updated_at": datetime.now(UTC),
+            })
+            self.intents[request_id] = failed
+            await self.repository.save_intent(failed)
+            if self.circuit_breaker.state.value == "open":
+                self.state = LiveRuntimeState.BLOCKED
+                await self._persist_runtime()
+            await self.audit.record(AuditEvent(
+                actor="operator", event_type="EXECUTION_ERROR",
+                execution_request_id=request_id, setup_id=intent.setup_id,
+                risk_decision_id=intent.risk_decision_id, symbol=intent.symbol,
+                direction=intent.direction.value, quantity=intent.quantity,
+                expected_price=intent.expected_entry, result="failed",
+                rejection_reason=type(exc).__name__, strategy_version=intent.strategy_version,
+                risk_version=intent.risk_version,
+            ))
+            raise
+        final_intent, order, position = result
+        self.intents[request_id] = final_intent
+        self.orders[order.order_id] = order
+        if position:
+            self.positions[position.position_id] = position
+        self.last_successful_order = now
+        await self.audit.record(AuditEvent(
+            actor="operator", event_type="ENTRY_PARTIAL" if order.status.value == "partially_filled" else "ENTRY_FILLED",
+            execution_request_id=request_id, setup_id=intent.setup_id,
+            risk_decision_id=intent.risk_decision_id, symbol=intent.symbol,
+            direction=intent.direction.value, quantity=order.filled_quantity,
+            expected_price=intent.expected_entry, actual_price=order.average_price,
+            order_id=order.exchange_order_id,
+            position_id=None if position is None else position.exchange_position_id,
+            fees=order.fees, result=final_intent.state.value,
+            strategy_version=intent.strategy_version, risk_version=intent.risk_version,
+        ))
+        return result
+
+    async def close_position(self, position_id: UUID, phrase: str):
+        if phrase != "CLOSE REAL POSITION":
+            raise SafetyGateRejected(["explicit real-position close phrase is required"])
+        await self.reconcile(actor="operator")
+        position = self.positions.get(position_id)
+        if position is None or position.status != "open":
+            raise SafetyGateRejected(["reconciled open position was not found"])
+        response = await self.executor.execute_exit(position)
+        await self.audit.record(AuditEvent(
+            actor="operator", event_type="EXIT_SUBMITTED", symbol=position.pair,
+            position_id=position.exchange_position_id, quantity=position.quantity, result="submitted",
+        ))
+        return response
+
+    def _risk_account(self, now):
+        return AccountSnapshot(
+            account_equity=self.account.equity,
+            available_balance=self.account.available_balance,
+            starting_day_equity=self.account.equity,
+            realized_pnl_today=self.account.daily_pnl,
+            open_positions=[
+                OpenPosition(symbol=item.pair, direction=item.direction, notional=item.quantity * (item.mark_price or item.average_price))
+                for item in self.positions.values() if item.status == "open"
+            ],
+            timestamp=self.account.timestamp or now,
+        )
+
+    @staticmethod
+    def _today_count(rows) -> int:
+        today = datetime.now(UTC).date()
+        return sum(1 for row in rows if row.created_at.date() == today)
+
+    def status(self) -> dict:
+        unprotected = [item for item in self.positions.values() if item.status == "open" and item.protection_status != ProtectionStatus.PROTECTED]
+        health = HealthState.CRITICAL if unprotected else HealthState.BLOCKED if self.state in {LiveRuntimeState.DISABLED, LiveRuntimeState.BLOCKED} else HealthState.HEALTHY
+        return {
+            "execution_mode": self.config.trading_mode,
+            "stage": int(self.config.stage),
+            "stage_name": self.config.stage.name,
+            "runtime_state": self.state,
+            "health": health,
+            "live_enabled": self.config.enabled,
+            "auto_execution": self.config.auto_execution,
+            "emergency_stop": self.emergency_stop.state,
+            "circuit_breaker": self.circuit_breaker.state,
+            "open_positions": sum(item.status == "open" for item in self.positions.values()),
+            "protected_positions": sum(item.status == "open" and item.protection_status == ProtectionStatus.PROTECTED for item in self.positions.values()),
+            "unprotected_positions": len(unprotected),
+            "pending_orders": sum(item.status.value in {"open", "partially_filled"} for item in self.orders.values()),
+            "unknown_orders": sum(item.status.value == "unknown" for item in self.orders.values()),
+            "orphan_positions": 0 if self.last_report is None else len(self.last_report.orphan_positions),
+            "last_reconciliation": self.last_reconciliation,
+            "last_successful_order": self.last_successful_order,
+            "last_api_error": self.last_api_error,
+        }
+
+    async def _persist_runtime(self):
+        await self.repository.save_runtime({
+            "runtime_state": self.state.value,
+            "emergency_stop": self.emergency_stop.state.value,
+            "last_reconciliation": self.last_reconciliation.isoformat() if self.last_reconciliation else None,
+        })

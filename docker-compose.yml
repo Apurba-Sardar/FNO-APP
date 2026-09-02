@@ -25,10 +25,19 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://fno:fno@postgres:5432/fno}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      TRADING_MODE: ${TRADING_MODE:-paper}
     ports: ["8000:8000"]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
   frontend:
     build: ./frontend
     environment:

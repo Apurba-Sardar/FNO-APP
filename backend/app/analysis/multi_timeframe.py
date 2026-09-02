@@ -1,9 +1,21 @@
+from datetime import UTC, datetime
+
 from app.domain.analysis import Direction, ScoreInputs
 from app.domain.market import Candle, Timeframe
 from app.indicators import IndicatorEngine, IndicatorSnapshot
+from app.indicators.models import (
+    AlignmentState,
+    AlignmentSummary,
+    MultiTimeframeAnalysis,
+    MultiTimeframeDataQuality,
+    TrendState,
+)
+from app.market_data.models import CandleResult
 
 
-class MultiTimeframeAnalyzer:
+class LegacyMultiTimeframeAnalyzer:
+    """Phase 1 scanner adapter retained without expanding scoring behavior."""
+
     def __init__(self, indicators: IndicatorEngine, volume_lookback: int = 20) -> None:
         self.indicators = indicators
         self.volume_lookback = volume_lookback
@@ -81,3 +93,101 @@ class MultiTimeframeAnalyzer:
             risk_reward=min(risk_reward / 2, 1),
         )
         return direction, inputs, snapshots
+
+
+class MultiTimeframeAnalyzer:
+    """Analysis-only aggregation across normalized Phase 2 candle results."""
+
+    def __init__(self, indicators: IndicatorEngine | None = None) -> None:
+        self.indicators = indicators or IndicatorEngine()
+
+    def analyze(
+        self,
+        symbol: str,
+        frames: dict[Timeframe, CandleResult],
+        requested: list[Timeframe] | None = None,
+    ) -> MultiTimeframeAnalysis:
+        requested = requested or list(Timeframe)
+        analyses = {
+            timeframe: self.indicators.analyze(
+                symbol,
+                timeframe,
+                result.candles,
+                stale=result.stale,
+            )
+            for timeframe, result in frames.items()
+            if timeframe in requested
+        }
+        alignment = self.alignment(analyses)
+        missing = [timeframe for timeframe in requested if timeframe not in analyses]
+        stale = [
+            timeframe
+            for timeframe, analysis in analyses.items()
+            if analysis.data_quality.stale_data
+        ]
+        invalid = sum(item.data_quality.invalid_candles for item in analyses.values())
+        warnings = [
+            f"{timeframe.value}: {warning}"
+            for timeframe, analysis in analyses.items()
+            for warning in analysis.data_quality.warnings
+        ]
+        warnings.extend(f"missing timeframe: {timeframe.value}" for timeframe in missing)
+        completeness = (
+            sum(item.data_quality.analysis_completeness for item in analyses.values())
+            / len(requested)
+            if requested
+            else 0
+        )
+        quality = MultiTimeframeDataQuality(
+            sufficient_data=not missing
+            and all(item.data_quality.sufficient_data for item in analyses.values()),
+            missing_timeframes=missing,
+            stale_timeframes=stale,
+            invalid_candles=invalid,
+            warnings=warnings,
+            analysis_completeness=round(completeness, 2),
+        )
+        return MultiTimeframeAnalysis(
+            symbol=symbol,
+            generated_at=datetime.now(UTC),
+            timeframes=analyses,
+            alignment=alignment,
+            data_quality=quality,
+        )
+
+    @staticmethod
+    def alignment(analyses: dict[Timeframe, object]) -> AlignmentSummary:
+        trends = [analysis.trend for analysis in analyses.values()]
+        bullish = trends.count(TrendState.BULLISH)
+        bearish = trends.count(TrendState.BEARISH)
+        neutral = trends.count(TrendState.NEUTRAL)
+        transition = trends.count(TrendState.TRANSITION)
+        total = len(trends)
+        ratio = max(bullish, bearish) / total if total else 0
+        dominant = (
+            TrendState.BULLISH
+            if bullish > bearish
+            else TrendState.BEARISH
+            if bearish > bullish
+            else TrendState.NEUTRAL
+        )
+        state = (
+            AlignmentState.STRONGLY_BULLISH
+            if dominant == TrendState.BULLISH and ratio >= 0.8
+            else AlignmentState.BULLISH
+            if dominant == TrendState.BULLISH and ratio > 0.5
+            else AlignmentState.STRONGLY_BEARISH
+            if dominant == TrendState.BEARISH and ratio >= 0.8
+            else AlignmentState.BEARISH
+            if dominant == TrendState.BEARISH and ratio > 0.5
+            else AlignmentState.MIXED
+        )
+        return AlignmentSummary(
+            bullish_count=bullish,
+            bearish_count=bearish,
+            neutral_count=neutral,
+            transition_count=transition,
+            alignment_ratio=ratio,
+            dominant_direction=dominant,
+            alignment_state=state,
+        )
