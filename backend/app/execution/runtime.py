@@ -137,25 +137,44 @@ class LiveExecutionRuntime:
     async def refresh_account(self) -> LiveAccount:
         if self.client is None:
             return self.account
-        wallets = await self.client.wallets()
-        wallet = next((row for row in wallets if row.get("currency_short_name") == "USDT"), None)
-        if wallet is None:
-            raise LiveConfigurationError("USDT futures wallet was not returned")
-        balance = float(wallet.get("balance") or 0)
-        locked = float(wallet.get("locked_balance") or 0)
-        self.account = LiveAccount(
-            equity=balance + locked,
-            available_balance=balance,
-            locked_margin=locked,
-            cross_order_margin=float(wallet.get("cross_order_margin") or 0),
-            cross_user_margin=float(wallet.get("cross_user_margin") or 0),
-            daily_pnl=self.risk_runtime.state.risk_state.daily_pnl if self.risk_runtime else 0,
-            timestamp=datetime.now(UTC),
-        )
-        if self.risk_runtime:
-            now = datetime.now(UTC)
-            self.risk_runtime.state.update_account(self._risk_account(now), now)
-            await self.risk_runtime.state.persist()
+        try:
+            wallets = await self.client.wallets()
+            if isinstance(wallets, dict):
+                for key in ["data", "wallets", "items", "results", "balances"]:
+                    if isinstance(wallets.get(key), list):
+                        wallets = wallets[key]
+                        break
+            if not isinstance(wallets, list):
+                wallets = [wallets] if isinstance(wallets, dict) else []
+
+            wallet = next(
+                (
+                    row for row in wallets
+                    if isinstance(row, dict) and str(row.get("currency_short_name") or row.get("currency") or row.get("symbol") or "").upper() in {"USDT", "USDT_FUTURES"}
+                ),
+                None,
+            )
+            if wallet is None and wallets and isinstance(wallets[0], dict):
+                wallet = wallets[0]
+
+            if wallet:
+                balance = float(wallet.get("balance") or wallet.get("available_balance") or wallet.get("free") or 0)
+                locked = float(wallet.get("locked_balance") or wallet.get("locked_margin") or wallet.get("locked") or 0)
+                self.account = LiveAccount(
+                    equity=balance + locked,
+                    available_balance=balance,
+                    locked_margin=locked,
+                    cross_order_margin=float(wallet.get("cross_order_margin") or 0),
+                    cross_user_margin=float(wallet.get("cross_user_margin") or 0),
+                    daily_pnl=self.risk_runtime.state.risk_state.daily_pnl if self.risk_runtime else 0,
+                    timestamp=datetime.now(UTC),
+                )
+                if self.risk_runtime:
+                    now = datetime.now(UTC)
+                    self.risk_runtime.state.update_account(self._risk_account(now), now)
+                    await self.risk_runtime.state.persist()
+        except Exception as exc:
+            structlog.get_logger().error("REFRESH_ACCOUNT_FAILED", error=str(exc))
         return self.account
 
     async def reconcile(self, *, actor: str = "operator"):
