@@ -947,6 +947,38 @@ async def live_health(request: Request, settings: SettingsDependency) -> dict:
     }
 
 
+@router.get("/live/debug-account")
+async def debug_account(request: Request, settings: SettingsDependency) -> dict:
+    authorize_live(request, settings)
+    runtime = live_runtime_from(request)
+    if not runtime.client:
+        return {"error": "no live client initialized"}
+    
+    from app.services.coindcx.constants import FUTURES_POSITIONS_PATH, FUTURES_WALLETS_PATH
+    results = {}
+    try:
+        results["post_futures_wallets"] = await runtime.client._signed_request("POST", FUTURES_WALLETS_PATH, {"margin_currency_short_name": ["USDT"]})
+    except Exception as e:
+        results["post_futures_wallets_error"] = f"{type(e).__name__}: {e}"
+        
+    try:
+        results["get_futures_wallets"] = await runtime.client._signed_request("GET", FUTURES_WALLETS_PATH)
+    except Exception as e:
+        results["get_futures_wallets_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        results["post_users_balances"] = await runtime.client._signed_request("POST", "/exchange/v1/users/balances", {})
+    except Exception as e:
+        results["post_users_balances_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        results["post_futures_positions"] = await runtime.client._signed_request("POST", FUTURES_POSITIONS_PATH, {"page": "1", "size": "100"})
+    except Exception as e:
+        results["post_futures_positions_error"] = f"{type(e).__name__}: {e}"
+
+    return results
+
+
 @router.get("/live/account")
 async def live_account(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
