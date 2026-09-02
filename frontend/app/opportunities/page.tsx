@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { Card } from "@/components/ui/card";
 import { getApiUrl } from "@/lib/api";
 
 type Opportunity = {
