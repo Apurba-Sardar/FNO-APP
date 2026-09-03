@@ -1045,7 +1045,30 @@ async def live_positions(request: Request, settings: SettingsDependency) -> dict
 @router.get("/live/orders")
 async def live_orders(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
-    rows = list(live_runtime_from(request).orders.values())
+    runtime = live_runtime_from(request)
+    if runtime.client:
+        try:
+            exchange_orders = await runtime.client.orders(status="filled,open,partially_filled,untriggered")
+            items = [
+                {
+                    "order_id": o.get("id"),
+                    "pair": o.get("pair"),
+                    "side": o.get("side"),
+                    "status": o.get("status"),
+                    "order_type": o.get("order_type"),
+                    "requested_quantity": float(o.get("total_quantity") or 0),
+                    "filled_quantity": float(o.get("total_quantity") or 0) if o.get("status") == "filled" else float(o.get("remaining_quantity") or 0),
+                    "price": float(o.get("avg_price") or o.get("price") or 0),
+                    "created_at": o.get("created_at"),
+                }
+                for o in exchange_orders
+            ]
+            items.sort(key=lambda x: x.get("created_at") or 0, reverse=True)
+            return {"count": len(items), "items": items[:30]}
+        except Exception as exc:
+            import structlog
+            structlog.get_logger().warning("EXCHANGE_ORDERS_FETCH_WARNING", error=str(exc))
+    rows = list(runtime.orders.values())
     return {"count": len(rows), "items": [item.model_dump(mode="json") for item in rows]}
 
 
