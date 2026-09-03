@@ -39,22 +39,28 @@ class AuthenticatedCoinDCXClient(CoinDCXClient):
         submission: bool = False,
         query: dict[str, Any] | None = None,
     ) -> Any:
-        request = dict(payload or {})
-        request["timestamp"] = self.clock.get_current_epoch_ms()
-        signed = self.signer.sign(request)
-        self.clock.assert_fresh(request["timestamp"])
+        if method == "GET":
+            signed = self.signer.sign(None, method="GET")
+            body_content = None
+        else:
+            request = dict(payload or {})
+            request["timestamp"] = self.clock.get_current_epoch_ms()
+            signed = self.signer.sign(request, method=method)
+            self.clock.assert_fresh(request["timestamp"])
+            body_content = signed.body
+
         attempts = 1 if submission else self._max_retries + 1
         safe_path = httpx.URL(path).path
         for attempt in range(attempts):
             await self._throttle.acquire()
             self.request_count += 1
             self.log.info("COINDCX_AUTH_REQUEST", method=method, path=safe_path, attempt=attempt + 1)
-            started_timestamp = request["timestamp"]
+            started_timestamp = request.get("timestamp") if method != "GET" else None
             try:
                 response = await self._http.request(
                     method,
                     f"{self.api_base_url}{path}",
-                    content=signed.body,
+                    content=body_content,
                     headers=signed.headers,
                     params=query,
                 )
@@ -107,13 +113,12 @@ class AuthenticatedCoinDCXClient(CoinDCXClient):
         raise AssertionError("unreachable")
 
     async def wallets(self):
-        return await self._signed_request("POST", FUTURES_WALLETS_PATH, {})
+        return await self._signed_request("GET", FUTURES_WALLETS_PATH)
 
     async def positions(self, *, pairs: str | None = None, position_ids: str | None = None):
         body: dict[str, Any] = {
             "page": "1",
             "size": "100",
-            "margin_currency_short_name": ["USDT"],
         }
         if pairs:
             body["pairs"] = pairs

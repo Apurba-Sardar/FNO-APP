@@ -44,7 +44,10 @@ class CoinDCXClient:
         transport: httpx.AsyncBaseTransport | None = None,
         sleeper=asyncio.sleep,
     ) -> None:
-        self._http = httpx.AsyncClient(timeout=timeout, transport=transport)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        self._http = httpx.AsyncClient(timeout=timeout, transport=transport, headers=headers)
         self._throttle = AsyncRequestThrottle(requests_per_second)
         self._max_retries = max_retries
         self._sleep = sleeper

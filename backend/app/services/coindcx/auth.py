@@ -57,14 +57,19 @@ class CoinDCXSigner:
     def serialize(payload: dict[str, Any]) -> bytes:
         return json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
-    def sign(self, payload: dict[str, Any]) -> SignedPayload:
-        body = self.serialize(payload)
-        signature = hmac.new(self._secret, body, hashlib.sha256).hexdigest()
+    def sign(self, payload: dict[str, Any] | None = None, method: str = "POST") -> SignedPayload:
+        if method == "GET":
+            body = b""
+            signature = hmac.new(self._secret, b"", hashlib.sha256).hexdigest()
+        else:
+            body = self.serialize(payload or {})
+            signature = hmac.new(self._secret, body, hashlib.sha256).hexdigest()
         return SignedPayload(
             body=body,
             signature=signature,
             headers={
                 "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "X-AUTH-APIKEY": self._api_key,
                 "X-AUTH-SIGNATURE": signature,
             },
