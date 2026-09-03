@@ -1165,8 +1165,8 @@ class LiveTestTradeRequest(LiveModel):
 async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
     runtime = live_runtime_from(request)
-    if runtime.state != LiveRuntimeState.ARMED:
-        raise HTTPException(status_code=409, detail="Live runtime must be ARMED before placing test trade")
+    if runtime.state.value != "armed":
+        raise HTTPException(status_code=409, detail=f"Live runtime must be ARMED (currently {runtime.state.value})")
     if body.confirmation_phrase != "EXECUTE REAL TRADE":
         raise HTTPException(status_code=400, detail="Confirmation phrase must be 'EXECUTE REAL TRADE'")
     if not runtime.client:
@@ -1192,12 +1192,17 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"CoinDCX Order Error: {exc}") from exc
 
-    await asyncio.sleep(1.5)
-    await runtime.reconcile(actor="operator-test-trade")
-    await runtime.refresh_account()
+    try:
+        await asyncio.sleep(1.5)
+        await runtime.reconcile(actor="operator-test-trade")
+        await runtime.refresh_account()
+    except Exception as exc:
+        import structlog
+        structlog.get_logger().warning("POST_TRADE_RECONCILE_WARNING", error=str(exc))
+
     return {
         "status": "submitted",
         "order_result": order_result,
         "open_positions": len(runtime.positions),
-        "available_balance": runtime.account.available_balance,
+        "available_balance": getattr(runtime.account, "available_balance", None),
     }
