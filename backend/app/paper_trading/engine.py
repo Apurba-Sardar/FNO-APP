@@ -221,7 +221,13 @@ class PaperTradingRuntime:
                     self.state.block_reason = str(exc)
             refresh_account(self.state, now)
             self.state.last_market_update = self.market_runtime.websocket.last_message_at
-            self.state.trading_blocked = had_stale or self.risk_state.risk_state.trading_lock.value == "blocked"
+            risk_blocked = (
+                self.risk_state.risk_state.trading_lock.value == "blocked"
+                and "account data unavailable" not in (self.risk_state.risk_state.block_reasons or [])
+            )
+            self.state.trading_blocked = had_stale or risk_blocked
+            if not self.state.trading_blocked:
+                self.state.block_reason = None
             if had_stale:
                 self.state.engine_status = EngineStatus.DATA_STALE
                 self._event("PAPER_ENGINE_DATA_STALE")

@@ -133,9 +133,11 @@ async def lifespan(application: FastAPI):
         if settings.trading_mode == "live":
             try:
                 await live_runtime.refresh_account()
-            except Exception:  # noqa: BLE001 - scanning must continue with a blocked risk account
+            except Exception:
                 structlog.get_logger().warning("LIVE_ACCOUNT_UNAVAILABLE_FOR_RISK")
             account = live_runtime._risk_account(now)
+            if account.account_equity is None or account.account_equity <= 0:
+                account = paper_runtime.risk_account(now)
         else:
             account = paper_runtime.risk_account(now)
         risk_stats = await risk_runtime.evaluate_all(
@@ -170,10 +172,9 @@ async def lifespan(application: FastAPI):
         await risk_state.load()
         await backtest_state.load()
         await paper_runtime.load()
-        if settings.trading_mode != "live":
-            now = datetime.now(UTC)
-            risk_state.update_account(paper_runtime.risk_account(now), now)
-            await risk_state.persist()
+        now = datetime.now(UTC)
+        risk_state.update_account(paper_runtime.risk_account(now), now)
+        await risk_state.persist()
         await runtime.start()
         await live_runtime.start()
         await scanner_runtime.start_runtime()

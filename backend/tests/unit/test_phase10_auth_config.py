@@ -72,8 +72,8 @@ async def test_authenticated_client_sends_the_signed_bytes_unchanged():
     finally:
         await client.close()
     assert captured["body"] == b'{"timestamp":1700000000000}'
-    assert captured["method"] == "GET"
-    assert captured["path"] == "/exchange/v1/derivatives/futures/wallets"
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/exchange/v1/derivatives/futures/positions/cross_margin_details"
     expected = hmac.new(b"secret", captured["body"], hashlib.sha256).hexdigest()
     assert captured["headers"]["x-auth-signature"] == expected
     assert "secret" not in repr(captured)
