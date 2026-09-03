@@ -31,15 +31,17 @@ class CoinDCXOrderRequestBuilder:
         pair = InstrumentMapper.exchange_pair(setup.symbol, market)
         quantity = InstrumentMapper.floor_quantity(decision.position_quantity, market)
         payload = {
-            "side": "buy" if setup.direction == StrategyDirection.LONG else "sell",
-            "pair": pair,
-            "order_type": "market_order",
-            "total_quantity": quantity,
-            "leverage": int(decision.estimated_leverage),
-            "notification": "no_notification",
-            "hidden": False,
-            "post_only": False,
-            "margin_currency_short_name": "USDT",
-            "position_margin_type": margin_mode,
+            "order": {
+                "side": "buy" if setup.direction == StrategyDirection.LONG else "sell",
+                "pair": pair,
+                "order_type": "market_order",
+                "total_quantity": quantity,
+                "leverage": int(decision.estimated_leverage),
+                "notification": "no_notification",
+                "hidden": False,
+                "post_only": False,
+                "margin_currency_short_name": "USDT",
+                "position_margin_type": margin_mode,
+            }
         }
         return BuiltOrder(payload=payload, quantity=quantity, pair=pair)

@@ -1174,16 +1174,18 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
 
     from app.services.coindcx.constants import FUTURES_CREATE_ORDER_PATH
     order_payload = {
-        "side": body.side,
-        "pair": body.symbol,
-        "order_type": "market_order",
-        "total_quantity": body.quantity,
-        "leverage": body.leverage,
-        "notification": "no_notification",
-        "hidden": False,
-        "post_only": False,
-        "margin_currency_short_name": "USDT",
-        "position_margin_type": "isolated",
+        "order": {
+            "side": body.side,
+            "pair": body.symbol,
+            "order_type": "market_order",
+            "total_quantity": body.quantity,
+            "leverage": body.leverage,
+            "notification": "no_notification",
+            "hidden": False,
+            "post_only": False,
+            "margin_currency_short_name": "USDT",
+            "position_margin_type": "isolated",
+        }
     }
     try:
         order_result = await runtime.client._signed_request("POST", FUTURES_CREATE_ORDER_PATH, order_payload, submission=True)
