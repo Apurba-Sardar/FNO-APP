@@ -954,11 +954,31 @@ async def debug_account(request: Request, settings: SettingsDependency) -> dict:
     if not runtime.client:
         return {"error": "no live client initialized"}
 
-    from app.services.coindcx.constants import FUTURES_POSITIONS_PATH, FUTURES_WALLETS_PATH
+    import time, urllib.request, hmac, hashlib
     results = {
         "key_masked": f"{runtime.client.signer._api_key[:6]}...{runtime.client.signer._api_key[-4:]}" if runtime.client and runtime.client.signer else "none",
         "secret_len": len(runtime.client.signer._secret) if runtime.client and runtime.client.signer else 0,
+        "server_epoch_ms": int(time.time() * 1000),
+        "client_headers": dict(runtime.client._http.headers) if runtime.client else {},
     }
+
+    try:
+        sig = hmac.new(runtime.client.signer._secret, b"", hashlib.sha256).hexdigest()
+        u_headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "X-AUTH-APIKEY": runtime.client.signer._api_key,
+            "X-AUTH-SIGNATURE": sig,
+        }
+        u_req = urllib.request.Request("https://api.coindcx.com/exchange/v1/derivatives/futures/wallets", headers=u_headers, method="GET")
+        with urllib.request.urlopen(u_req, timeout=10) as resp:
+            results["urllib_wallets_status"] = resp.status
+            results["urllib_wallets_sample"] = resp.read().decode("utf-8")[:200]
+    except Exception as u_err:
+        results["urllib_wallets_error"] = str(u_err)
+        if hasattr(u_err, "read"):
+            results["urllib_wallets_body"] = u_err.read().decode("utf-8")
+
     try:
         results["post_cross_margin"] = await runtime.client._signed_request("POST", FUTURES_WALLETS_PATH, {})
     except Exception as e:
