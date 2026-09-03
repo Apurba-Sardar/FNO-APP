@@ -13,6 +13,7 @@ async function proxyRequest(request: NextRequest, pathParams: string[]) {
 
   const incomingHeaders = new Headers(request.headers);
   incomingHeaders.delete("host");
+  incomingHeaders.delete("content-length");
   const body = request.method !== "GET" && request.method !== "HEAD" ? await request.text() : undefined;
 
   let lastError = "";
