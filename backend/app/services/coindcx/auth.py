@@ -51,7 +51,10 @@ class CoinDCXSigner:
         if not api_key or not api_secret:
             raise ValueError("CoinDCX API credentials are required")
         self._api_key = api_key.strip()
-        self._secret = api_secret.strip().encode("utf-8")
+        raw_secret = api_secret.strip()
+        if len(raw_secret) == 128 and raw_secret[:64] == raw_secret[64:]:
+            raw_secret = raw_secret[:64]
+        self._secret = raw_secret.encode("utf-8")
 
     @staticmethod
     def serialize(payload: dict[str, Any]) -> bytes:
