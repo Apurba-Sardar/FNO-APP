@@ -915,12 +915,11 @@ class LiveCloseRequest(LiveModel):
 
 def authorize_live(request: Request, settings: Settings, *, emergency: bool = False) -> None:
     expected = settings.live.emergency_token if emergency else settings.live.operator_token
-    default_token = "LIVE_EMERGENCY_TOKEN_2026" if emergency else "LIVE_OPERATOR_TOKEN_2026"
     if not expected:
-        expected = default_token
+        raise HTTPException(status_code=503, detail="live execution authorization is not configured")
     header = "x-live-emergency-token" if emergency else "x-live-operator-token"
     supplied = request.headers.get(header, "")
-    if (supplied and compare_digest(supplied, expected)) or (supplied and compare_digest(supplied, default_token)):
+    if supplied and compare_digest(supplied, expected):
         return
     raise HTTPException(status_code=403, detail="live execution authorization failed")
 
@@ -945,38 +944,6 @@ async def live_health(request: Request, settings: SettingsDependency) -> dict:
         "account_data_health": "healthy" if runtime.account.timestamp else "unavailable",
         "risk_lock": runtime.risk_runtime.state.risk_state.trading_lock if runtime.risk_runtime else "blocked",
     }
-
-
-@router.get("/live/debug-account")
-async def debug_account(request: Request, settings: SettingsDependency) -> dict:
-    authorize_live(request, settings)
-    runtime = live_runtime_from(request)
-    if not runtime.client:
-        return {"error": "no live client initialized"}
-    
-    from app.services.coindcx.constants import FUTURES_POSITIONS_PATH, FUTURES_WALLETS_PATH
-    results = {}
-    try:
-        results["post_futures_wallets"] = await runtime.client._signed_request("POST", FUTURES_WALLETS_PATH, {"margin_currency_short_name": ["USDT"]})
-    except Exception as e:
-        results["post_futures_wallets_error"] = f"{type(e).__name__}: {e}"
-        
-    try:
-        results["get_futures_wallets"] = await runtime.client._signed_request("GET", FUTURES_WALLETS_PATH)
-    except Exception as e:
-        results["get_futures_wallets_error"] = f"{type(e).__name__}: {e}"
-
-    try:
-        results["post_users_balances"] = await runtime.client._signed_request("POST", "/exchange/v1/users/balances", {})
-    except Exception as e:
-        results["post_users_balances_error"] = f"{type(e).__name__}: {e}"
-
-    try:
-        results["post_futures_positions"] = await runtime.client._signed_request("POST", FUTURES_POSITIONS_PATH, {"page": "1", "size": "100"})
-    except Exception as e:
-        results["post_futures_positions_error"] = f"{type(e).__name__}: {e}"
-
-    return results
 
 
 @router.get("/live/account")

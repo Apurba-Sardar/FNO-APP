@@ -32,7 +32,9 @@ class TPSLManager:
             await self.repository.save_position(failed)
             raise ProtectionFailure("native TP/SL request failed") from exc
         parts = [response.get("stop_loss"), response.get("take_profit")] if isinstance(response, dict) else []
-        if len(parts) != 2 or any(not isinstance(item, dict) or item.get("success") is False for item in parts):
+        if len(parts) != 2 or any(
+            not isinstance(item, dict) or item.get("success") is not True for item in parts
+        ):
             failed = position.model_copy(update={"protection_status": ProtectionStatus.FAILED})
             await self.repository.save_position(failed)
             raise ProtectionFailure("CoinDCX did not confirm both native TP and SL requests")
@@ -43,7 +45,12 @@ class TPSLManager:
             await self.repository.save_position(failed)
             raise ProtectionFailure("native TP/SL verification failed") from exc
         match = next((row for row in rows if str(row.get("id")) == position.exchange_position_id), None)
-        verified = bool(match and float(match.get("stop_loss_trigger") or 0) == stop and float(match.get("take_profit_trigger") or 0) == target)
+        price_tolerance = max(abs(position.average_price) * 1e-10, 1e-12)
+        verified = bool(
+            match
+            and abs(float(match.get("stop_loss_trigger") or 0) - stop) <= price_tolerance
+            and abs(float(match.get("take_profit_trigger") or 0) - target) <= price_tolerance
+        )
         updated = position.model_copy(update={
             "stop": stop,
             "target": target,

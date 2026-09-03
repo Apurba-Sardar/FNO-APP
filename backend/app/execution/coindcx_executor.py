@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 
 from app.execution.interface import TradeExecutor
@@ -13,9 +14,10 @@ from .tpsl_manager import TPSLManager
 class CoinDCXTradeExecutor(TradeExecutor):
     """Exchange adapter. Its caller must pass the final safety gate before invocation."""
 
-    def __init__(self, client, repository):
+    def __init__(self, client, repository, *, confirmation_timeout_seconds: float = 10):
         self.client = client
         self.repository = repository
+        self.confirmation_timeout_seconds = confirmation_timeout_seconds
         self.tpsl = TPSLManager(client, repository)
 
     async def execute_entry(self, intent: ExecutionIntent, order_payload: dict):
@@ -51,9 +53,9 @@ class CoinDCXTradeExecutor(TradeExecutor):
             intent = transition(intent, ExecutionState.ORDER_UNKNOWN)
             await self.repository.save_intent(intent)
             raise UnknownOrderState("CoinDCX response did not identify the order; reconciliation required")
-        rows = await self.client.orders(status="open,partially_filled,filled,rejected,cancelled")
-        raw = next((row for row in rows if str(row.get("id")) == exchange_order_id), None)
-        if raw is None:
+        try:
+            raw = await self._wait_for_order(exchange_order_id)
+        except Exception as exc:
             unknown = order.model_copy(update={
                 "exchange_order_id": exchange_order_id, "status": OrderState.UNKNOWN,
                 "updated_at": datetime.now(UTC),
@@ -63,7 +65,10 @@ class CoinDCXTradeExecutor(TradeExecutor):
                 update={"exchange_order_id": exchange_order_id}
             )
             await self.repository.save_intent(intent)
-            raise UnknownOrderState("submitted order was not confirmed by order-status query")
+            raise UnknownOrderState(
+                "submitted order did not reach a confirmed fill/terminal state; "
+                "reconciliation required"
+            ) from exc
         filled = max(0.0, float(raw.get("total_quantity") or 0) - float(raw.get("remaining_quantity") or 0))
         status = self._order_status(str(raw.get("status") or ""))
         order = order.model_copy(update={
@@ -77,11 +82,20 @@ class CoinDCXTradeExecutor(TradeExecutor):
             "updated_at": datetime.now(UTC),
         })
         await self.repository.save_order(order)
+        if status in {OrderState.REJECTED, OrderState.CANCELLED}:
+            failed = intent.model_copy(update={
+                "state": ExecutionState.FAILED,
+                "exchange_order_id": exchange_order_id,
+                "rejection_reasons": [f"exchange order {status.value}"],
+                "updated_at": datetime.now(UTC),
+            })
+            await self.repository.save_intent(failed)
+            raise CoinDCXError(f"CoinDCX order was {status.value}")
         if filled <= 0:
-            return intent.model_copy(update={"state": ExecutionState.ORDER_OPEN, "exchange_order_id": exchange_order_id}), order, None
-        position_rows = await self.client.positions(pairs=intent.exchange_pair)
-        raw_position = next((row for row in position_rows if float(row.get("active_pos") or 0) != 0), None)
-        if raw_position is None:
+            raise UnknownOrderState("CoinDCX reported no confirmed fill; reconciliation required")
+        try:
+            raw_position = await self._wait_for_position(intent.exchange_pair)
+        except Exception as exc:
             unknown = order.model_copy(update={"status": OrderState.UNKNOWN})
             await self.repository.save_order(unknown)
             unknown_intent = intent.model_copy(update={
@@ -91,7 +105,10 @@ class CoinDCXTradeExecutor(TradeExecutor):
                 "updated_at": datetime.now(UTC),
             })
             await self.repository.save_intent(unknown_intent)
-            raise UnknownOrderState("fill was reported but exchange position was not found")
+            raise UnknownOrderState(
+                "fill was reported but exchange position was not confirmed; "
+                "reconciliation required"
+            ) from exc
         position = normalize_exchange_position(raw_position, execution_request_id=intent.execution_request_id)
         await self.repository.save_position(position)
         next_state = ExecutionState.PARTIALLY_FILLED if status == OrderState.PARTIALLY_FILLED else ExecutionState.FILLED
@@ -132,6 +149,61 @@ class CoinDCXTradeExecutor(TradeExecutor):
         if not order.exchange_order_id:
             raise ValueError("exchange order id is required")
         return await self.client.cancel_order(order.exchange_order_id)
+
+    async def _wait_for_order(self, exchange_order_id: str) -> dict:
+        """Poll the documented order-list endpoint until the result is unambiguous."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.confirmation_timeout_seconds
+        while loop.time() < deadline:
+            rows = await self.client.orders(
+                status="open,partially_filled,filled,rejected,cancelled"
+            )
+            raw = next(
+                (
+                    row
+                    for row in rows
+                    if str(row.get("id") or row.get("order_id")) == exchange_order_id
+                ),
+                None,
+            )
+            if raw is not None:
+                status = self._order_status(str(raw.get("status") or ""))
+                total = float(raw.get("total_quantity") or 0)
+                remaining = float(raw.get("remaining_quantity") or 0)
+                if status in {
+                    OrderState.FILLED,
+                    OrderState.PARTIALLY_FILLED,
+                    OrderState.REJECTED,
+                    OrderState.CANCELLED,
+                } or total - remaining > 0:
+                    return raw
+            await asyncio.sleep(0.25)
+        raise TimeoutError("order confirmation timed out")
+
+    async def _wait_for_position(self, pair: str) -> dict:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.confirmation_timeout_seconds
+        while loop.time() < deadline:
+            rows = await self.client.positions(pairs=pair)
+            raw = next(
+                (
+                    row
+                    for row in rows
+                    if str(row.get("pair") or row.get("symbol")) == pair
+                    and float(
+                        row.get("active_pos")
+                        or row.get("active_position")
+                        or row.get("quantity")
+                        or 0
+                    )
+                    != 0
+                ),
+                None,
+            )
+            if raw is not None:
+                return raw
+            await asyncio.sleep(0.25)
+        raise TimeoutError("position confirmation timed out")
 
     @staticmethod
     def _extract_order_id(response) -> str | None:

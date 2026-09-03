@@ -44,14 +44,14 @@ export default function Home() {
   const isLive = health?.trading_mode === "live";
 
   return (
-    <main className="mx-auto max-w-7xl p-4 sm:p-6">
-      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <main className="mx-auto max-w-[1500px] p-3 sm:p-5">
+      <header className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[.2em] text-cyan-400">
             CoinDCX USDT Futures
           </p>
-          <h1 className="text-3xl font-black text-slate-100">
-            Algorithmic Trading & Scanner Suite
+          <h1 className="text-2xl font-black tracking-tight text-slate-100 sm:text-3xl">
+            Futures operations center
           </h1>
         </div>
         <div className="flex gap-2">
@@ -67,32 +67,32 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <Card className="border-cyan-500/20 bg-cyan-950/20">
           <p className="text-xs font-semibold uppercase text-slate-400">Trading Mode</p>
-          <p className={`mt-2 text-2xl font-black uppercase ${isLive ? "text-rose-400" : "text-amber-400"}`}>
+          <p className={`mt-1 text-lg font-black uppercase sm:text-xl ${isLive ? "text-rose-400" : "text-amber-400"}`}>
             {health?.trading_mode ?? "Paper"}
           </p>
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-950/20">
           <p className="text-xs font-semibold uppercase text-slate-400">API Health</p>
-          <p className="mt-2 text-2xl font-black text-emerald-400 uppercase">
-            {health?.status === "ok" ? "HEALTHY & CONNECTED" : "OFFLINE"}
+          <p className="mt-1 text-lg font-black uppercase text-emerald-400 sm:text-xl">
+            {health?.status === "ok" ? "Healthy" : "Offline"}
           </p>
         </Card>
         <Card className="border-purple-500/20 bg-purple-950/20">
           <p className="text-xs font-semibold uppercase text-slate-400">Live Execution</p>
-          <p className={`mt-2 text-2xl font-black ${health?.live_execution_available ? "text-emerald-400" : "text-slate-400"}`}>
+          <p className={`mt-1 text-lg font-black sm:text-xl ${health?.live_execution_available ? "text-emerald-400" : "text-slate-400"}`}>
             {health?.live_execution_available ? "ENABLED" : "CONFIGURED"}
           </p>
         </Card>
         <Card className="border-amber-500/20 bg-amber-950/20">
           <p className="text-xs font-semibold uppercase text-slate-400">System Phase</p>
-          <p className="mt-2 text-2xl font-black text-amber-300">Phase 10 Engine</p>
+          <p className="mt-1 text-lg font-black text-amber-300 sm:text-xl">Phase 10</p>
         </Card>
       </section>
 
-      <section className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <section className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         <Card className="flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center">
@@ -100,7 +100,7 @@ export default function Home() {
               <span className="rounded bg-rose-500/20 px-2 py-0.5 text-xs font-bold text-rose-300">REAL MONEY</span>
             </div>
             <p className="mt-2 text-sm text-slate-400">
-              Track live account equity, margins, 5 open positions, active exit orders, and interactive TradingView charts.
+              Track live account equity, margins, positions, protection, and execution health.
             </p>
           </div>
           <Link

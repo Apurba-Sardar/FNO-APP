@@ -43,6 +43,23 @@ def test_all_live_state_endpoints_require_backend_authorization():
     assert response.json()["stage"] == 0
 
 
+def test_live_api_is_unavailable_when_operator_token_is_not_configured():
+    application = FastAPI()
+    application.include_router(router)
+    application.state.live_runtime = Runtime()
+    application.dependency_overrides[get_settings] = lambda: Settings(
+        live_operator_token="", live_emergency_token=""
+    )
+    http = TestClient(application)
+
+    response = http.get(
+        "/api/v1/live/status",
+        headers={"x-live-operator-token": "CHANGE-ME-LIVE-OPERATOR"},
+    )
+
+    assert response.status_code == 503
+
+
 def test_frontend_cannot_override_execution_quantity_stop_target_or_leverage():
     http = api()
     response = http.post(

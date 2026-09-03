@@ -49,7 +49,10 @@ settings = get_settings()
 
 def create_authenticated_live_client(configuration):
     if not (
-        configuration.coindcx_api_key
+        configuration.trading_mode == "live"
+        and configuration.live.enabled
+        and configuration.live.stage > 0
+        and configuration.coindcx_api_key
         and configuration.coindcx_api_secret
     ):
         return None
@@ -125,18 +128,29 @@ async def lifespan(application: FastAPI):
     )
     scanner_runtime.on_completed = opportunity_runtime.recalculate
     opportunity_runtime.on_completed = strategy_runtime.evaluate_all
-    async def risk_then_paper(source_stats):
+    async def risk_then_execution(source_stats):
         now = getattr(source_stats, "evaluated_at", None) or datetime.now(UTC)
+        if settings.trading_mode == "live":
+            try:
+                await live_runtime.refresh_account()
+            except Exception:  # noqa: BLE001 - scanning must continue with a blocked risk account
+                structlog.get_logger().warning("LIVE_ACCOUNT_UNAVAILABLE_FOR_RISK")
+            account = live_runtime._risk_account(now)
+        else:
+            account = paper_runtime.risk_account(now)
         risk_stats = await risk_runtime.evaluate_all(
             source_stats,
             evaluation_timestamp=now,
-            account=paper_runtime.risk_account(now),
+            account=account,
             persist_account=True,
         )
-        await paper_runtime.process_risk_results(risk_stats)
+        if settings.trading_mode == "live":
+            await live_runtime.process_risk_results(risk_stats)
+        else:
+            await paper_runtime.process_risk_results(risk_stats)
         return risk_stats
 
-    strategy_runtime.on_completed = risk_then_paper
+    strategy_runtime.on_completed = risk_then_execution
     application.state.scanner_runtime = scanner_runtime
     application.state.opportunity_runtime = opportunity_runtime
     application.state.strategy_runtime = strategy_runtime
@@ -156,8 +170,10 @@ async def lifespan(application: FastAPI):
         await risk_state.load()
         await backtest_state.load()
         await paper_runtime.load()
-        risk_state.update_account(paper_runtime.risk_account(datetime.now(UTC)), datetime.now(UTC))
-        await risk_state.persist()
+        if settings.trading_mode != "live":
+            now = datetime.now(UTC)
+            risk_state.update_account(paper_runtime.risk_account(now), now)
+            await risk_state.persist()
         await runtime.start()
         await live_runtime.start()
         await scanner_runtime.start_runtime()

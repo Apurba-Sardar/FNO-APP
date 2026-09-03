@@ -55,6 +55,8 @@ async def test_authenticated_client_sends_the_signed_bytes_unchanged():
     def handler(request: httpx.Request):
         captured["body"] = request.content
         captured["headers"] = request.headers
+        captured["method"] = request.method
+        captured["path"] = request.url.path
         return httpx.Response(200, json=[{"id": "wallet", "currency_short_name": "USDT"}])
 
     client = AuthenticatedCoinDCXClient(
@@ -70,6 +72,8 @@ async def test_authenticated_client_sends_the_signed_bytes_unchanged():
     finally:
         await client.close()
     assert captured["body"] == b'{"timestamp":1700000000000}'
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/exchange/v1/derivatives/futures/wallets"
     expected = hmac.new(b"secret", captured["body"], hashlib.sha256).hexdigest()
     assert captured["headers"]["x-auth-signature"] == expected
     assert "secret" not in repr(captured)
