@@ -132,7 +132,7 @@ export default function Home() {
           </div>
           <b className="mt-2 text-2xl sm:text-3xl font-bold text-white">
             ${balance(liveAccount?.equity ?? 1059.07)} <span className="text-xs font-normal text-slate-400">USDT</span>
-          </p>
+          </b>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
             <span>Free Cash:</span>
             <b className="text-emerald-300">${balance(liveAccount?.available_balance ?? 0.28)} USDT</b>
