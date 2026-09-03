@@ -31,9 +31,12 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://fno:fno@postgres:5432/fno}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      TRADING_MODE: ${TRADING_MODE:-paper}
-      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
-      LIVE_STAGE: ${LIVE_STAGE:-0}
+      TRADING_MODE: ${TRADING_MODE:-live}
+      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-true}
+      LIVE_STAGE: ${LIVE_STAGE:-3}
+      LIVE_OPERATOR_TOKEN: ${LIVE_OPERATOR_TOKEN:-LIVE_OPERATOR_TOKEN_2026}
+      LIVE_EMERGENCY_TOKEN: ${LIVE_EMERGENCY_TOKEN:-LIVE_EMERGENCY_TOKEN_2026}
+      LIVE_TRADING_CONFIRMATION: ${LIVE_TRADING_CONFIRMATION:-LIVE_CONFIRM_SAFE_2026}
     ports: ["8000:8000"]
     depends_on:
       postgres: {condition: service_healthy}

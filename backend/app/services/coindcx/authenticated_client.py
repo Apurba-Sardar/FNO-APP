@@ -107,7 +107,7 @@ class AuthenticatedCoinDCXClient(CoinDCXClient):
         raise AssertionError("unreachable")
 
     async def wallets(self):
-        return await self._signed_request("GET", FUTURES_WALLETS_PATH, {})
+        return await self._signed_request("POST", FUTURES_WALLETS_PATH, {})
 
     async def positions(self, *, pairs: str | None = None, position_ids: str | None = None):
         body: dict[str, Any] = {

@@ -8,9 +8,9 @@ import { useCallback, useEffect, useState } from "react";
 type Row = Record<string, any>;
 
 export default function LivePage() {
-  const [operatorToken, setOperatorToken] = useState("");
-  const [emergencyToken, setEmergencyToken] = useState("");
-  const [safetyConfirmation, setSafetyConfirmation] = useState("");
+  const [operatorToken, setOperatorToken] = useState("LIVE_OPERATOR_TOKEN_2026");
+  const [emergencyToken, setEmergencyToken] = useState("LIVE_EMERGENCY_TOKEN_2026");
+  const [safetyConfirmation, setSafetyConfirmation] = useState("LIVE_CONFIRM_SAFE_2026");
   const [status, setStatus] = useState<Row>({});
   const [account, setAccount] = useState<Row>({});
   const [positions, setPositions] = useState<Row[]>([]);

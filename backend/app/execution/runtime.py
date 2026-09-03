@@ -149,6 +149,26 @@ class LiveExecutionRuntime:
             return self.account
         try:
             wallets = await self.client.wallets()
+            if isinstance(wallets, dict) and ("total_wallet_balance" in wallets or "total_account_equity" in wallets or "available_balance_cross" in wallets):
+                equity = float(wallets.get("total_account_equity") or wallets.get("total_wallet_balance") or 0)
+                available = float(wallets.get("available_balance_cross") or wallets.get("withdrawable_balance") or equity)
+                locked = float(wallets.get("locked_margin") or wallets.get("locked_balance") or 0)
+                self.account = LiveAccount(
+                    equity=equity,
+                    available_balance=available,
+                    locked_margin=locked,
+                    cross_order_margin=float(wallets.get("cross_order_margin") or 0),
+                    cross_user_margin=float(wallets.get("cross_user_margin") or 0),
+                    daily_pnl=self.risk_runtime.state.risk_state.daily_pnl if self.risk_runtime else 0,
+                    timestamp=datetime.now(UTC),
+                )
+                if self.risk_runtime:
+                    now = datetime.now(UTC)
+                    self.risk_runtime.state.update_account(self._risk_account(now), now)
+                    await self.risk_runtime.state.persist()
+                self.last_api_error = None
+                return self.account
+
             if isinstance(wallets, dict):
                 for key in ["data", "wallets", "items", "results", "balances"]:
                     if isinstance(wallets.get(key), list):
