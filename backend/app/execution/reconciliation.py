@@ -92,5 +92,5 @@ class PositionReconciliationService:
                 local_orders[local.order_id] = local.model_copy(update={"status": OrderState.RECONCILED, "raw_metadata": row})
                 await self.repository.save_order(local_orders[local.order_id])
                 report.unknown_orders_resolved += 1
-        report.healthy = not (report.ghost_positions or report.orphan_orders)
+        report.healthy = not report.ghost_positions
         return report
