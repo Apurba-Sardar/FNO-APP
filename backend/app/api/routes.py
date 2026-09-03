@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 from secrets import compare_digest
 from typing import Annotated, Literal
@@ -1184,7 +1185,11 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
         "margin_currency_short_name": "USDT",
         "position_margin_type": "isolated",
     }
-    order_result = await runtime.client._signed_request("POST", FUTURES_CREATE_ORDER_PATH, order_payload, submission=True)
+    try:
+        order_result = await runtime.client._signed_request("POST", FUTURES_CREATE_ORDER_PATH, order_payload, submission=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"CoinDCX Order Error: {exc}") from exc
+
     await asyncio.sleep(1.5)
     await runtime.reconcile(actor="operator-test-trade")
     await runtime.refresh_account()
