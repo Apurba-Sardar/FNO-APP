@@ -1150,3 +1150,47 @@ async def close_live_position(position_id: UUID, body: LiveCloseRequest, request
         return await live_runtime_from(request).close_position(position_id, body.confirmation_phrase)
     except LiveExecutionError as exc:
         raise live_error(exc) from exc
+
+
+class LiveTestTradeRequest(LiveModel):
+    symbol: str = "B-LTC_USDT"
+    side: Literal["buy", "sell"] = "buy"
+    quantity: float = 0.1
+    leverage: int = 1
+    confirmation_phrase: str
+
+
+@router.post("/live/test-trade")
+async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings: SettingsDependency) -> dict:
+    authorize_live(request, settings)
+    runtime = live_runtime_from(request)
+    if runtime.state != LiveRuntimeState.ARMED:
+        raise HTTPException(status_code=409, detail="Live runtime must be ARMED before placing test trade")
+    if body.confirmation_phrase != "EXECUTE REAL TRADE":
+        raise HTTPException(status_code=400, detail="Confirmation phrase must be 'EXECUTE REAL TRADE'")
+    if not runtime.client:
+        raise HTTPException(status_code=503, detail="CoinDCX live client unavailable")
+
+    from app.services.coindcx.constants import FUTURES_CREATE_ORDER_PATH
+    order_payload = {
+        "side": body.side,
+        "pair": body.symbol,
+        "order_type": "market_order",
+        "total_quantity": body.quantity,
+        "leverage": body.leverage,
+        "notification": "no_notification",
+        "hidden": False,
+        "post_only": False,
+        "margin_currency_short_name": "USDT",
+        "position_margin_type": "isolated",
+    }
+    order_result = await runtime.client._signed_request("POST", FUTURES_CREATE_ORDER_PATH, order_payload, submission=True)
+    await asyncio.sleep(1.5)
+    await runtime.reconcile(actor="operator-test-trade")
+    await runtime.refresh_account()
+    return {
+        "status": "submitted",
+        "order_result": order_result,
+        "open_positions": len(runtime.positions),
+        "available_balance": runtime.account.available_balance,
+    }
