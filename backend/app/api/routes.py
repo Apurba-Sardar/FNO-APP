@@ -1229,3 +1229,31 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
         "open_positions": len(runtime.positions),
         "available_balance": getattr(runtime.account, "available_balance", None),
     }
+
+
+class LiveExitPositionRequest(LiveModel):
+    position_id: str
+    confirmation_phrase: str = "EXIT REAL POSITION"
+
+
+@router.post("/live/exit-position")
+async def live_exit_position(body: LiveExitPositionRequest, request: Request, settings: SettingsDependency) -> dict:
+    authorize_live(request, settings)
+    runtime = live_runtime_from(request)
+    if not runtime.client:
+        raise HTTPException(status_code=503, detail="CoinDCX live client unavailable")
+    try:
+        from app.services.coindcx.constants import FUTURES_EXIT_POSITION_PATH
+        result = await runtime.client._signed_request("POST", FUTURES_EXIT_POSITION_PATH, {"id": body.position_id}, submission=True)
+        await asyncio.sleep(1.5)
+        await runtime.reconcile(actor="operator-exit-position")
+        await runtime.refresh_account()
+        return {
+            "status": "success",
+            "result": result,
+            "open_positions": len(runtime.positions),
+            "available_balance": getattr(runtime.account, "available_balance", None),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"CoinDCX Exit Position Error: {exc}") from exc
+

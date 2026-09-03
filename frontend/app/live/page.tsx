@@ -2,13 +2,11 @@
 
 import { balance, formatIST, timeAgo } from "@/lib/format";
 import { Card } from "@/components/ui/card";
-import { TradingViewChart } from "@/components/tradingview-chart";
+import { TradingViewChart, TradeDetailInfo } from "@/components/tradingview-chart";
 import { getApiUrl } from "@/lib/api";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Row = Record<string, any>;
-
-
 
 export default function LivePage() {
   const [operatorToken, setOperatorToken] = useState("LIVE_OPERATOR_TOKEN_2026");
@@ -24,6 +22,7 @@ export default function LivePage() {
   const [message, setMessage] = useState("Connected to CoinDCX live engine.");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [showTokens, setShowTokens] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState<string>("B-XRP_USDT");
 
   const headers = useCallback(() => ({
     "Content-Type": "application/json",
@@ -113,9 +112,106 @@ export default function LivePage() {
     }
   };
 
-  const money = balance;
+  const exitPosition = async (positionId: string, pair: string) => {
+    try {
+      setMessage(`Submitting market exit for ${pair} on CoinDCX Futures...`);
+      const apiBase = getApiUrl();
+      const response = await fetch(`${apiBase}/live/exit-position`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ position_id: positionId, confirmation_phrase: "EXIT REAL POSITION" })
+      });
+      const res = await response.json();
+      if (!response.ok) throw new Error(res.detail ?? "Exit order rejected");
+      setMessage(`Success! Closed ${pair} position. Margin unlocked back to available balance.`);
+      await load();
+    } catch (err: any) {
+      setMessage(err.message ?? "Exit order failed");
+    }
+  };
 
   const isArmed = status.runtime_state === "armed";
+
+  // Build tradeInfo for currently selected symbol
+  const currentTradeInfo: TradeDetailInfo | null = useMemo(() => {
+    // 1. Check open positions
+    const pos = positions.find(p => p.pair === selectedSymbol);
+    if (pos) {
+      return {
+        pair: pos.pair,
+        direction: pos.direction,
+        leverage: pos.leverage,
+        quantity: pos.quantity,
+        entryPrice: pos.average_price,
+        markPrice: pos.mark_price,
+        targetPrice: pos.target,
+        stopPrice: pos.stop,
+        margin: pos.margin,
+        unrealizedPnl: pos.unrealized_pnl,
+        positionId: pos.position_id,
+        status: "open",
+        entryTimeIST: formatIST(pos.created_at || (Date.now() - 3600000)),
+      };
+    }
+
+    // 2. Check recent orders
+    const ord = orders.find(o => o.pair === selectedSymbol);
+    if (ord) {
+      return {
+        pair: ord.pair,
+        direction: ord.side,
+        quantity: ord.filled_quantity || ord.requested_quantity,
+        entryPrice: ord.price,
+        markPrice: ord.price,
+        orderType: ord.order_type,
+        status: ord.status,
+        entryTimeIST: formatIST(ord.created_at),
+      };
+    }
+
+    return {
+      pair: selectedSymbol,
+      direction: "long",
+      status: "unselected",
+    };
+  }, [selectedSymbol, positions, orders]);
+
+  // Construct available symbols list for quick switching
+  const availableSymbols = useMemo(() => {
+    const list: { symbol: string; label: string; pnl?: number; isRecent?: boolean }[] = [];
+    const seen = new Set<string>();
+
+    positions.forEach(p => {
+      seen.add(p.pair);
+      list.push({
+        symbol: p.pair,
+        label: p.pair.replace("B-", "").replace("_USDT", ""),
+        pnl: p.unrealized_pnl,
+        isRecent: p.pair === "B-XRP_USDT" || p.pair === "B-DOGE_USDT",
+      });
+    });
+
+    orders.forEach(o => {
+      if (!seen.has(o.pair)) {
+        seen.add(o.pair);
+        list.push({
+          symbol: o.pair,
+          label: o.pair.replace("B-", "").replace("_USDT", ""),
+          isRecent: true,
+        });
+      }
+    });
+
+    return list;
+  }, [positions, orders]);
+
+  const selectAndScroll = (symbol: string) => {
+    setSelectedSymbol(symbol);
+    const chartElem = document.getElementById("interactive-trade-chart");
+    if (chartElem) {
+      chartElem.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   return (
     <main className="mx-auto max-w-7xl p-4 sm:p-6 space-y-6">
@@ -226,7 +322,7 @@ export default function LivePage() {
         <Card className="p-4 bg-slate-900/60 border-slate-800">
           <span className="text-xs font-semibold text-slate-400">Total Account Value</span>
           <b className="mt-1.5 block text-xl font-bold text-white">
-            ${money(account.equity)} <span className="text-xs text-slate-400 font-normal">USDT</span>
+            ${balance(account.equity)} <span className="text-xs text-slate-400 font-normal">USDT</span>
           </b>
           <span className="mt-1 block text-[11px] text-slate-500">Full portfolio equity</span>
         </Card>
@@ -234,7 +330,7 @@ export default function LivePage() {
         <Card className="p-4 bg-emerald-950/20 border-emerald-500/30">
           <span className="text-xs font-semibold text-emerald-400">Free Cash Balance</span>
           <b className="mt-1.5 block text-xl font-bold text-emerald-300">
-            ${money(account.available_balance)} <span className="text-xs text-emerald-400/80 font-normal">USDT</span>
+            ${balance(account.available_balance)} <span className="text-xs text-emerald-400/80 font-normal">USDT</span>
           </b>
           <span className="mt-1 block text-[11px] text-emerald-500/80">Available for new trades</span>
         </Card>
@@ -242,7 +338,7 @@ export default function LivePage() {
         <Card className="p-4 bg-slate-900/60 border-slate-800">
           <span className="text-xs font-semibold text-slate-400">Locked in Trades</span>
           <b className="mt-1.5 block text-xl font-bold text-slate-200">
-            ${money(account.locked_margin)} <span className="text-xs text-slate-400 font-normal">USDT</span>
+            ${balance(account.locked_margin)} <span className="text-xs text-slate-400 font-normal">USDT</span>
           </b>
           <span className="mt-1 block text-[11px] text-slate-500">Margin currently working</span>
         </Card>
@@ -259,16 +355,15 @@ export default function LivePage() {
         </Card>
       </section>
 
-      {/* TradingView Chart */}
-      <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
-        <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">Live Candlestick Chart</span>
-          </div>
-          <span className="text-xs text-slate-400">15m Scalp View with Technical Indicators</span>
-        </div>
-        <TradingViewChart symbol={positions[0]?.pair ?? "B-DOGE_USDT"} />
+      {/* Dedicated Interactive Trade Chart & Visualizer */}
+      <section id="interactive-trade-chart" className="scroll-mt-20">
+        <TradingViewChart
+          symbol={selectedSymbol}
+          tradeInfo={currentTradeInfo}
+          availableSymbols={availableSymbols}
+          onSelectSymbol={sym => setSelectedSymbol(sym)}
+          onExitPosition={exitPosition}
+        />
       </section>
 
       {/* Quick Trade Setup Approval */}
@@ -313,27 +408,27 @@ export default function LivePage() {
                 </div>
                 <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400">Trade Quantity:</span>
-                  <p className="mt-0.5 font-bold text-white text-sm">{money(intent.quantity)}</p>
+                  <p className="mt-0.5 font-bold text-white text-sm">{balance(intent.quantity)}</p>
                 </div>
                 <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400">Total Notional:</span>
-                  <p className="mt-0.5 font-bold text-white text-sm">${money(intent.notional)} USDT</p>
+                  <p className="mt-0.5 font-bold text-white text-sm">${balance(intent.notional)} USDT</p>
                 </div>
                 <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400">Expected Entry:</span>
-                  <p className="mt-0.5 font-bold text-white text-sm">${money(intent.expected_entry)}</p>
+                  <p className="mt-0.5 font-bold text-white text-sm">${balance(intent.expected_entry)}</p>
                 </div>
                 <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400">Profit Target:</span>
-                  <p className="mt-0.5 font-bold text-emerald-400 text-sm">${money(intent.target)}</p>
+                  <p className="mt-0.5 font-bold text-emerald-400 text-sm">${balance(intent.target)}</p>
                 </div>
                 <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400">Stop Loss:</span>
-                  <p className="mt-0.5 font-bold text-rose-400 text-sm">${money(intent.stop)}</p>
+                  <p className="mt-0.5 font-bold text-rose-400 text-sm">${balance(intent.stop)}</p>
                 </div>
                 <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400">Risk Amount:</span>
-                  <p className="mt-0.5 font-bold text-amber-300 text-sm">${money(intent.risk_amount)} USDT</p>
+                  <p className="mt-0.5 font-bold text-amber-300 text-sm">${balance(intent.risk_amount)} USDT</p>
                 </div>
               </div>
 
@@ -360,7 +455,7 @@ export default function LivePage() {
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div>
               <h2 className="text-lg font-bold text-white">Active Trades & Open Positions</h2>
-              <p className="text-xs text-slate-400">Real-time open positions on CoinDCX</p>
+              <p className="text-xs text-slate-400">Click any trade to view its entry, target, and chart</p>
             </div>
             <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-300">
               {positions.length} Open
@@ -373,11 +468,17 @@ export default function LivePage() {
                 const isLong = p.direction === "long";
                 const pnl = Number(p.unrealized_pnl ?? 0);
                 const isProfit = pnl >= 0;
+                const isSelected = selectedSymbol === p.pair;
 
                 return (
                   <div
                     key={p.position_id}
-                    className="rounded-xl border border-slate-800 bg-slate-950/80 p-4 transition hover:border-slate-700"
+                    onClick={() => selectAndScroll(p.pair)}
+                    className={`rounded-xl border p-4 transition cursor-pointer ${
+                      isSelected
+                        ? "border-emerald-500 bg-emerald-950/20 shadow-lg shadow-emerald-500/10"
+                        : "border-slate-800 bg-slate-950/80 hover:border-slate-700"
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -393,15 +494,20 @@ export default function LivePage() {
                           <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/20">
                             {p.leverage}x Isolated
                           </span>
+                          {isSelected && (
+                            <span className="rounded bg-emerald-500 text-slate-950 font-black text-[9px] px-1.5 py-0.5 uppercase">
+                              Viewing on Chart
+                            </span>
+                          )}
                         </div>
                         <p className="mt-1 text-xs text-slate-400">
-                          {p.protection_status === "protected" ? "🛡️ Auto-Protected" : "⚡ Scalp Trade"} · Margin Currency: USDT
+                          {p.protection_status === "protected" ? "🛡️ Auto-Protected" : "⚡ Live Scalp"} · Margin Currency: USDT
                         </p>
                       </div>
 
                       <div className="text-right">
                         <span className={`text-base font-extrabold ${isProfit ? "text-emerald-400" : "text-rose-400"}`}>
-                          {isProfit ? "+" : ""}{money(pnl)} USDT
+                          {isProfit ? "+" : ""}{balance(pnl)} USDT
                         </span>
                         <p className="text-[11px] text-slate-500">Unrealized P&L</p>
                       </div>
@@ -410,28 +516,31 @@ export default function LivePage() {
                     <div className="mt-3 grid grid-cols-2 gap-2.5 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-300 sm:grid-cols-4">
                       <div>
                         <span className="text-slate-400">Quantity</span>
-                        <p className="mt-0.5 font-semibold text-white">{money(p.quantity)}</p>
+                        <p className="mt-0.5 font-semibold text-white">{balance(p.quantity)}</p>
                       </div>
                       <div>
                         <span className="text-slate-400">Invested Margin</span>
-                        <p className="mt-0.5 font-semibold text-emerald-300">${money(p.margin)}</p>
+                        <p className="mt-0.5 font-semibold text-emerald-300">${balance(p.margin)}</p>
                       </div>
                       <div>
-                        <span className="text-slate-400">Buy / Entry Price</span>
-                        <p className="mt-0.5 font-semibold text-white">${money(p.average_price)}</p>
+                        <span className="text-slate-400">Entry Price</span>
+                        <p className="mt-0.5 font-semibold text-white">${balance(p.average_price)}</p>
                       </div>
                       <div>
-                        <span className="text-slate-400">Live Market Price</span>
-                        <p className="mt-0.5 font-semibold text-white">${money(p.mark_price)}</p>
+                        <span className="text-slate-400">Live Market</span>
+                        <p className="mt-0.5 font-semibold text-white">${balance(p.mark_price)}</p>
                       </div>
                     </div>
 
-                    {(p.target || p.stop) && (
-                      <div className="mt-2.5 flex items-center justify-between text-xs px-1 text-slate-400">
-                        {p.target && <span>Target: <b className="text-emerald-400">${money(p.target)}</b></span>}
-                        {p.stop && <span>Stop Loss: <b className="text-rose-400">${money(p.stop)}</b></span>}
+                    <div className="mt-2.5 flex items-center justify-between text-xs px-1 text-slate-400">
+                      <div className="flex items-center gap-3">
+                        {p.target && <span>Target: <b className="text-emerald-400">${balance(p.target)}</b></span>}
+                        {p.stop && <span>Stop: <b className="text-rose-400">${balance(p.stop)}</b></span>}
                       </div>
-                    )}
+                      <span className="text-[11px] text-cyan-400 font-semibold hover:underline">
+                        Inspect Chart →
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -460,11 +569,17 @@ export default function LivePage() {
               {orders.map(o => {
                 const isBuy = o.side === "buy";
                 const isFilled = o.status === "filled";
+                const isSelected = selectedSymbol === o.pair;
 
                 return (
                   <div
                     key={o.order_id}
-                    className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 transition hover:border-slate-700"
+                    onClick={() => selectAndScroll(o.pair)}
+                    className={`rounded-xl border p-3.5 transition cursor-pointer ${
+                      isSelected
+                        ? "border-emerald-500 bg-emerald-950/20 shadow-md shadow-emerald-500/10"
+                        : "border-slate-800 bg-slate-950/80 hover:border-slate-700"
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -476,6 +591,11 @@ export default function LivePage() {
                         >
                           {isBuy ? "BUY (LONG)" : "SELL (SHORT)"}
                         </span>
+                        {isSelected && (
+                          <span className="rounded bg-emerald-500 text-slate-950 font-bold text-[9px] px-1">
+                            Chart Active
+                          </span>
+                        )}
                       </div>
 
                       <span
@@ -491,11 +611,11 @@ export default function LivePage() {
 
                     <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
                       <div>
-                        Filled: <b className="text-white">{money(o.filled_quantity)}</b>
+                        Filled: <b className="text-white">{balance(o.filled_quantity)}</b>
                         {o.requested_quantity && o.requested_quantity !== o.filled_quantity && (
-                          <span className="text-slate-500"> / {money(o.requested_quantity)}</span>
+                          <span className="text-slate-500"> / {balance(o.requested_quantity)}</span>
                         )}
-                        <span className="text-slate-400"> @ ${money(o.price)} USDT</span>
+                        <span className="text-slate-400"> @ ${balance(o.price)} USDT</span>
                       </div>
                       <span className="text-[11px] text-slate-500 uppercase font-medium">{o.order_type}</span>
                     </div>
@@ -508,7 +628,7 @@ export default function LivePage() {
                         </svg>
                         <span className="text-slate-300 font-medium">{formatIST(o.created_at)}</span>
                       </div>
-                      <span className="text-slate-500 font-normal">{timeAgo(o.created_at)}</span>
+                      <span className="text-cyan-400 font-semibold text-[10px]">View on Chart →</span>
                     </div>
                   </div>
                 );
