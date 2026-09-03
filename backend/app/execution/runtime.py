@@ -276,6 +276,8 @@ class LiveExecutionRuntime:
         strategy = StrategyName(strategy_value)
         analysis = await self.strategy_runtime.evaluate_symbol(symbol, now)
         setup = analysis.results[strategy]
+        if not setup.is_actionable or setup.hypothetical_entry is None:
+            raise SafetyGateRejected([f"Strategy setup for {symbol} ({strategy.value}) is not actionable (waiting for breakout trigger)"])
         candidate = self.risk_runtime.scanner_state.candidates.get(symbol)
         if candidate is None or candidate.instrument is None:
             raise SafetyGateRejected(["validated instrument metadata is unavailable"])
