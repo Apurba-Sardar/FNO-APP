@@ -947,29 +947,74 @@ async def live_health(request: Request, settings: SettingsDependency) -> dict:
     }
 
 
+@router.get("/live/debug-account")
+async def debug_account(request: Request, settings: SettingsDependency) -> dict:
+    authorize_live(request, settings)
+    runtime = live_runtime_from(request)
+    if not runtime.client:
+        return {"error": "no live client initialized"}
+
+    from app.services.coindcx.constants import FUTURES_POSITIONS_PATH, FUTURES_WALLETS_PATH
+    results = {}
+    try:
+        results["post_cross_margin"] = await runtime.client._signed_request("POST", FUTURES_WALLETS_PATH, {})
+    except Exception as e:
+        results["post_cross_margin_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        results["get_cross_margin"] = await runtime.client._signed_request("GET", FUTURES_WALLETS_PATH)
+    except Exception as e:
+        results["get_cross_margin_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        results["post_users_balances"] = await runtime.client._signed_request("POST", "/exchange/v1/users/balances", {})
+    except Exception as e:
+        results["post_users_balances_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        results["post_futures_positions"] = await runtime.client._signed_request("POST", FUTURES_POSITIONS_PATH, {"page": "1", "size": "100", "margin_currency_short_name": ["USDT"]})
+    except Exception as e:
+        results["post_futures_positions_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        results["post_futures_positions_clean"] = await runtime.client._signed_request("POST", FUTURES_POSITIONS_PATH, {"page": "1", "size": "100"})
+    except Exception as e:
+        results["post_futures_positions_clean_error"] = f"{type(e).__name__}: {e}"
+
+    return results
+
+
 @router.get("/live/account")
 async def live_account(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
     runtime = live_runtime_from(request)
+    last_err = None
     if runtime.client:
         try:
             await runtime.refresh_account()
-        except Exception:
-            pass
-    return runtime.account.model_dump(mode="json")
+        except Exception as exc:
+            last_err = f"{type(exc).__name__}: {exc}"
+    data = runtime.account.model_dump(mode="json")
+    if last_err:
+        data["api_error"] = last_err
+    return data
 
 
 @router.get("/live/positions")
 async def live_positions(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
     runtime = live_runtime_from(request)
+    last_err = None
     if runtime.client:
         try:
             await runtime.reconcile(actor="api")
-        except Exception:
-            pass
+        except Exception as exc:
+            last_err = f"{type(exc).__name__}: {exc}"
     rows = list(runtime.positions.values())
-    return {"count": len(rows), "items": [item.model_dump(mode="json") for item in rows]}
+    res = {"count": len(rows), "items": [item.model_dump(mode="json") for item in rows]}
+    if last_err:
+        res["api_error"] = last_err
+    return res
 
 
 @router.get("/live/orders")
