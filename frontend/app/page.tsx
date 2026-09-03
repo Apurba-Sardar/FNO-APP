@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { getApiUrl } from "@/lib/api";
-import { formatIST, money } from "@/lib/format";
+import { balance, formatIST } from "@/lib/format";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -130,12 +130,12 @@ export default function Home() {
             <span>Total Account Value</span>
             <span className="text-emerald-400">Live</span>
           </div>
-          <p className="mt-2 text-2xl sm:text-3xl font-black text-white">
-            ${money(liveAccount?.equity ?? 1059.07)} <span className="text-xs font-normal text-slate-400">USDT</span>
+          <b className="mt-2 text-2xl sm:text-3xl font-bold text-white">
+            ${balance(liveAccount?.equity ?? 1059.07)} <span className="text-xs font-normal text-slate-400">USDT</span>
           </p>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
             <span>Free Cash:</span>
-            <b className="text-emerald-300">${money(liveAccount?.available_balance ?? 0.28)} USDT</b>
+            <b className="text-emerald-300">${balance(liveAccount?.available_balance ?? 0.28)} USDT</b>
           </div>
         </Card>
 
@@ -153,7 +153,7 @@ export default function Home() {
           </p>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
             <span>Margin Working:</span>
-            <b className="text-slate-200">${money(liveAccount?.locked_margin ?? 1058.78)} USDT</b>
+            <b className="text-slate-200">${balance(liveAccount?.locked_margin ?? 1058.78)} USDT</b>
           </div>
         </Card>
 

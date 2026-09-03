@@ -55,6 +55,19 @@ export function timeAgo(ts: number | string | Date | undefined | null): string {
 }
 
 export function money(value: unknown, maxDecimals = 4, minDecimals = 2): string {
+  if (value === null || value === undefined || value === "" || Number(value) === 0) {
+    return "—";
+  }
+  const num = Number(value);
+  if (isNaN(num)) return "—";
+  return num.toLocaleString("en-IN", {
+    maximumFractionDigits: maxDecimals,
+    minimumFractionDigits: minDecimals,
+  });
+}
+
+/** Like money() but always shows a value (0 → "0.00"), for balances where zero is meaningful */
+export function balance(value: unknown, maxDecimals = 4, minDecimals = 2): string {
   const num = Number(value ?? 0);
   if (isNaN(num)) return "0.00";
   return num.toLocaleString("en-IN", {

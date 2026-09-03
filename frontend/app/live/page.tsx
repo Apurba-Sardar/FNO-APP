@@ -1,5 +1,6 @@
 "use client";
 
+import { balance, formatIST, timeAgo } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { TradingViewChart } from "@/components/tradingview-chart";
 import { getApiUrl } from "@/lib/api";
@@ -7,34 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 
 type Row = Record<string, any>;
 
-function formatIST(ts: number | string | undefined | null): string {
-  if (!ts) return "—";
-  const date = typeof ts === "number" ? new Date(ts) : new Date(ts);
-  if (isNaN(date.getTime())) return "—";
-  return date.toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  }) + " IST";
-}
 
-function timeAgo(ts: number | string | undefined | null): string {
-  if (!ts) return "";
-  const date = typeof ts === "number" ? new Date(ts) : new Date(ts);
-  if (isNaN(date.getTime())) return "";
-  const diffSec = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${Math.floor(diffHours / 24)}d ago`;
-}
 
 export default function LivePage() {
   const [operatorToken, setOperatorToken] = useState("LIVE_OPERATOR_TOKEN_2026");
@@ -139,10 +113,7 @@ export default function LivePage() {
     }
   };
 
-  const money = (value: unknown, maxDecimals = 4) => {
-    const num = Number(value ?? 0);
-    return isNaN(num) ? "0.00" : num.toLocaleString("en-IN", { maximumFractionDigits: maxDecimals, minimumFractionDigits: 2 });
-  };
+  const money = balance;
 
   const isArmed = status.runtime_state === "armed";
 
