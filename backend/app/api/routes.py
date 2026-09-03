@@ -955,7 +955,10 @@ async def debug_account(request: Request, settings: SettingsDependency) -> dict:
         return {"error": "no live client initialized"}
 
     from app.services.coindcx.constants import FUTURES_POSITIONS_PATH, FUTURES_WALLETS_PATH
-    results = {}
+    results = {
+        "key_masked": f"{runtime.client.signer._api_key[:6]}...{runtime.client.signer._api_key[-4:]}" if runtime.client and runtime.client.signer else "none",
+        "secret_len": len(runtime.client.signer._secret) if runtime.client and runtime.client.signer else 0,
+    }
     try:
         results["post_cross_margin"] = await runtime.client._signed_request("POST", FUTURES_WALLETS_PATH, {})
     except Exception as e:
