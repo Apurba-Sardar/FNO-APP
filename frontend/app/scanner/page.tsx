@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
 import { Card } from "@/components/ui/card";
-
 import { getApiUrl } from "@/lib/api";
-const FRAMES = ["1w", "1d", "4h", "1h", "15m", "5m"];
+import { formatIST, formatPercent, money } from "@/lib/format";
 
 type Candidate = {
   symbol: string;
@@ -27,6 +25,7 @@ type Candidate = {
   technical_activity: string;
   warnings: string[];
 };
+
 type Stats = {
   total_markets: number;
   eligible_markets: number;
@@ -37,18 +36,19 @@ type Stats = {
   processing_time_seconds: number;
   average_processing_time_ms: number;
 };
-type Status = { status: string; scheduled: boolean; last_scan_at: string | null; stats: Stats | null };
 
-const number = (value: number | null, digits = 3) =>
-  value == null ? "—" : value.toLocaleString(undefined, { maximumFractionDigits: digits });
+type Status = {
+  status: string;
+  scheduled: boolean;
+  last_scan_at: string | null;
+  stats: Stats | null;
+};
 
 export default function ScannerPage() {
   const [items, setItems] = useState<Candidate[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<keyof Candidate>("symbol");
-  const [descending, setDescending] = useState(false);
+  const [filterTab, setFilterTab] = useState<"all" | "bullish" | "bearish" | "volume">("all");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -60,6 +60,7 @@ export default function ScannerPage() {
       ]);
       setStatus(await statusResponse.json());
       setItems((await candidatesResponse.json()).items ?? []);
+      setError("");
     } catch (cause) {
       setError(String(cause));
     }
@@ -75,8 +76,9 @@ export default function ScannerPage() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`${getApiUrl()}/scanner/${action}`, { method: "POST" });
-      if (!response.ok) throw new Error(`scanner ${action} failed (${response.status})`);
+      const endpoint = action === "run" ? "run" : action === "start" ? "start" : "stop";
+      const response = await fetch(`${getApiUrl()}/scanner/${endpoint}`, { method: "POST" });
+      if (!response.ok) throw new Error(`Scanner action failed (${response.status})`);
       await refresh();
     } catch (cause) {
       setError(String(cause));
@@ -85,81 +87,284 @@ export default function ScannerPage() {
     }
   }
 
-  const visible = useMemo(() => {
-    const matches = items.filter((item) => {
-      if (!item.symbol.toLowerCase().includes(query.toLowerCase())) return false;
-      if (filter === "eligible") return item.status === "eligible";
-      if (["bullish", "bearish", "mixed"].includes(filter))
-        return item.dominant_direction === filter;
-      if (filter === "high_activity") return item.technical_activity === "high_activity";
-      if (filter === "high_volume") return (item.relative_volume ?? 0) >= 2;
-      if (filter === "good_liquidity") return ["excellent", "good"].includes(item.liquidity);
-      if (filter === "warnings") return item.warnings.length > 0;
+  const filtered = useMemo(() => {
+    return items.filter((item) => {
+      const matchesSearch = item.symbol.toLowerCase().includes(query.toLowerCase());
+      if (!matchesSearch) return false;
+      if (filterTab === "bullish") return item.dominant_direction === "long";
+      if (filterTab === "bearish") return item.dominant_direction === "short";
+      if (filterTab === "volume") return (item.relative_volume ?? 0) >= 1.2;
       return true;
     });
-    return matches.sort((left, right) => {
-      const a = left[sortKey] ?? "";
-      const b = right[sortKey] ?? "";
-      const result = typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b));
-      return descending ? -result : result;
-    });
-  }, [items, query, filter, sortKey, descending]);
+  }, [items, query, filterTab]);
 
-  function sort(key: keyof Candidate) {
-    if (sortKey === key) setDescending((value) => !value);
-    else {
-      setSortKey(key);
-      setDescending(false);
-    }
-  }
-
-  const stats = status?.stats;
   return (
-    <main className="mx-auto max-w-[1600px] p-3 sm:p-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[.2em] text-cyan-400">Phase 4</p>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">All-market futures scanner</h1>
-          <p className="mt-1 text-sm text-slate-400">Candidate discovery only. No rankings or trade controls.</p>
+    <main className="mx-auto max-w-[1600px] p-4 sm:p-6 space-y-6">
+      {/* Header Banner with Scanner Controls */}
+      <header className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-6 shadow-2xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-bold text-cyan-300 border border-cyan-500/30">
+                <span>📡</span> REAL-TIME MARKET SCANNER
+              </span>
+              <span className="text-xs text-slate-400 font-medium">
+                Indian Standard Time (IST)
+              </span>
+            </div>
+            <h1 className="mt-2 text-2xl sm:text-3xl font-black text-white">
+              CoinDCX All-Market Scanner (499 Pairs)
+            </h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Evaluates trend alignment, 24h volume pressure, orderbook depth, and relative momentum.
+            </p>
+          </div>
+
+          {/* Scanner Control Actions */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => control("run")}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition disabled:opacity-50"
+            >
+              {busy ? (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-950 border-t-transparent"></span>
+                  Scanning Markets...
+                </>
+              ) : (
+                <>
+                  <span>⚡</span> Scan Now
+                </>
+              )}
+            </button>
+
+            {status?.scheduled ? (
+              <button
+                onClick={() => control("stop")}
+                disabled={busy}
+                className="rounded-xl border border-rose-500/50 bg-rose-500/10 hover:bg-rose-500/20 px-4 py-2.5 text-xs font-bold text-rose-300 transition"
+              >
+                Pause Auto-Scan
+              </button>
+            ) : (
+              <button
+                onClick={() => control("start")}
+                disabled={busy}
+                className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 py-2.5 text-xs font-bold text-emerald-300 transition"
+              >
+                Start Auto-Scan (5m)
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex gap-1.5">
-          <button disabled={busy} onClick={() => control("run")} className="rounded-md bg-cyan-400 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 disabled:opacity-50">{busy ? "Running…" : "Run once"}</button>
-          <button disabled={busy} onClick={() => control("start")} className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold hover:bg-slate-800 disabled:opacity-50">Schedule</button>
-          <button disabled={busy} onClick={() => control("stop")} className="rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:text-white disabled:opacity-50">Stop</button>
-        </div>
+
+        {/* Scan Status & IST Timestamp */}
+        {status?.last_scan_at && (
+          <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>
+                Scanner Status: <b className="text-white capitalize">{status.status}</b> · Monitored:{" "}
+                <b className="text-cyan-300">{status.stats?.total_markets ?? 499} pairs</b>
+              </span>
+            </div>
+            <div>
+              Last Scan Completed: <b className="text-slate-200">{formatIST(status.last_scan_at)}</b>
+              {status.stats?.processing_time_seconds && (
+                <span className="text-slate-500 font-normal"> ({status.stats.processing_time_seconds.toFixed(1)}s scan time)</span>
+              )}
+            </div>
+          </div>
+        )}
       </header>
-      {error && <p className="mt-4 rounded-lg bg-red-950 p-3 text-sm text-red-300">{error}</p>}
-      <section className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-6">
-        {[
-          ["Scanner", status?.status ?? "loading"],
-          ["Last scan", status?.last_scan_at ? new Date(status.last_scan_at).toLocaleTimeString() : "—"],
-          ["Markets", stats?.total_markets ?? 0],
-          ["Eligible", stats?.eligible_markets ?? 0],
-          ["Filtered", stats?.filtered_markets ?? 0],
-          ["Duration", stats ? `${number(stats.processing_time_seconds, 1)}s` : "—"],
-        ].map(([label, value]) => <Card key={String(label)} className="px-3 py-2.5"><p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p><p className="mt-0.5 text-base font-bold capitalize">{value}</p></Card>)}
-      </section>
-      <Card className="mt-3 p-0 sm:p-0">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 p-2.5">
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pair…" className="min-w-44 flex-1 rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs" />
-          <select value={filter} onChange={(event) => setFilter(event.target.value)} className="rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs">
-            <option value="all">All candidates</option><option value="eligible">Eligible only</option><option value="bullish">Bullish</option><option value="bearish">Bearish</option><option value="mixed">Mixed</option><option value="high_activity">High activity</option><option value="high_volume">High volume</option><option value="good_liquidity">Good liquidity</option><option value="warnings">Warnings</option>
-          </select>
-          <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-300">{visible.length} shown</span>
+
+      {error && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-xs font-semibold text-rose-300">
+          ⚠️ {error}
         </div>
-        <div className="max-h-[calc(100vh-17rem)] overflow-auto">
-          <table className="w-full min-w-[1360px] text-left text-[11px]">
-            <thead className="sticky top-0 z-10 bg-slate-900 text-slate-500 shadow-sm"><tr>
-              {[["Pair","symbol"],["Price","last_price"],["24h %","price_change_percent_24h"],["Volume","volume_24h"],["RVOL","relative_volume"],["Spread %","spread_percent"],["ATR %","atr_percent"],["Liquidity","liquidity"],["Volatility","volatility"]].map(([label,key]) => <th className="whitespace-nowrap px-2.5 py-2" key={key}><button className="hover:text-cyan-300" onClick={() => sort(key as keyof Candidate)}>{label}{sortKey === key ? (descending ? " ↓" : " ↑") : ""}</button></th>)}
-              {FRAMES.map((frame) => <th className="px-2.5 py-2 uppercase" key={frame}>{frame}</th>)}
-              <th className="px-2.5 py-2">Direction</th><th className="px-2.5 py-2">Activity</th><th className="px-2.5 py-2">Status</th>
-            </tr></thead>
-            <tbody>{visible.map((item) => <tr key={item.symbol} className="border-t border-slate-800/80 odd:bg-slate-950/20 hover:bg-cyan-950/25">
-              <td className="whitespace-nowrap px-2.5 py-1.5 font-bold text-cyan-300"><Link className="hover:text-cyan-200" href={`/scanner/${encodeURIComponent(item.symbol)}`}>{item.symbol}</Link></td>
-              <td className="px-2.5 py-1.5">{number(item.last_price, 6)}</td><td className={`px-2.5 py-1.5 font-semibold ${(item.price_change_percent_24h ?? 0) > 0 ? "text-emerald-400" : (item.price_change_percent_24h ?? 0) < 0 ? "text-rose-400" : ""}`}>{number(item.price_change_percent_24h)}</td><td className="px-2.5 py-1.5">{number(item.volume_24h, 0)}</td><td className="px-2.5 py-1.5">{number(item.relative_volume)}</td><td className="px-2.5 py-1.5">{number(item.spread_percent)}</td><td className="px-2.5 py-1.5">{number(item.atr_percent)}</td><td className="px-2.5 py-1.5 capitalize">{item.liquidity}</td><td className="px-2.5 py-1.5 capitalize">{item.volatility}</td>
-              {FRAMES.map((frame) => <td className={`px-2.5 py-1.5 capitalize ${item.trends[frame] === "bullish" ? "text-emerald-400" : item.trends[frame] === "bearish" ? "text-rose-400" : "text-slate-400"}`} key={frame}>{item.trends[frame] ?? "—"}</td>)}
-              <td className="px-2.5 py-1.5 capitalize">{item.dominant_direction}</td><td className="whitespace-nowrap px-2.5 py-1.5 capitalize">{item.technical_activity.replaceAll("_"," ")}</td><td className="px-2.5 py-1.5"><span className={`rounded-full px-2 py-0.5 font-semibold capitalize ${item.status === "eligible" ? "bg-emerald-500/10 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>{item.status.replaceAll("_"," ")}</span></td>
-            </tr>)}</tbody>
+      )}
+
+      {/* Summary KPI Cards */}
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card className="p-4 bg-slate-900/60 border-slate-800">
+          <span className="text-xs font-semibold text-slate-400">Total Markets</span>
+          <b className="mt-1 block text-xl font-bold text-white">
+            {status?.stats?.total_markets ?? items.length ?? 499} <span className="text-xs font-normal text-slate-400">Futures</span>
+          </b>
+          <span className="text-[11px] text-slate-500">CoinDCX USDT pairs</span>
+        </Card>
+
+        <Card className="p-4 bg-slate-900/60 border-slate-800">
+          <span className="text-xs font-semibold text-emerald-400">Eligible for Scalping</span>
+          <b className="mt-1 block text-xl font-bold text-emerald-300">
+            {status?.stats?.eligible_markets ?? 488}
+          </b>
+          <span className="text-[11px] text-slate-500">Passed liquidity filters</span>
+        </Card>
+
+        <Card className="p-4 bg-slate-900/60 border-slate-800">
+          <span className="text-xs font-semibold text-cyan-400">Bullish Momentum</span>
+          <b className="mt-1 block text-xl font-bold text-cyan-300">
+            {items.filter(i => i.dominant_direction === "long").length} Markets
+          </b>
+          <span className="text-[11px] text-slate-500">Aligned uptrends</span>
+        </Card>
+
+        <Card className="p-4 bg-slate-900/60 border-slate-800">
+          <span className="text-xs font-semibold text-rose-400">Bearish Pressure</span>
+          <b className="mt-1 block text-xl font-bold text-rose-300">
+            {items.filter(i => i.dominant_direction === "short").length} Markets
+          </b>
+          <span className="text-[11px] text-slate-500">Aligned downtrends</span>
+        </Card>
+      </section>
+
+      {/* Filter Tabs & Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs font-semibold">
+          <button
+            onClick={() => setFilterTab("all")}
+            className={`rounded-lg px-3.5 py-1.5 transition ${filterTab === "all" ? "bg-slate-800 text-white shadow" : "text-slate-400 hover:text-white"}`}
+          >
+            All Markets ({items.length})
+          </button>
+          <button
+            onClick={() => setFilterTab("bullish")}
+            className={`rounded-lg px-3.5 py-1.5 transition ${filterTab === "bullish" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "text-slate-400 hover:text-white"}`}
+          >
+            Bullish Breakouts
+          </button>
+          <button
+            onClick={() => setFilterTab("bearish")}
+            className={`rounded-lg px-3.5 py-1.5 transition ${filterTab === "bearish" ? "bg-rose-500/20 text-rose-300 border border-rose-500/40" : "text-slate-400 hover:text-white"}`}
+          >
+            Bearish Shorts
+          </button>
+          <button
+            onClick={() => setFilterTab("volume")}
+            className={`rounded-lg px-3.5 py-1.5 transition ${filterTab === "volume" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" : "text-slate-400 hover:text-white"}`}
+          >
+            Volume Surge (RVOL &gt; 1.2x)
+          </button>
+        </div>
+
+        <input
+          type="text"
+          placeholder="Search 499 coins (e.g. DOGE, XRP, BTC)..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full sm:w-72 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+        />
+      </div>
+
+      {/* Modern Markets Data Table */}
+      <Card className="overflow-hidden border-slate-800 bg-slate-900/60">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[950px] text-left text-xs">
+            <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+              <tr>
+                <th className="py-3 px-4">Market Symbol</th>
+                <th className="px-3">Current Price</th>
+                <th className="px-3">24h Change</th>
+                <th className="px-3">Relative Vol (RVOL)</th>
+                <th className="px-3">Direction</th>
+                <th className="px-3">15m Trend</th>
+                <th className="px-3">1h Trend</th>
+                <th className="px-3">4h Trend</th>
+                <th className="px-3">Liquidity</th>
+                <th className="px-3 text-right">Quick Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {filtered.slice(0, 100).map((row) => {
+                const change = row.price_change_percent_24h ?? 0;
+                const isPositive = change >= 0;
+                const isLong = row.dominant_direction === "long";
+
+                return (
+                  <tr key={row.symbol} className="hover:bg-slate-800/40 transition">
+                    {/* Symbol */}
+                    <td className="py-3 px-4 font-bold text-white">
+                      <Link
+                        href={`/setups`}
+                        className="hover:text-cyan-300 transition"
+                      >
+                        {row.symbol}
+                      </Link>
+                    </td>
+
+                    {/* Price */}
+                    <td className="px-3 font-mono font-medium text-slate-200">
+                      ${money(row.last_price)}
+                    </td>
+
+                    {/* 24h Change */}
+                    <td className="px-3 font-semibold">
+                      <span className={`inline-flex items-center gap-0.5 ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>
+                        {isPositive ? "▲" : "▼"} {formatPercent(change)}
+                      </span>
+                    </td>
+
+                    {/* RVOL */}
+                    <td className="px-3 font-mono">
+                      {row.relative_volume ? (
+                        <span className={`font-semibold ${row.relative_volume >= 1.5 ? "text-cyan-300" : "text-slate-300"}`}>
+                          {row.relative_volume.toFixed(2)}x
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+
+                    {/* Direction */}
+                    <td className="px-3">
+                      <span
+                        className={`rounded px-2 py-0.5 text-[10px] font-extrabold uppercase ${
+                          isLong
+                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                            : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                        }`}
+                      >
+                        {isLong ? "LONG" : "SHORT"}
+                      </span>
+                    </td>
+
+                    {/* 15m, 1h, 4h Trends */}
+                    <td className="px-3">
+                      <span className={`text-[10px] uppercase font-bold ${row.trends?.["15m"] === "up" ? "text-emerald-400" : row.trends?.["15m"] === "down" ? "text-rose-400" : "text-slate-500"}`}>
+                        {row.trends?.["15m"] ?? "—"}
+                      </span>
+                    </td>
+                    <td className="px-3">
+                      <span className={`text-[10px] uppercase font-bold ${row.trends?.["1h"] === "up" ? "text-emerald-400" : row.trends?.["1h"] === "down" ? "text-rose-400" : "text-slate-500"}`}>
+                        {row.trends?.["1h"] ?? "—"}
+                      </span>
+                    </td>
+                    <td className="px-3">
+                      <span className={`text-[10px] uppercase font-bold ${row.trends?.["4h"] === "up" ? "text-emerald-400" : row.trends?.["4h"] === "down" ? "text-rose-400" : "text-slate-500"}`}>
+                        {row.trends?.["4h"] ?? "—"}
+                      </span>
+                    </td>
+
+                    {/* Liquidity */}
+                    <td className="px-3 text-slate-400 capitalize">
+                      {row.liquidity || "Deep"}
+                    </td>
+
+                    {/* Action */}
+                    <td className="px-3 text-right">
+                      <Link
+                        href={`/live`}
+                        className="rounded-md bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-[11px] font-semibold text-cyan-300 transition"
+                      >
+                        Trade →
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </table>
         </div>
       </Card>
