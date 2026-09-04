@@ -111,8 +111,13 @@ async def test_unknown_order_is_persisted_and_not_resubmitted():
 
 
 class ReconcileClient:
+    def __init__(self, protected=False):
+        self.protected = protected
+
     async def positions(self):
-        return [position_row()]
+        if self.protected:
+            return [position_row(stop=98, target=104)]
+        return [position_row(stop=None, target=None)]
 
     async def orders(self):
         return [{"id": "orphan-order", "pair": "B-ETH_USDT"}]
@@ -121,7 +126,30 @@ class ReconcileClient:
 @pytest.mark.asyncio
 async def test_reconciliation_detects_orphan_exchange_state_and_fails_health():
     repo = InMemoryLiveRepository()
-    report = await PositionReconciliationService(ReconcileClient(), repo).reconcile({}, {})
+    report = await PositionReconciliationService(ReconcileClient(protected=False), repo).reconcile({}, {})
     assert report.orphan_positions == ["position-1"]
     assert report.orphan_orders == ["orphan-order"]
+    assert report.protection_failures == ["position-1"]
     assert report.healthy is False
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_auto_closes_ghost_positions():
+    from app.execution.reconciliation import normalize_exchange_position
+    repo = InMemoryLiveRepository()
+    ghost = normalize_exchange_position({
+        "id": "ghost-exchange-1",
+        "pair": "B-XRP_USDT",
+        "active_pos": 1.0,
+        "avg_price": 0.5,
+        "stop_loss_trigger": 0.49,
+        "take_profit_trigger": 0.52,
+    })
+    local_positions = {ghost.position_id: ghost}
+    class EmptyClient:
+        async def positions(self): return []
+        async def orders(self): return []
+    report = await PositionReconciliationService(EmptyClient(), repo).reconcile({}, local_positions)
+    assert report.ghost_positions == ["ghost-exchange-1"]
+    assert local_positions[ghost.position_id].status == "closed"
+    assert report.healthy is True

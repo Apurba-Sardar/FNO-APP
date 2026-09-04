@@ -1282,6 +1282,11 @@ async def reset_circuit(request: Request, settings: SettingsDependency) -> dict:
         await runtime.monitor_and_auto_close_positions()
     except Exception:
         pass
+    if hasattr(runtime, "circuit_breaker"):
+        runtime.circuit_breaker.success()
+    if hasattr(runtime, "emergency_stop"):
+        runtime.emergency_stop.resume()
+    runtime.state = LiveRuntimeState.ARMED
     await runtime._persist_runtime()
     state_str = runtime.state.value if hasattr(runtime.state, "value") else str(runtime.state)
     cb_str = runtime.circuit_breaker.state.value if hasattr(runtime, "circuit_breaker") and hasattr(runtime.circuit_breaker.state, "value") else "closed"

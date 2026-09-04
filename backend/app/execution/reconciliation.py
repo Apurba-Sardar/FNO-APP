@@ -86,11 +86,17 @@ class PositionReconciliationService:
                 await self.repository.save_position(normalized)
             if normalized.protection_status == ProtectionStatus.UNPROTECTED:
                 report.protection_failures.append(exchange_id)
+        for exchange_id in report.ghost_positions:
+            local = known_positions.get(exchange_id)
+            if local:
+                closed = local.model_copy(update={"status": "closed", "unrealized_pnl": 0.0})
+                local_positions[local.position_id] = closed
+                await self.repository.save_position(closed)
         for exchange_id, local in known_orders.items():
             row = open_exchange_orders.get(exchange_id)
             if local.status == OrderState.UNKNOWN and row:
                 local_orders[local.order_id] = local.model_copy(update={"status": OrderState.RECONCILED, "raw_metadata": row})
                 await self.repository.save_order(local_orders[local.order_id])
                 report.unknown_orders_resolved += 1
-        report.healthy = not report.ghost_positions
+        report.healthy = not report.protection_failures
         return report
