@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     live_max_orders_per_day: int = Field(default=50, ge=1)
     live_max_trades_per_day: int = Field(default=25, ge=1)
     live_max_notional_per_trade: float = Field(default=100, gt=0)
+    live_max_daily_profit_target: float = Field(default=10.0, ge=0.0)
     live_max_daily_loss_percent: float = Field(default=0.25, gt=0)
     live_max_open_positions: int = Field(default=5, ge=1)
     live_max_total_exposure: float = Field(default=2500, gt=0)
@@ -114,6 +115,7 @@ class Settings(BaseSettings):
             max_orders_per_day=self.live_max_orders_per_day,
             max_trades_per_day=self.live_max_trades_per_day,
             max_notional_per_trade=self.live_max_notional_per_trade,
+            max_daily_profit_target=self.live_max_daily_profit_target,
             max_daily_loss_percent=self.live_max_daily_loss_percent,
             max_open_positions=self.live_max_open_positions,
             max_total_exposure=self.live_max_total_exposure,

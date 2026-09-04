@@ -611,6 +611,19 @@ class LiveExecutionRuntime:
             or self.state not in {LiveRuntimeState.ARMED, LiveRuntimeState.READY}
         ):
             return
+
+        # Check if daily profit goal ($10.00 USDT) has been reached to secure profits
+        today_pnl = getattr(self.account, "daily_pnl", 0.0) or 0.0
+        max_target = getattr(self.config, "max_daily_profit_target", 10.0)
+        if max_target > 0 and today_pnl >= max_target:
+            structlog.get_logger().info(
+                "DAILY_PROFIT_GOAL_REACHED",
+                today_pnl=today_pnl,
+                target=max_target,
+                action="PAUSING_NEW_ENTRIES_TO_SECURE_DAILY_GAINS",
+            )
+            return
+
         async with self._automatic_execution_lock:
             open_count = sum(1 for p in self.positions.values() if p.status == "open")
             if open_count >= self.config.max_open_positions:
@@ -709,6 +722,12 @@ class LiveExecutionRuntime:
             "auto_execution": self.config.auto_execution or getattr(self, "auto_trading_enabled", False),
             "auto_close_active": True,
             "enforced_leverage": 3,
+            "daily_profit_target": getattr(self.config, "max_daily_profit_target", 10.0),
+            "daily_pnl": getattr(self.account, "daily_pnl", 0.0) or 0.0,
+            "daily_profit_goal_reached": bool(
+                getattr(self.config, "max_daily_profit_target", 10.0) > 0
+                and (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= getattr(self.config, "max_daily_profit_target", 10.0)
+            ),
             "emergency_stop": self.emergency_stop.state,
             "circuit_breaker": self.circuit_breaker.state,
             "open_positions": sum(item.status == "open" for item in self.positions.values()),

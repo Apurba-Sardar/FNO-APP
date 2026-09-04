@@ -296,6 +296,10 @@ export default function LivePage() {
               <span className="font-bold">⚡ 3x Isolated Leverage</span>
               <span className="text-slate-400 font-normal">Enforced</span>
             </div>
+            <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 text-xs text-amber-300 font-medium">
+              <span>🎯</span>
+              <b>Daily Profit Target:</b> $10.00 Max Cap
+            </div>
           </div>
 
           <button
@@ -311,6 +315,47 @@ export default function LivePage() {
           </button>
         </div>
       </header>
+
+      {/* Daily Profit Target & Safety Goal Banner */}
+      <section className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-950 p-4 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-xl">
+              🎯
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Daily Profit Goal Target</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  (account.daily_pnl ?? 0) >= 10.0
+                    ? "bg-emerald-500 text-slate-950"
+                    : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                }`}>
+                  {(account.daily_pnl ?? 0) >= 10.0 ? "GOAL REACHED! 🏆 (Profits Locked for Today)" : "ACTIVE · Scalping towards $10.00 Target"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Automatically pauses new trade purchases to protect daily earnings once cumulative profit touches $10.00 USDT.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-right">
+            <div>
+              <span className="text-[11px] text-slate-400">Daily Cap</span>
+              <b className="block text-sm font-bold text-white">$10.00 USDT</b>
+            </div>
+            <div className="border-l border-slate-800 pl-4">
+              <span className="text-[11px] text-slate-400">Today&apos;s Realized P&L</span>
+              <b className={`block text-base font-extrabold ${
+                (account.daily_pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
+              }`}>
+                {(account.daily_pnl ?? 0) >= 0 ? "+" : ""}{balance(account.daily_pnl ?? 0)} USDT
+              </b>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Safety & Token Panel (Collapsible) */}
       {showTokens && (
