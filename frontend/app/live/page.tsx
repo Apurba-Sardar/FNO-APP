@@ -195,6 +195,23 @@ export default function LivePage() {
     }
   };
 
+  const resetCircuit = async () => {
+    try {
+      setMessage("Resetting circuit breaker and reconciling live engine...");
+      const apiBase = getApiUrl();
+      const response = await fetch(`${apiBase}/live/reset-circuit`, {
+        method: "POST",
+        headers: headers(),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail ?? "Reset rejected");
+      setMessage("Engine unblocked and reconciled successfully!");
+      await load();
+    } catch (err: any) {
+      setMessage(err.message ?? "Reset failed");
+    }
+  };
+
   const isArmed = status.runtime_state === "armed";
 
   // Build tradeInfo for currently selected symbol
@@ -354,7 +371,7 @@ export default function LivePage() {
             </div>
             <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 text-xs text-amber-300 font-medium">
               <span>🎯</span>
-              <b>Daily Profit Target:</b> $10.00 Max Cap
+              <b>Daily Target:</b> $6.00 Cap ($66 Capital Plan)
             </div>
           </div>
 
@@ -367,12 +384,50 @@ export default function LivePage() {
             }`}
           >
             <span className={`h-2 w-2 rounded-full ${status.auto_execution ? "bg-emerald-400 animate-ping" : "bg-slate-500"}`}></span>
-            Auto-Purchase: {status.auto_execution ? "ACTIVE (Scanning Setups)" : "PAUSED (Click to Activate)"}
+            Auto-Pilot: {status.auto_execution ? "ACTIVE (Scanning • Sizing • Entry • Exit)" : "PAUSED (Click to Activate)"}
           </button>
         </div>
       </header>
 
-      {/* Daily Profit Target & Safety Goal Banner */}
+      {/* Circuit Breaker Alert Banner (if blocked or circuit open) */}
+      {(status.runtime_state === "blocked" || status.circuit_breaker === "open" || status.last_api_error) && (
+        <section className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                Safety Alert: Engine Blocked ({status.last_api_error || "Circuit Breaker Open"})
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                New order entries are paused by safety gates. Tap below to reset circuit counters, reconcile account, and restore ARMED state.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={resetCircuit}
+            className="rounded-lg bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 shadow-md transition shrink-0"
+          >
+            Unblock & Reconcile Engine
+          </button>
+        </section>
+      )}
+
+      {/* Margin Notice Banner if cash < $5 */}
+      {Number(account.available_balance ?? 100) < 5.0 && positions.length > 0 && (
+        <section className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 shadow-lg flex items-center gap-3">
+          <span className="text-xl">ℹ️</span>
+          <div>
+            <h4 className="text-xs font-bold text-cyan-300 uppercase tracking-wider">
+              Margin Locked (${balance(account.locked_margin ?? 1021.60)} USDT)
+            </h4>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Available cash is <b>${balance(account.available_balance ?? 0.11)} USDT</b> across {positions.length} active positions. To open new 3x scalps, close any open position below to release margin immediately.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* Daily Profit Target & Safety Goal Banner ($6.00 Cap) */}
       <section className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-950 p-4 shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -383,15 +438,17 @@ export default function LivePage() {
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Daily Profit Goal Target</span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  (account.daily_pnl ?? 0) >= 10.0
+                  (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 6.0)
                     ? "bg-emerald-500 text-slate-950"
                     : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                 }`}>
-                  {(account.daily_pnl ?? 0) >= 10.0 ? "GOAL REACHED! 🏆 (Profits Locked for Today)" : "ACTIVE · Scalping towards $10.00 Target"}
+                  {(account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 6.0)
+                    ? "GOAL REACHED! 🏆 (Profits Locked for Today)"
+                    : `ACTIVE · Scalping towards $${balance(status.daily_profit_target ?? 6.0)} Target`}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Automatically pauses new trade purchases to protect daily earnings once cumulative profit touches $10.00 USDT.
+                Automatically pauses new trade purchases to protect daily earnings once cumulative profit touches ${balance(status.daily_profit_target ?? 6.0)} USDT.
               </p>
             </div>
           </div>
@@ -399,7 +456,7 @@ export default function LivePage() {
           <div className="flex items-center gap-4 text-right">
             <div>
               <span className="text-[11px] text-slate-400">Daily Cap</span>
-              <b className="block text-sm font-bold text-white">$10.00 USDT</b>
+              <b className="block text-sm font-bold text-white">${balance(status.daily_profit_target ?? 6.0)} USDT</b>
             </div>
             <div className="border-l border-slate-800 pl-4">
               <span className="text-[11px] text-slate-400">Today&apos;s Realized P&L</span>

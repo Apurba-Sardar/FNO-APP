@@ -56,7 +56,6 @@ export function TradingViewChart({
   onSelectSymbol?: (sym: string) => void;
   onExitPosition?: (positionId: string, pair: string) => void;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [currentSymbol, setCurrentSymbol] = useState(symbol);
   const [timeframe, setTimeframe] = useState("15");
   const [confirmExit, setConfirmExit] = useState(false);
@@ -65,49 +64,8 @@ export function TradingViewChart({
     setCurrentSymbol(symbol);
   }, [symbol]);
 
-  useEffect(() => {
-    const tvSymbol = normalizeTradingViewSymbol(currentSymbol);
-    const containerId = `tradingview_${Math.random().toString(36).substring(7)}`;
-
-    if (containerRef.current) {
-      containerRef.current.id = containerId;
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/tv.js";
-    script.async = true;
-    script.onload = () => {
-      if (window.TradingView && containerRef.current) {
-        new window.TradingView.widget({
-          autosize: true,
-          symbol: tvSymbol,
-          interval: timeframe,
-          timezone: "Asia/Kolkata",
-          theme: "dark",
-          style: "1",
-          locale: "en",
-          toolbar_bg: "#090d16",
-          enable_publishing: false,
-          allow_symbol_change: true,
-          container_id: containerId,
-          hide_side_toolbar: false,
-          studies: [
-            "STD;EMA",
-            "STD;RSI",
-            "STD;MACD"
-          ],
-        });
-      }
-    };
-
-    document.head.appendChild(script);
-
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, [currentSymbol, timeframe]);
+  const tvSymbol = normalizeTradingViewSymbol(currentSymbol);
+  const embedUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodeURIComponent(tvSymbol)}&interval=${timeframe}&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=090d16&theme=dark&style=1&timezone=Asia%2FKolkata`;
 
   const handleSymbolClick = (sym: string) => {
     setCurrentSymbol(sym);
@@ -332,7 +290,16 @@ export function TradingViewChart({
       )}
 
       {/* TradingView Candlestick Graph */}
-      <div className="h-[540px] w-full" ref={containerRef} />
+      <div className="h-[560px] w-full bg-[#090d16]">
+        <iframe
+          key={`${tvSymbol}-${timeframe}`}
+          src={embedUrl}
+          className="w-full h-full border-0"
+          title={`TradingView Chart ${tvSymbol}`}
+          allow="clipboard-write"
+          loading="lazy"
+        />
+      </div>
     </div>
   );
 }
