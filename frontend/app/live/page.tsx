@@ -374,96 +374,110 @@ export default function LivePage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl p-4 sm:p-6 space-y-6">
-      {/* Top Banner */}
-      <header className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-6 shadow-2xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <main className="mx-auto max-w-[1600px] p-4 sm:p-8 space-y-7">
+      {/* Top CRED Luxury Command Header */}
+      <header className="cred-surface relative overflow-hidden rounded-3xl p-6 sm:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.9)]">
+        {/* Subtle Ambient Radial Glows */}
+        <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#00F5A0]/10 blur-3xl"></div>
+        <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl"></div>
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400 border border-emerald-500/20">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                COINDCX FUTURES LIVE
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00F5A0]/10 px-3 py-1 text-[11px] font-black tracking-wider uppercase text-[#00F5A0] border border-[#00F5A0]/30 shadow-[0_0_15px_rgba(0,245,160,0.2)]">
+                <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-pulse"></span>
+                CoinDCX Futures Live
               </span>
-              <span className="text-xs text-slate-400 font-medium">
+              <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-3 py-1 text-[11px] text-slate-300 font-mono">
                 Indian Standard Time (IST) Active
               </span>
+              <span className="rounded-full bg-indigo-500/10 border border-indigo-500/25 px-3 py-1 text-[11px] font-bold text-indigo-300">
+                ⚡ 3x Isolated Leverage Enforced
+              </span>
             </div>
-            <h1 className="mt-2 text-2xl sm:text-3xl font-black tracking-tight text-white">
-              Live Trading & Algorithmic Scalp Portfolio
+            <h1 className="mt-3 text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-2">
+              <span className="bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+                Live Trading Command Suite
+              </span>
             </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Live balances, automated position monitoring, and real-time order history synced with CoinDCX.
+            <p className="mt-1.5 text-xs sm:text-sm text-slate-400 font-normal max-w-2xl leading-relaxed">
+              Fully autonomous algorithmic research, position sizing, execution, and risk guardrails synchronized in real time with CoinDCX.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowAlertModal(true)}
-              className="rounded-lg border border-cyan-500/50 bg-gradient-to-r from-cyan-950/80 to-blue-950/80 hover:border-cyan-400 hover:from-cyan-900/90 hover:to-blue-900/90 px-3.5 py-2 text-xs font-bold text-cyan-300 shadow-lg shadow-cyan-950/40 transition flex items-center gap-2"
+              className="cred-btn-secondary rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2"
             >
-              <span className="text-sm">📱</span>
+              <span className="text-base">📱</span>
               <span>S24 Ultra Alerts</span>
-              <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-pulse"></span>
             </button>
             <button
               onClick={() => setShowTokens(!showTokens)}
-              className="rounded-lg border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition"
+              className="cred-btn-secondary rounded-xl px-4 py-2.5 text-xs font-bold text-slate-300"
             >
-              {showTokens ? "Hide Safety Controls" : "Security & Controls"}
+              {showTokens ? "Hide Security Keys" : "Security & Keys"}
             </button>
             <button
               onClick={() => load().catch(e => setMessage(e.message))}
-              className="rounded-lg bg-emerald-500 hover:bg-emerald-400 px-4 py-2 text-xs font-bold text-slate-950 shadow-lg shadow-emerald-500/20 transition flex items-center gap-1.5"
+              className="cred-btn-primary rounded-xl px-5 py-2.5 text-xs font-black flex items-center gap-2"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <svg className="w-3.5 h-3.5 animate-spin-hover" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              Refresh Data
+              Refresh Engine
             </button>
           </div>
         </div>
 
-        {/* Live sync ticker */}
-        <div className="mt-4 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-300">Status:</span>
-            <span className="text-emerald-300 font-medium">{message}</span>
-          </div>
-          {lastRefreshedAt && (
+        {/* Live Status & Auto-Pilot Master Switch Strip */}
+        <div className="relative z-10 mt-6 pt-5 border-t border-white/[0.08] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-black/50 border border-white/[0.08] flex items-center justify-center text-sm">
+              📡
+            </div>
             <div>
-              Last updated: <b className="text-slate-200">{formatIST(lastRefreshedAt.getTime())}</b> ({timeAgo(lastRefreshedAt.getTime())})
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">System Status</span>
+              <p className="text-xs text-emerald-300 font-semibold">{message}</p>
             </div>
-          )}
-        </div>
-
-        {/* Autonomous Scalp & 3x Leverage Control Strip */}
-        <div className="mt-3.5 pt-3.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-xs text-emerald-300 font-medium">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span><b>Auto-Close:</b> ACTIVE (Target +1.8% / Stop -1.2%)</span>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30 px-3 py-1.5 text-xs text-indigo-300 font-medium">
-              <span className="font-bold">⚡ 3x Isolated Leverage</span>
-              <span className="text-slate-400 font-normal">Enforced</span>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 text-xs text-amber-300 font-medium">
-              <span>🎯</span>
-              <b>Daily Target:</b> $6.00 Cap ($66 Capital Plan)
-            </div>
+            {lastRefreshedAt && (
+              <div className="hidden sm:block border-l border-white/[0.08] pl-3 ml-1 text-xs text-slate-400">
+                Sync: <b className="text-slate-200 font-mono">{formatIST(lastRefreshedAt.getTime())}</b>
+              </div>
+            )}
           </div>
 
-          <button
-            onClick={toggleAutoTrading}
-            className={`flex items-center gap-2 rounded-lg border px-4 py-1.5 text-xs font-bold transition shadow-sm ${
-              status.auto_execution
-                ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 shadow-emerald-500/10"
-                : "border-slate-700 bg-slate-800/90 text-slate-300 hover:bg-slate-700 hover:text-white"
-            }`}
-          >
-            <span className={`h-2 w-2 rounded-full ${status.auto_execution ? "bg-emerald-400 animate-ping" : "bg-slate-500"}`}></span>
-            Auto-Pilot: {status.auto_execution ? "ACTIVE (Scanning • Sizing • Entry • Exit)" : "PAUSED (Click to Activate)"}
-          </button>
+          {/* CRED Tactile Auto-Pilot Toggle Button */}
+          <div className="flex items-center gap-3 bg-black/50 border border-white/[0.08] rounded-2xl p-1.5 sm:px-4 sm:py-2">
+            <div className="flex flex-col text-left">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Autonomous Scalper</span>
+              <span className={`text-xs font-extrabold ${status.auto_execution ? "text-[#00F5A0]" : "text-slate-400"}`}>
+                {status.auto_execution ? "ARMED & SCALPING (100% Autonomous)" : "PAUSED (Tap Switch to Arm)"}
+              </span>
+            </div>
+
+            <button
+              onClick={toggleAutoTrading}
+              className={`relative inline-flex h-9 w-20 shrink-0 cursor-pointer rounded-full border transition-all duration-300 ease-in-out focus:outline-none ${
+                status.auto_execution
+                  ? "bg-gradient-to-r from-emerald-500 to-teal-400 border-emerald-400 shadow-[0_0_20px_rgba(0,245,160,0.4)]"
+                  : "bg-white/[0.06] border-white/15 hover:border-white/30"
+              }`}
+            >
+              <span className="sr-only">Toggle Auto Trading</span>
+              <span
+                className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-slate-950 shadow-lg ring-0 transition duration-300 ease-in-out my-auto ml-1 ${
+                  status.auto_execution ? "translate-x-10 text-[#00F5A0]" : "translate-x-0 text-slate-400"
+                }`}
+              >
+                <span className="flex h-full w-full items-center justify-center text-[10px] font-black">
+                  {status.auto_execution ? "ON" : "OFF"}
+                </span>
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -505,44 +519,77 @@ export default function LivePage() {
         </section>
       )}
 
-      {/* Daily Profit Target & Safety Goal Banner ($6.00 Cap) */}
-      <section className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-950 p-4 shadow-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-xl">
+      {/* Daily Profit Target & Milestone Card (CRED Club Luxury Gold System) */}
+      <section className="cred-surface-gold relative overflow-hidden rounded-3xl p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.85)]">
+        {/* Subtle Ambient Gold Radial Glow */}
+        <div className="pointer-events-none absolute -top-20 -right-20 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl"></div>
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-2xl text-slate-950 shadow-[0_0_25px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.6)] shrink-0">
               🎯
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Daily Profit Goal Target</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-300">
+                  Daily Profit Milestone Target
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                   (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 6.0)
-                    ? "bg-emerald-500 text-slate-950"
-                    : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    ? "bg-emerald-400 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+                    : "bg-amber-400/15 text-amber-300 border border-amber-400/30"
                 }`}>
                   {(account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 6.0)
-                    ? "GOAL REACHED! 🏆 (Profits Locked for Today)"
-                    : `ACTIVE · Scalping towards $${balance(status.daily_profit_target ?? 6.0)} Target`}
+                    ? "Goal Unlocked 🏆 (Gains Protected)"
+                    : `Active Target: $${balance(status.daily_profit_target ?? 6.0)} USDT`}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Automatically pauses new trade purchases to protect daily earnings once cumulative profit touches ${balance(status.daily_profit_target ?? 6.0)} USDT.
+              <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
+                Autonomous capital compounding plan for your $66.69 balance. Position entries automatically pause once today&apos;s net earnings reach $6.00 USDT.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-right">
+          <div className="flex items-center gap-6 self-end md:self-auto text-right">
             <div>
-              <span className="text-[11px] text-slate-400">Daily Cap</span>
-              <b className="block text-sm font-bold text-white">${balance(status.daily_profit_target ?? 6.0)} USDT</b>
-            </div>
-            <div className="border-l border-slate-800 pl-4">
-              <span className="text-[11px] text-slate-400">Today&apos;s Realized P&L</span>
-              <b className={`block text-base font-extrabold ${
-                (account.daily_pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
-              }`}>
-                {(account.daily_pnl ?? 0) >= 0 ? "+" : ""}{balance(account.daily_pnl ?? 0)} USDT
+              <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Today&apos;s Target Cap</span>
+              <b className="mt-0.5 block text-lg font-black text-white font-mono">
+                ${balance(status.daily_profit_target ?? 6.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
               </b>
+            </div>
+            <div className="border-l border-white/10 pl-6">
+              <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Realized Net P&L</span>
+              <b className={`mt-0.5 block text-2xl font-black font-mono tracking-tight ${
+                (account.daily_pnl ?? 0) >= 0 ? "text-[#00F5A0]" : "text-rose-400"
+              }`}>
+                {(account.daily_pnl ?? 0) >= 0 ? "+" : ""}{balance(account.daily_pnl ?? 0)} <span className="text-xs font-normal text-slate-400">USDT</span>
+              </b>
+            </div>
+          </div>
+        </div>
+
+        {/* CRED Shimmer Progress Track */}
+        <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08]">
+          <div className="flex items-center justify-between text-xs text-slate-300 mb-2">
+            <span className="font-semibold flex items-center gap-2">
+              <span>Goal Progress:</span>
+              <b className="text-amber-300 font-mono">
+                {Math.min(Math.round(((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 6.0)) * 100), 100)}%
+              </b>
+            </span>
+            <span className="text-slate-400 text-[11px]">
+              Next Scalp Sizing: <b className="text-white">~$20 USDT Margin · 3x Isolated</b>
+            </span>
+          </div>
+
+          <div className="relative w-full h-3 rounded-full bg-black/60 overflow-hidden border border-white/10 p-0.5 shadow-inner">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber-400 via-[#00F5A0] to-[#00D9F5] relative transition-all duration-500 shadow-[0_0_15px_rgba(0,245,160,0.5)]"
+              style={{
+                width: `${Math.min(Math.max((((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 6.0)) * 100), 4), 100)}%`
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
             </div>
           </div>
         </div>
@@ -550,45 +597,45 @@ export default function LivePage() {
 
       {/* Safety & Token Panel (Collapsible) */}
       {showTokens && (
-        <section className="grid gap-3 md:grid-cols-3 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-          <Card className="bg-slate-950 border-slate-800 p-4">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Operator Key</label>
+        <section className="cred-surface grid gap-4 md:grid-cols-3 p-5 rounded-2xl border border-white/10">
+          <Card className="bg-black/60 border-white/10 p-4 rounded-xl">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Operator Key</label>
             <input
               type="password"
               value={operatorToken}
               onChange={e => setOperatorToken(e.target.value)}
-              className="mt-2 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-200"
+              className="mt-2 w-full rounded-lg border border-white/10 bg-slate-900/90 px-3 py-2 text-xs text-slate-200"
             />
             <p className="mt-1.5 text-[11px] text-slate-500">Authorizes live trading and position management.</p>
           </Card>
-          <Card className="bg-slate-950 border-amber-500/30 p-4">
-            <label className="text-xs font-semibold uppercase tracking-wider text-amber-300">Engine Arming Passphrase</label>
+          <Card className="bg-black/60 border-amber-500/30 p-4 rounded-xl">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Engine Arming Passphrase</label>
             <input
               type="password"
               value={safetyConfirmation}
               onChange={e => setSafetyConfirmation(e.target.value)}
-              className="mt-2 w-full rounded-md border border-amber-700/50 bg-slate-900 px-3 py-1.5 text-xs text-amber-100"
+              className="mt-2 w-full rounded-lg border border-amber-700/50 bg-slate-900/90 px-3 py-2 text-xs text-amber-100"
             />
             <button
               onClick={arm}
               disabled={!operatorToken || !safetyConfirmation}
-              className="mt-2.5 w-full rounded-md bg-amber-500 hover:bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-950 transition disabled:opacity-40"
+              className="mt-2.5 w-full rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-2 text-xs font-bold text-slate-950 transition disabled:opacity-40"
             >
               ARM LIVE ENGINE
             </button>
           </Card>
-          <Card className="bg-slate-950 border-rose-500/30 p-4">
-            <label className="text-xs font-semibold uppercase tracking-wider text-rose-300">Safety Cut-Off (Emergency)</label>
+          <Card className="bg-black/60 border-rose-500/30 p-4 rounded-xl">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-300">Safety Cut-Off (Emergency)</label>
             <input
               type="password"
               value={emergencyToken}
               onChange={e => setEmergencyToken(e.target.value)}
-              className="mt-2 w-full rounded-md border border-rose-700/50 bg-slate-900 px-3 py-1.5 text-xs text-rose-100"
+              className="mt-2 w-full rounded-lg border border-rose-700/50 bg-slate-900/90 px-3 py-2 text-xs text-rose-100"
             />
             <button
               onClick={stop}
               disabled={!emergencyToken}
-              className="mt-2.5 w-full rounded-md bg-rose-600 hover:bg-rose-500 px-3 py-1.5 text-xs font-bold text-white transition disabled:opacity-40"
+              className="mt-2.5 w-full rounded-lg bg-rose-600 hover:bg-rose-500 px-3 py-2 text-xs font-bold text-white transition disabled:opacity-40"
             >
               HALT ALL NEW TRADES
             </button>
@@ -596,42 +643,64 @@ export default function LivePage() {
         </section>
       )}
 
-      {/* Account Overview Cards */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Total Account Value</span>
-          <b className="mt-1.5 block text-xl font-bold text-white">
+      {/* Account Overview 4-Metric Grid (CRED Luxury Obsidian Glass) */}
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="cred-surface rounded-2xl p-5 hover:border-white/20 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Total Portfolio Value</span>
+            <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
+          </div>
+          <b className="mt-2 block text-2xl sm:text-3xl font-black text-white font-mono tracking-tight">
             ${balance(account.equity)} <span className="text-xs text-slate-400 font-normal">USDT</span>
           </b>
-          <span className="mt-1 block text-[11px] text-slate-500">Full portfolio equity</span>
-        </Card>
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="text-emerald-400">✓</span> Full account equity on CoinDCX
+          </div>
+        </div>
 
-        <Card className="p-4 bg-emerald-950/20 border-emerald-500/30">
-          <span className="text-xs font-semibold text-emerald-400">Free Cash Balance</span>
-          <b className="mt-1.5 block text-xl font-bold text-emerald-300">
-            ${balance(account.available_balance)} <span className="text-xs text-emerald-400/80 font-normal">USDT</span>
+        <div className="cred-surface-glow rounded-2xl p-5 hover:border-[#00F5A0]/50 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#00F5A0]">Available Free Cash</span>
+            <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-pulse"></span>
+          </div>
+          <b className="mt-2 block text-2xl sm:text-3xl font-black text-[#00F5A0] font-mono tracking-tight">
+            ${balance(account.available_balance)} <span className="text-xs text-[#00F5A0]/80 font-normal">USDT</span>
           </b>
-          <span className="mt-1 block text-[11px] text-emerald-500/80">Available for new trades</span>
-        </Card>
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#00F5A0]/80">
+            <span>⚡</span> 100% Free · Ready for 3x Scalps
+          </div>
+        </div>
 
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Locked in Trades</span>
-          <b className="mt-1.5 block text-xl font-bold text-slate-200">
+        <div className="cred-surface rounded-2xl p-5 hover:border-white/20 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Locked in Trades</span>
+            <span className="h-2 w-2 rounded-full bg-indigo-400"></span>
+          </div>
+          <b className="mt-2 block text-2xl sm:text-3xl font-black text-slate-200 font-mono tracking-tight">
             ${balance(account.locked_margin)} <span className="text-xs text-slate-400 font-normal">USDT</span>
           </b>
-          <span className="mt-1 block text-[11px] text-slate-500">Margin currently working</span>
-        </Card>
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span>🛡️</span> Active position margin at risk
+          </div>
+        </div>
 
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Active Positions</span>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <b className="text-xl font-bold text-white">{openPositions.length}</b>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
-              {isArmed ? "Engine Ready" : "Reconciled"}
+        <div className="cred-surface rounded-2xl p-5 hover:border-white/20 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Active Scalp Trades</span>
+            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+              openPositions.length > 0 ? "bg-[#00F5A0]/20 text-[#00F5A0]" : "bg-white/10 text-slate-400"
+            }`}>
+              {openPositions.length > 0 ? "In Trade" : "Scanning"}
             </span>
           </div>
-          <span className="mt-1 block text-[11px] text-slate-500">Stage 3: Safe Micro Scalps</span>
-        </Card>
+          <div className="mt-2 flex items-baseline gap-2">
+            <b className="text-2xl sm:text-3xl font-black text-white font-mono">{openPositions.length}</b>
+            <span className="text-xs font-bold text-slate-400">Positions Open</span>
+          </div>
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span>📈</span> Enforced 3x Leverage Scalper
+          </div>
+        </div>
       </section>
 
       {/* Dedicated Interactive Trade Chart & Visualizer */}
@@ -730,19 +799,22 @@ export default function LivePage() {
       {/* Main Bottom Grid: Active Positions & Trade Logs */}
       <section className="grid gap-6 lg:grid-cols-2">
         {/* Left Card: Active Trades & Open Holdings */}
-        <Card className="p-5 bg-slate-900/60 border-slate-800">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <Card className="cred-surface rounded-3xl p-6 sm:p-7 border border-white/[0.08] shadow-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
             <div>
-              <h2 className="text-lg font-bold text-white">Active Trades & Open Positions</h2>
-              <p className="text-xs text-slate-400">Real-time live positions open on CoinDCX Futures</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/45">CoinDCX Futures Portfolio</p>
+              <h2 className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2.5 mt-0.5">
+                Active Positions
+                <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-pulse"></span>
+              </h2>
             </div>
-            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-emerald-400 border border-slate-700">
-              {openPositions.length} Open
+            <span className="rounded-full bg-white/[0.05] px-3 py-1 text-xs font-black text-[#00F5A0] border border-[#00F5A0]/25 backdrop-blur-md">
+              {openPositions.length} LIVE
             </span>
           </div>
 
           {openPositions.length > 0 ? (
-            <div className="mt-4 space-y-3 max-h-[620px] overflow-y-auto pr-1">
+            <div className="mt-5 space-y-3.5 max-h-[620px] overflow-y-auto pr-1">
               {openPositions.map(p => {
                 const isLong = p.direction === "long";
                 const pnl = Number(p.unrealized_pnl ?? 0);
@@ -753,70 +825,80 @@ export default function LivePage() {
                   <div
                     key={p.position_id}
                     onClick={() => selectAndScroll(p.pair)}
-                    className={`rounded-xl border p-4 transition cursor-pointer ${
+                    className={`rounded-2xl border p-4 sm:p-5 transition cursor-pointer backdrop-blur-xl ${
                       isSelected
-                        ? "border-emerald-500 bg-emerald-950/20 shadow-lg shadow-emerald-500/10"
-                        : "border-slate-800 bg-slate-950/80 hover:border-slate-700"
+                        ? "border-[#00F5A0] bg-[#00F5A0]/[0.06] shadow-xl shadow-[#00F5A0]/10"
+                        : "border-white/[0.08] bg-[#090b12]/80 hover:border-white/20"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <b className="text-base font-bold text-white">{p.pair}</b>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <b className="text-lg font-black tracking-tight text-white">{p.pair}</b>
                           <span
-                            className={`rounded px-1.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide ${
-                              isLong ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                              isLong ? "bg-[#00F5A0]/15 text-[#00F5A0] border border-[#00F5A0]/30" : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
                             }`}
                           >
                             {isLong ? "BUY · LONG" : "SELL · SHORT"}
                           </span>
-                          <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/20">
+                          <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-[10px] font-bold text-white/70 border border-white/10">
                             {p.leverage}x Isolated
                           </span>
                           {isSelected && (
-                            <span className="rounded bg-emerald-500 text-slate-950 font-black text-[9px] px-1.5 py-0.5 uppercase">
-                              Viewing on Chart
+                            <span className="rounded-full bg-[#00F5A0] text-slate-950 font-black text-[9px] px-2 py-0.5 uppercase tracking-wider shadow">
+                              Active Chart
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {p.protection_status === "protected" ? "🛡️ Auto-Protected" : "⚡ Live Scalp"} · Margin Currency: USDT
+                        <p className="mt-1 text-xs text-white/45 flex items-center gap-1.5">
+                          <span>{p.protection_status === "protected" ? "🛡️ Auto-Protected Scalp" : "⚡ Live Algorithmic Scalp"}</span>
+                          <span>•</span>
+                          <span>Margin: USDT</span>
                         </p>
                       </div>
 
                       <div className="text-right">
-                        <span className={`text-base font-extrabold ${isProfit ? "text-emerald-400" : "text-rose-400"}`}>
+                        <span className={`text-lg font-black font-mono tracking-tight ${isProfit ? "text-[#00F5A0]" : "text-rose-400"}`}>
                           {isProfit ? "+" : ""}{balance(pnl)} USDT
                         </span>
-                        <p className="text-[11px] text-slate-500">Unrealized P&L</p>
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-white/40">Unrealized P&L</p>
                       </div>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2.5 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-300 sm:grid-cols-4">
+                    <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-white/[0.03] p-3 text-xs border border-white/[0.04] sm:grid-cols-4">
                       <div>
-                        <span className="text-slate-400">Quantity</span>
-                        <p className="mt-0.5 font-semibold text-white">{balance(p.quantity)}</p>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-white/40">Quantity</span>
+                        <p className="mt-0.5 font-bold font-mono text-white">{balance(p.quantity)}</p>
                       </div>
                       <div>
-                        <span className="text-slate-400">Invested Margin</span>
-                        <p className="mt-0.5 font-semibold text-emerald-300">${balance(p.margin)}</p>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-white/40">Invested Margin</span>
+                        <p className="mt-0.5 font-bold font-mono text-[#00F5A0]">${balance(p.margin)}</p>
                       </div>
                       <div>
-                        <span className="text-slate-400">Entry Price</span>
-                        <p className="mt-0.5 font-semibold text-white">${balance(p.average_price)}</p>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-white/40">Entry Price</span>
+                        <p className="mt-0.5 font-bold font-mono text-white">${balance(p.average_price)}</p>
                       </div>
                       <div>
-                        <span className="text-slate-400">Live Market</span>
-                        <p className="mt-0.5 font-semibold text-white">${balance(p.mark_price)}</p>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-white/40">Live Mark</span>
+                        <p className="mt-0.5 font-bold font-mono text-white">${balance(p.mark_price)}</p>
                       </div>
                     </div>
 
-                    <div className="mt-2.5 flex items-center justify-between text-xs px-1 text-slate-400">
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        {p.target && <span>Target: <b className="text-emerald-400">${balance(p.target)}</b></span>}
-                        {p.stop && <span>Stop: <b className="text-rose-400">${balance(p.stop)}</b></span>}
-                        <span className="rounded bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 font-bold border border-emerald-500/20">
-                          🛡️ Auto-Close Active
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {p.target && (
+                          <span className="text-white/60 text-[11px]">
+                            TP: <b className="text-[#00F5A0] font-mono font-bold">${balance(p.target)}</b>
+                          </span>
+                        )}
+                        {p.stop && (
+                          <span className="text-white/60 text-[11px]">
+                            SL: <b className="text-rose-400 font-mono font-bold">${balance(p.stop)}</b>
+                          </span>
+                        )}
+                        <span className="rounded-full bg-[#00F5A0]/10 text-[#00F5A0] text-[10px] px-2.5 py-0.5 font-bold border border-[#00F5A0]/20">
+                          🛡️ OCO Auto-Guard
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -825,12 +907,12 @@ export default function LivePage() {
                             e.stopPropagation();
                             exitPosition((p as any).exchange_position_id || p.position_id, p.pair);
                           }}
-                          className="rounded-lg bg-rose-600/90 hover:bg-rose-500 px-2.5 py-1 text-[11px] font-bold text-white transition shadow-sm"
+                          className="rounded-xl bg-rose-500/90 hover:bg-rose-400 px-3 py-1.5 text-xs font-black text-white transition shadow-lg active:scale-95"
                         >
                           ⚡ Take Profit / Exit
                         </button>
-                        <span className="text-[11px] text-cyan-400 font-semibold hover:underline">
-                          Inspect Chart →
+                        <span className="text-xs text-[#00D9F5] font-bold hover:underline">
+                          View Chart →
                         </span>
                       </div>
                     </div>
@@ -839,28 +921,28 @@ export default function LivePage() {
               })}
             </div>
           ) : (
-            <div className="mt-4 flex flex-col items-center justify-center py-8 px-4 text-center rounded-xl border border-dashed border-slate-800 bg-slate-950/40">
-              <div className="h-11 w-11 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 mb-2.5 border border-emerald-500/20">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <div className="mt-5 flex flex-col items-center justify-center py-10 px-6 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]">
+              <div className="h-12 w-12 rounded-2xl bg-[#00F5A0]/10 flex items-center justify-center text-[#00F5A0] mb-3 border border-[#00F5A0]/20 shadow-inner">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-sm font-bold text-white">0 Active Trades · 100% Free Capital</h3>
-              <p className="mt-1 text-xs text-slate-400 max-w-sm">
-                No trades currently open on CoinDCX. All ${balance(account.available_balance ?? 66.6)} USDT is available cash. Auto-pilot is scanning for 3x micro scalps towards the $6.00 daily goal.
+              <h3 className="text-base font-extrabold tracking-tight text-white">0 Active Trades · 100% Free Capital</h3>
+              <p className="mt-1.5 text-xs text-white/50 max-w-md leading-relaxed">
+                Zero capital locked on CoinDCX. All <b className="text-white font-mono">${balance(account.available_balance ?? 66.6)} USDT</b> is liquid. Auto-pilot scanner is continuously hunting high-probability 3x scalp setups to reach the $6.00 daily profit target.
               </p>
-              <div className="mt-3 flex flex-wrap gap-2 justify-center">
+              <div className="mt-4 flex flex-wrap gap-2.5 justify-center">
                 <button
                   onClick={() => selectAndScroll("B-XRP_USDT")}
-                  className="rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition"
+                  className="cred-btn-secondary px-4 py-2 text-xs font-bold text-white flex items-center gap-1.5"
                 >
-                  ⚡ Inspect XRP Scalp
+                  <span>⚡ Inspect XRP Scalp</span>
                 </button>
                 <button
                   onClick={() => selectAndScroll("B-DOGE_USDT")}
-                  className="rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition"
+                  className="cred-btn-secondary px-4 py-2 text-xs font-bold text-white flex items-center gap-1.5"
                 >
-                  ⚡ Inspect DOGE Scalp
+                  <span>⚡ Inspect DOGE Scalp</span>
                 </button>
               </div>
             </div>
@@ -868,32 +950,32 @@ export default function LivePage() {
 
           {/* Collapsible Past Closed Holdings History */}
           {closedPositions.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-slate-800/80">
+            <div className="mt-5 pt-4 border-t border-white/[0.06]">
               <button
                 onClick={() => setShowClosedPositions(!showClosedPositions)}
-                className="w-full flex items-center justify-between text-xs text-slate-400 hover:text-slate-300 py-1 transition"
+                className="w-full flex items-center justify-between text-xs text-white/50 hover:text-white py-1 transition"
               >
-                <span className="font-semibold flex items-center gap-1.5">
-                  <span className="text-[10px]">{showClosedPositions ? "▼" : "▶"}</span>
+                <span className="font-bold flex items-center gap-2">
+                  <span className="text-[10px] text-white/40">{showClosedPositions ? "▼" : "▶"}</span>
                   Past Closed Holdings History ({closedPositions.length})
                 </span>
-                <span className="text-[11px] text-slate-500">Settled on CoinDCX</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-white/40">Settled on CoinDCX</span>
               </button>
               {showClosedPositions && (
-                <div className="mt-2.5 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                <div className="mt-3 space-y-2 max-h-[220px] overflow-y-auto pr-1">
                   {closedPositions.map(p => (
                     <div
                       key={p.position_id}
-                      className="rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 flex items-center justify-between text-xs"
+                      className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 flex items-center justify-between text-xs"
                     >
                       <div className="flex items-center gap-2">
-                        <b className="text-slate-300 font-semibold">{p.pair}</b>
-                        <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase font-bold text-slate-400 border border-slate-700/60">
+                        <b className="text-white/80 font-bold">{p.pair}</b>
+                        <span className="rounded-full bg-white/[0.05] px-2 py-0.5 text-[9px] uppercase font-bold text-white/50 border border-white/10">
                           CLOSED
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-slate-400 text-[11px]">Margin Released: ${balance(p.margin)}</span>
+                        <span className="text-white/50 text-[11px] font-mono">Margin Released: ${balance(p.margin)}</span>
                       </div>
                     </div>
                   ))}
@@ -904,112 +986,112 @@ export default function LivePage() {
         </Card>
 
         {/* Right Card: Dual Tab (Live Research Feed / Order History) */}
-        <Card className="p-5 bg-slate-900/60 border-slate-800">
-          <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-800 gap-2">
-            <div className="flex items-center gap-1.5 rounded-lg bg-slate-950 p-1 border border-slate-800">
+        <Card className="cred-surface rounded-3xl p-6 sm:p-7 border border-white/[0.08] shadow-2xl relative overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between pb-4 border-b border-white/[0.06] gap-2">
+            <div className="flex items-center gap-1.5 rounded-2xl bg-white/[0.04] p-1.5 border border-white/[0.06]">
               <button
                 onClick={() => setRightCardTab("research")}
-                className={`text-xs font-bold px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                className={`text-xs font-black tracking-wide px-3.5 py-1.5 rounded-xl transition flex items-center gap-2 ${
                   rightCardTab === "research"
-                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
-                    : "text-slate-400 hover:text-white"
+                    ? "bg-white text-slate-950 shadow-md shadow-white/10"
+                    : "text-white/50 hover:text-white"
                 }`}
               >
                 <span>🔬 Live Research Stream</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                <span className="h-1.5 w-1.5 rounded-full bg-[#00D9F5] animate-ping"></span>
               </button>
               <button
                 onClick={() => setRightCardTab("orders")}
-                className={`text-xs font-bold px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                className={`text-xs font-black tracking-wide px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
                   rightCardTab === "orders"
-                    ? "bg-slate-800 text-white border border-slate-700 shadow-sm"
-                    : "text-slate-400 hover:text-white"
+                    ? "bg-white text-slate-950 shadow-md shadow-white/10"
+                    : "text-white/50 hover:text-white"
                 }`}
               >
-                <span>📜 Filled Orders ({orders.length})</span>
+                <span>📜 Orders Log ({orders.length})</span>
               </button>
             </div>
-            <span className="text-[11px] text-slate-400 font-medium">
+            <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-white/40">
               Indian Standard Time (IST)
             </span>
           </div>
 
           {rightCardTab === "research" ? (
-            <div className="mt-4 space-y-3.5">
+            <div className="mt-5 space-y-4">
               {/* Top Scanner Status Box */}
-              <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-slate-950 to-slate-950 p-3 text-xs">
+              <div className="rounded-2xl border border-[#00D9F5]/30 bg-gradient-to-r from-[#00D9F5]/[0.08] via-white/[0.01] to-transparent p-4 text-xs">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                    <b className="text-cyan-300">Scanning 499 CoinDCX Futures Markets</b>
+                  <div className="flex items-center gap-2.5">
+                    <span className="h-2 w-2 rounded-full bg-[#00D9F5] animate-pulse"></span>
+                    <b className="text-[#00D9F5] font-extrabold tracking-wide text-xs uppercase">Scanning 499 CoinDCX Markets</b>
                   </div>
-                  <span className="rounded bg-cyan-500/10 text-cyan-400 px-2 py-0.5 font-bold text-[10px] border border-cyan-500/20">
-                    EVERY 60s
+                  <span className="rounded-full bg-[#00D9F5]/10 text-[#00D9F5] px-2.5 py-0.5 font-black text-[9px] tracking-wider border border-[#00D9F5]/25">
+                    SYNC 60s
                   </span>
                 </div>
-                <p className="mt-1 text-slate-400 text-[11px] leading-relaxed">
+                <p className="mt-2 text-white/60 text-xs leading-relaxed">
                   {researchFeed?.readiness?.status_explanation ??
                     "Scanner is continuously evaluating breakout and trend pullback indicators across 14 eligible liquid markets. Auto-Pilot is armed to punch 3x scalps the moment a candle triggers."}
                 </p>
-                <div className="mt-2 pt-2 border-t border-slate-900 flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-1">
+                <div className="mt-3 pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between text-[11px] text-white/50 gap-2">
                   <span>Eligible Liquid Pairs: <b className="text-white">14 Candidates</b></span>
-                  <span>Leverage: <b className="text-indigo-400">3x Isolated</b></span>
-                  <span>Daily Cap: <b className="text-amber-400">$6.00 USDT</b></span>
+                  <span>Leverage: <b className="text-white font-mono">3x Isolated</b></span>
+                  <span>Daily Cap: <b className="text-[#F59E0B] font-mono font-bold">$6.00 USDT</b></span>
                 </div>
               </div>
 
               {/* 1-Tap Instant Test Punch Controls */}
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3.5">
+              <div className="rounded-2xl border border-[#00F5A0]/30 bg-gradient-to-r from-[#00F5A0]/[0.06] via-transparent to-transparent p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
                       <span>⚡ Instant Test Scalp Punch</span>
-                      <span className="text-[10px] rounded bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 font-extrabold uppercase">
-                        $20 Margin · 3x
+                      <span className="text-[9px] rounded-full bg-[#00F5A0]/20 text-[#00F5A0] px-2 py-0.5 font-black border border-[#00F5A0]/30">
+                        $20 MARGIN · 3x
                       </span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Punch a live trade immediately to test entry fill, TP/SL, and phone notifications:
+                    <p className="text-xs text-white/50 mt-1">
+                      Execute a live trade immediately to test order fill, TP/SL triggers, and phone alerts:
                     </p>
                   </div>
                 </div>
-                <div className="mt-2.5 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-2.5">
                   <button
                     onClick={() => punchInstantScalp("B-XRP_USDT", "buy")}
                     disabled={isPunchingScalp !== null}
-                    className="flex-1 min-w-[130px] rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 px-3 py-2 text-xs font-bold text-slate-950 shadow transition flex items-center justify-center gap-1.5"
+                    className="cred-btn-primary flex-1 min-w-[140px] py-2.5 text-xs flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    {isPunchingScalp === "B-XRP_USDT" ? "Punching XRP..." : "⚡ Punch XRP 3x Scalp"}
+                    <span>{isPunchingScalp === "B-XRP_USDT" ? "Punching XRP..." : "⚡ Punch XRP 3x Scalp"}</span>
                   </button>
                   <button
                     onClick={() => punchInstantScalp("B-DOGE_USDT", "buy")}
                     disabled={isPunchingScalp !== null}
-                    className="flex-1 min-w-[130px] rounded-lg bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 px-3 py-2 text-xs font-bold text-white shadow transition flex items-center justify-center gap-1.5"
+                    className="cred-btn-secondary flex-1 min-w-[140px] py-2.5 text-xs text-white flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    {isPunchingScalp === "B-DOGE_USDT" ? "Punching DOGE..." : "⚡ Punch DOGE 3x Scalp"}
+                    <span>{isPunchingScalp === "B-DOGE_USDT" ? "Punching DOGE..." : "⚡ Punch DOGE 3x Scalp"}</span>
                   </button>
                 </div>
               </div>
 
               {/* Research Candidate Stream */}
               <div>
-                <div className="flex items-center justify-between pb-1.5 text-xs text-slate-400">
-                  <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                <div className="flex items-center justify-between pb-2 text-xs text-white/50">
+                  <span className="font-bold text-white/80 flex items-center gap-2">
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F5A0] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00F5A0]"></span>
                     </span>
                     Top Market Candidates & Setup Diagnostic:
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-slate-900 border border-slate-800 px-2 py-0.5 text-[11px] font-mono text-emerald-400 flex items-center gap-1">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                    <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#00F5A0] flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0]"></span>
                       {researchFeed?.evaluated_at_ist ?? (lastRefreshedAt ? formatISTTime(lastRefreshedAt) : "Live Stream")}
                     </span>
-                    <span className="text-[10px] text-slate-500">Every 10s</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-widest">10s</span>
                   </div>
                 </div>
-                <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
                   {(researchFeed?.evaluations?.length ? researchFeed.evaluations : [
                     { symbol: "B-XRP_USDT", score: 72.6, current_price: 1.4464, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating in ATR range: waiting for 15m breakout candle with 1.2x volume expansion" },
                     { symbol: "B-DOGE_USDT", score: 68.7, current_price: 0.0871, strategy: "trend_pullback", status: "watching", direction: "neutral", explanation: "Pullback holding 20 EMA: waiting for 15m bullish reversal confirmation" },
@@ -1024,44 +1106,44 @@ export default function LivePage() {
                       <div
                         key={item.symbol || idx}
                         onClick={() => selectAndScroll(item.symbol)}
-                        className="rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-700 p-3 transition cursor-pointer"
+                        className="rounded-2xl border border-white/[0.06] bg-[#090b12]/80 hover:border-white/20 p-4 transition cursor-pointer backdrop-blur-md"
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <b className="text-sm font-bold text-white">{item.symbol}</b>
-                            <span className="rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-1.5 py-0.5 text-[10px] font-bold">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <b className="text-sm font-extrabold text-white tracking-tight">{item.symbol}</b>
+                            <span className="rounded-full bg-[#00D9F5]/10 text-[#00D9F5] border border-[#00D9F5]/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
                               Score: {item.score}
                             </span>
-                            <span className="text-[11px] text-slate-400 font-mono">
+                            <span className="text-xs text-white/50 font-mono">
                               ${balance(item.current_price)}
                             </span>
                           </div>
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                            className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
                               isTriggered
-                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse"
+                                ? "bg-[#00F5A0]/20 text-[#00F5A0] border border-[#00F5A0]/40 animate-pulse"
                                 : isArmed
-                                ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
-                                : "bg-slate-800 text-slate-400 border border-slate-700"
+                                ? "bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/40"
+                                : "bg-white/[0.05] text-white/50 border border-white/10"
                             }`}
                           >
                             {isTriggered ? "🎯 TRIGGERED" : isArmed ? "⏳ ARMED" : "WATCHING"}
                           </span>
                         </div>
 
-                        <p className="mt-1.5 text-[11px] text-slate-400 leading-relaxed bg-slate-900/60 rounded p-1.5 border border-slate-800/60">
+                        <p className="mt-2 text-xs text-white/60 leading-relaxed bg-white/[0.02] rounded-xl p-2.5 border border-white/[0.04]">
                           {item.explanation ?? "Consolidating: waiting for 15m breakout candle with 1.2x volume expansion"}
                         </p>
 
-                        <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500">
+                        <div className="mt-2.5 flex items-center justify-between text-[11px] text-white/40">
                           <div className="flex items-center gap-2">
-                            <span>Strategy: <b className="text-slate-400">{item.strategy ?? "breakout"}</b></span>
+                            <span>Strategy: <b className="text-white/70">{item.strategy ?? "breakout"}</b></span>
                             <span>•</span>
-                            <span className="text-slate-400 font-mono">
-                              ⏱️ Checked: <b className="text-emerald-400/90">{item.evaluated_at_ist ?? (lastRefreshedAt ? formatISTTime(lastRefreshedAt) : "Live")}</b>
+                            <span className="font-mono">
+                              Checked: <b className="text-[#00F5A0]">{item.evaluated_at_ist ?? (lastRefreshedAt ? formatISTTime(lastRefreshedAt) : "Live")}</b>
                             </span>
                           </div>
-                          <span className="text-cyan-400 font-semibold hover:underline">Inspect Chart →</span>
+                          <span className="text-[#00D9F5] font-bold hover:underline">Inspect Chart →</span>
                         </div>
                       </div>
                     );
@@ -1072,7 +1154,7 @@ export default function LivePage() {
           ) : (
             <div>
               {orders.length ? (
-                <div className="mt-4 space-y-3 max-h-[620px] overflow-y-auto pr-1">
+                <div className="mt-5 space-y-3 max-h-[620px] overflow-y-auto pr-1">
                   {orders.map(o => {
                     const isBuy = o.side === "buy";
                     const isFilled = o.status === "filled";
@@ -1082,68 +1164,68 @@ export default function LivePage() {
                       <div
                         key={o.order_id}
                         onClick={() => selectAndScroll(o.pair)}
-                        className={`rounded-xl border p-3.5 transition cursor-pointer ${
+                        className={`rounded-2xl border p-4 transition cursor-pointer backdrop-blur-md ${
                           isSelected
-                            ? "border-emerald-500 bg-emerald-950/20 shadow-md shadow-emerald-500/10"
-                            : "border-slate-800 bg-slate-950/80 hover:border-slate-700"
+                            ? "border-[#00F5A0] bg-[#00F5A0]/[0.06] shadow-lg shadow-[#00F5A0]/10"
+                            : "border-white/[0.06] bg-[#090b12]/80 hover:border-white/20"
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <b className="text-sm font-bold text-white">{o.pair}</b>
+                            <b className="text-sm font-extrabold text-white tracking-tight">{o.pair}</b>
                             <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${
-                                isBuy ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
+                              className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                                isBuy ? "bg-[#00F5A0]/15 text-[#00F5A0]" : "bg-rose-500/15 text-rose-400"
                               }`}
                             >
                               {isBuy ? "BUY (LONG)" : "SELL (SHORT)"}
                             </span>
                             {isSelected && (
-                              <span className="rounded bg-emerald-500 text-slate-950 font-bold text-[9px] px-1">
-                                Chart Active
+                              <span className="rounded-full bg-[#00F5A0] text-slate-950 font-black text-[9px] px-2 py-0.5 uppercase tracking-wider">
+                                Active
                               </span>
                             )}
                           </div>
 
                           <span
-                            className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
                               isFilled
-                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                                : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                                ? "bg-[#00F5A0]/15 text-[#00F5A0] border border-[#00F5A0]/30"
+                                : "bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/30"
                             }`}
                           >
                             {isFilled ? "✓ FILLED" : o.status}
                           </span>
                         </div>
 
-                        <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
+                        <div className="mt-2.5 flex items-center justify-between text-xs text-white/60">
                           <div>
-                            Filled: <b className="text-white">{balance(o.filled_quantity)}</b>
+                            Filled: <b className="text-white font-mono font-bold">{balance(o.filled_quantity)}</b>
                             {o.requested_quantity && o.requested_quantity !== o.filled_quantity && (
-                              <span className="text-slate-500"> / {balance(o.requested_quantity)}</span>
+                              <span className="text-white/40"> / {balance(o.requested_quantity)}</span>
                             )}
-                            <span className="text-slate-400"> @ ${balance(o.price)} USDT</span>
+                            <span className="text-white/45"> @ ${balance(o.price)} USDT</span>
                           </div>
-                          <span className="text-[11px] text-slate-500 uppercase font-medium">{o.order_type}</span>
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-white/40">{o.order_type}</span>
                         </div>
 
                         {/* Date & Time in IST */}
-                        <div className="mt-2 pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400">
+                        <div className="mt-2.5 pt-2.5 border-t border-white/[0.04] flex items-center justify-between text-[11px] text-white/40">
                           <div className="flex items-center gap-1.5">
-                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <span className="text-slate-300 font-medium">{formatIST(o.created_at)}</span>
+                            <span className="text-white/70 font-mono font-medium">{formatIST(o.created_at)}</span>
                           </div>
-                          <span className="text-cyan-400 font-semibold text-[10px]">View on Chart →</span>
+                          <span className="text-[#00D9F5] font-bold text-[10px] hover:underline">View on Chart →</span>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <p className="mt-6 text-center text-sm text-slate-500 py-8">
-                  No recent trade activity.
+                <p className="mt-8 text-center text-xs uppercase tracking-widest text-white/40 py-10">
+                  No recent order executions
                 </p>
               )}
             </div>
@@ -1153,54 +1235,54 @@ export default function LivePage() {
 
       {/* S24 Ultra Push Notification Modal */}
       {showAlertModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-cyan-500/40 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 p-6 shadow-2xl shadow-cyan-950/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/15 cred-surface p-7 shadow-2xl">
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-2xl shadow-inner">
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/[0.08]">
+              <div className="flex items-center gap-3.5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 text-2xl shadow-inner">
                   📱
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-white">
-                      Samsung Galaxy S24 Ultra Push Alerts
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xl font-black tracking-tight text-white">
+                      Samsung Galaxy S24 Ultra Alerts
                     </h3>
-                    <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                    <span className="rounded-full bg-[#00F5A0]/15 border border-[#00F5A0]/30 px-2.5 py-0.5 text-[9px] font-black text-[#00F5A0] uppercase tracking-wider">
                       Live Active
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Instant sound & vibration alerts directly to your phone for all trade actions.
+                  <p className="text-xs text-white/50 mt-0.5">
+                    Tactile sound & vibration alerts directly to your phone for all trade executions.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => { setShowAlertModal(false); setAlertStatusMessage(null); }}
-                className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                className="h-8 w-8 rounded-full bg-white/[0.04] hover:bg-white/10 text-white/50 hover:text-white transition flex items-center justify-center text-xs font-bold"
               >
                 ✕
               </button>
             </div>
 
             {/* Test Alert Button & Feedback */}
-            <div className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-950/30 p-4">
+            <div className="mt-5 rounded-2xl border border-[#00D9F5]/30 bg-gradient-to-r from-[#00D9F5]/[0.08] via-transparent to-transparent p-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-cyan-200">
-                    <span>Topic:</span>
-                    <code className="rounded bg-slate-900/90 px-2 py-0.5 font-mono text-cyan-400 text-xs border border-cyan-500/30">
+                  <div className="flex items-center gap-2 text-xs font-bold text-white/80">
+                    <span className="text-[10px] uppercase font-black tracking-wider text-white/40">Topic:</span>
+                    <code className="rounded-lg bg-white/[0.05] px-2.5 py-1 font-mono text-[#00D9F5] text-xs border border-[#00D9F5]/30">
                       fno_trades_apurba
                     </code>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Delivered via high-priority push with IST timestamps.
+                  <p className="text-[11px] text-white/50 mt-1.5">
+                    High-priority push delivery with exact IST timestamps.
                   </p>
                 </div>
                 <button
                   onClick={testPushNotification}
                   disabled={isTestingAlert}
-                  className="rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 px-4 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-cyan-500/25 transition flex items-center justify-center gap-2 whitespace-nowrap"
+                  className="cred-btn-primary px-5 py-2.5 text-xs flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50"
                 >
                   {isTestingAlert ? (
                     <>
@@ -1217,9 +1299,9 @@ export default function LivePage() {
               </div>
 
               {alertStatusMessage && (
-                <div className={`mt-3 rounded-lg p-2.5 text-xs font-medium border ${
+                <div className={`mt-3 rounded-xl p-3 text-xs font-medium border ${
                   alertStatusMessage.includes("🚀")
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    ? "bg-[#00F5A0]/10 border-[#00F5A0]/30 text-[#00F5A0]"
                     : "bg-rose-500/10 border-rose-500/30 text-rose-300"
                 }`}>
                   {alertStatusMessage}
@@ -1229,25 +1311,25 @@ export default function LivePage() {
 
             {/* Quick 30-Second Setup on S24 Ultra */}
             <div className="mt-5 space-y-2">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
                 ⚡ Quick 30-Second Setup on your S24 Ultra:
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-slate-300">
-                <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-3">
-                  <div className="text-emerald-400 font-bold mb-1">Step 1</div>
-                  <p className="text-slate-400 text-[11px]">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] p-3.5">
+                  <div className="text-[#00F5A0] font-black text-xs mb-1">Step 1</div>
+                  <p className="text-white/50 text-[11px] leading-relaxed">
                     Open Google Play Store on your S24 Ultra & install the free <b className="text-white">ntfy</b> app.
                   </p>
                 </div>
-                <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-3">
-                  <div className="text-cyan-400 font-bold mb-1">Step 2</div>
-                  <p className="text-slate-400 text-[11px]">
-                    Tap <b className="text-white">+ (Subscribe)</b> and enter topic: <code className="text-cyan-300 font-mono">fno_trades_apurba</code>
+                <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] p-3.5">
+                  <div className="text-[#00D9F5] font-black text-xs mb-1">Step 2</div>
+                  <p className="text-white/50 text-[11px] leading-relaxed">
+                    Tap <b className="text-white">+ (Subscribe)</b> and enter topic: <code className="text-[#00D9F5] font-mono">fno_trades_apurba</code>
                   </p>
                 </div>
-                <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-3">
-                  <div className="text-amber-400 font-bold mb-1">Step 3</div>
-                  <p className="text-slate-400 text-[11px]">
+                <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] p-3.5">
+                  <div className="text-[#F59E0B] font-black text-xs mb-1">Step 3</div>
+                  <p className="text-white/50 text-[11px] leading-relaxed">
                     Click the <b className="text-white">Send Test Alert</b> button above to verify phone sound & banner!
                   </p>
                 </div>
@@ -1256,55 +1338,55 @@ export default function LivePage() {
 
             {/* Notification Types Covered */}
             <div className="mt-5 space-y-2">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
                 🔔 Automatic Notifications Delivered to your S24 Ultra:
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg bg-slate-900/60 border border-slate-800/80 p-2.5 flex items-start gap-2.5">
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-3 flex items-start gap-2.5">
                   <span className="text-base">🚀</span>
                   <div>
-                    <div className="font-semibold text-white">Trade Punched (Entry)</div>
-                    <div className="text-[11px] text-slate-400">Pair, BUY/SELL, 3x leverage, Entry Price, TP, SL, Margin & IST Time.</div>
+                    <div className="font-bold text-white">Trade Punched (Entry)</div>
+                    <div className="text-[11px] text-white/50 mt-0.5">Pair, BUY/SELL, 3x leverage, Entry Price, TP, SL, Margin & IST Time.</div>
                   </div>
                 </div>
-                <div className="rounded-lg bg-slate-900/60 border border-slate-800/80 p-2.5 flex items-start gap-2.5">
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-3 flex items-start gap-2.5">
                   <span className="text-base">🎯</span>
                   <div>
-                    <div className="font-semibold text-white">Trade Exit & Take-Profit</div>
-                    <div className="text-[11px] text-slate-400">Exit Price, Realized P&L ($ USDT & ROE %), Trigger reason & Cash balance.</div>
+                    <div className="font-bold text-white">Trade Exit & Take-Profit</div>
+                    <div className="text-[11px] text-white/50 mt-0.5">Exit Price, Realized P&L ($ USDT & ROE %), Trigger reason & Cash balance.</div>
                   </div>
                 </div>
-                <div className="rounded-lg bg-slate-900/60 border border-slate-800/80 p-2.5 flex items-start gap-2.5">
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-3 flex items-start gap-2.5">
                   <span className="text-base">⚡</span>
                   <div>
-                    <div className="font-semibold text-white">Potential Breakout Setups</div>
-                    <div className="text-[11px] text-slate-400">Tier-A setups (Score ≥ 75) with Trigger Price, Target & Invalidation Stop.</div>
+                    <div className="font-bold text-white">Potential Breakout Setups</div>
+                    <div className="text-[11px] text-white/50 mt-0.5">Tier-A setups (Score ≥ 75) with Trigger Price, Target & Invalidation Stop.</div>
                   </div>
                 </div>
-                <div className="rounded-lg bg-slate-900/60 border border-slate-800/80 p-2.5 flex items-start gap-2.5">
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-3 flex items-start gap-2.5">
                   <span className="text-base">🏆</span>
                   <div>
-                    <div className="font-semibold text-white">Daily Profit Goal ($10)</div>
-                    <div className="text-[11px] text-slate-400">Instant alert when $10 profit target is locked for the day.</div>
+                    <div className="font-bold text-white">Daily Profit Goal ($6.00)</div>
+                    <div className="text-[11px] text-white/50 mt-0.5">Instant alert when $6.00 profit target is locked for the day.</div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between text-xs">
+            <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-center justify-between text-xs">
               <a
                 href="https://ntfy.sh/fno_trades_apurba"
                 target="_blank"
                 rel="noreferrer"
-                className="text-cyan-400 hover:text-cyan-300 font-semibold underline flex items-center gap-1"
+                className="text-[#00D9F5] hover:underline font-bold flex items-center gap-1"
               >
                 <span>Open Web Feed on Mobile Browser</span>
                 <span>↗</span>
               </a>
               <button
                 onClick={() => { setShowAlertModal(false); setAlertStatusMessage(null); }}
-                className="rounded-lg bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 transition"
+                className="cred-btn-secondary px-5 py-2 text-xs font-bold text-white"
               >
                 Close
               </button>

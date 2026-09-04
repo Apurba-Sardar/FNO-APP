@@ -84,34 +84,38 @@ export function TradingViewChart({
   const priceChangePct = (entry && mark && entry > 0) ? ((mark - entry) / entry) * 100 * (isLong ? 1 : -1) : null;
 
   return (
-    <div className="w-full rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl overflow-hidden">
+    <div className="w-full rounded-3xl cred-surface shadow-[0_25px_60px_rgba(0,0,0,0.9)] overflow-hidden">
       {/* Top Header & Trade Selection Bar */}
-      <div className="border-b border-slate-800/80 bg-slate-900/60 p-4">
+      <div className="border-b border-white/[0.08] bg-black/40 p-4 sm:p-5 backdrop-blur-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="h-3 w-3 animate-pulse rounded-full bg-emerald-400"></span>
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-[#00F5A0]/15 border border-[#00F5A0]/30 flex items-center justify-center text-[#00F5A0] shadow-[0_0_15px_rgba(0,245,160,0.2)]">
+              <span className="text-base">📈</span>
+            </div>
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <h3 className="text-base font-black text-white flex items-center gap-2 tracking-tight">
                 Live Interactive Chart & Trade Visualizer
-                <span className="text-xs font-mono font-normal text-slate-400 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700">
+                <span className="text-xs font-mono font-bold text-[#00F5A0] bg-[#00F5A0]/10 px-2.5 py-0.5 rounded-full border border-[#00F5A0]/20">
                   {normalizeTradingViewSymbol(currentSymbol)}
                 </span>
               </h3>
-              <p className="text-xs text-slate-400">
-                Shows exact Entry, Mark Price, and Exit Targets in Indian Standard Time (IST)
+              <p className="text-xs text-slate-400 mt-0.5">
+                Exact Entry, Mark Price, and Protection Bounds streaming live in Indian Standard Time (IST)
               </p>
             </div>
           </div>
 
           {/* Timeframe selector */}
-          <div className="flex items-center gap-1.5 self-start md:self-auto bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-            <span className="text-[11px] text-slate-500 px-2">Timeframe:</span>
+          <div className="flex items-center gap-1 self-start md:self-auto bg-black/60 p-1 rounded-xl border border-white/[0.08] text-xs shadow-inner">
+            <span className="text-[10px] uppercase font-black tracking-wider text-slate-500 px-2">TF:</span>
             {["5", "15", "60", "240", "D"].map(tf => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
-                className={`rounded px-2 py-1 font-bold transition ${
-                  timeframe === tf ? "bg-emerald-500 text-slate-950" : "text-slate-400 hover:text-white"
+                className={`rounded-lg px-2.5 py-1 text-xs font-black transition ${
+                  timeframe === tf
+                    ? "bg-[#00F5A0] text-black shadow-[0_0_15px_rgba(0,245,160,0.4)]"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
                 {tf === "D" ? "1D" : `${tf}m`}
@@ -121,8 +125,8 @@ export function TradingViewChart({
         </div>
 
         {/* Quick Trade Selector Pills */}
-        <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-          <span className="text-slate-400 font-semibold text-[11px] shrink-0">Switch Trade:</span>
+        <div className="mt-3.5 flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider shrink-0">Select Pair:</span>
           {availableSymbols.length > 0 ? (
             availableSymbols.map(item => {
               const active = currentSymbol === item.symbol;
@@ -133,33 +137,33 @@ export function TradingViewChart({
                 <button
                   key={item.symbol}
                   onClick={() => handleSymbolClick(item.symbol)}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 shrink-0 transition font-bold ${
+                  className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 shrink-0 transition font-black text-xs ${
                     active
-                      ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20"
-                      : "bg-slate-950/80 border border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white"
+                      ? "bg-[#00F5A0] text-black shadow-[0_0_20px_rgba(0,245,160,0.35)]"
+                      : "bg-white/[0.04] border border-white/[0.08] text-slate-300 hover:border-white/20 hover:text-white"
                   }`}
                 >
                   <span>{item.label}</span>
                   {hasPnl && (
-                    <span className={`text-[10px] font-black ${active ? "text-slate-950" : isPnlPositive ? "text-emerald-400" : "text-rose-400"}`}>
+                    <span className={`text-[10px] font-black ${active ? "text-black" : isPnlPositive ? "text-emerald-400" : "text-rose-400"}`}>
                       {isPnlPositive ? "+" : ""}{balance(item.pnl)}
                     </span>
                   )}
                   {item.isRecent && (
-                    <span className="rounded bg-cyan-500/20 text-cyan-300 text-[9px] px-1">Recent</span>
+                    <span className="rounded-full bg-cyan-400/20 text-cyan-300 text-[9px] px-1.5 font-extrabold uppercase">Live</span>
                   )}
                 </button>
               );
             })
           ) : (
-            ["B-XRP_USDT", "B-DOGE_USDT", "B-DOGS_USDT", "B-1000CAT_USDT", "B-MELANIA_USDT", "B-MUBARAK_USDT", "B-ZEC_USDT"].map(sym => (
+            ["B-XRP_USDT", "B-DOGE_USDT", "B-SOL_USDT", "B-ETH_USDT", "B-BTC_USDT", "B-LTC_USDT"].map(sym => (
               <button
                 key={sym}
                 onClick={() => handleSymbolClick(sym)}
-                className={`rounded-lg px-2.5 py-1.5 shrink-0 transition font-semibold ${
+                className={`rounded-xl px-3 py-1.5 shrink-0 transition font-bold text-xs ${
                   currentSymbol === sym
-                    ? "bg-emerald-500 text-slate-950 font-bold"
-                    : "bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-[#00F5A0] text-black font-black"
+                    : "bg-white/[0.04] border border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20"
                 }`}
               >
                 {sym.replace("B-", "").replace("_USDT", "")}
@@ -171,7 +175,7 @@ export function TradingViewChart({
 
       {/* Trade Details HUD (Entry, Live Mark, Target, Stop, PnL) */}
       {tradeInfo && (
-        <div className="bg-slate-900/90 border-b border-slate-800 p-4">
+        <div className="bg-black/60 border-b border-white/[0.08] p-4 sm:p-5 backdrop-blur-xl">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 text-xs">
             {/* Entry Box */}
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-3">

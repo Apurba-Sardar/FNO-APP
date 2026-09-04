@@ -32,19 +32,19 @@ export function Header() {
   if (pathname === "/login") return null;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl shadow-xl shadow-black/20">
+    <header className="sticky top-0 z-50 border-b border-white/[0.07] bg-[#05060b]/90 backdrop-blur-2xl shadow-[0_10px_35px_rgba(0,0,0,0.85)]">
       <div className="mx-auto max-w-[1600px] px-3 sm:px-6">
         <div className="flex h-14 items-center justify-between gap-3">
           {/* Logo & Brand */}
           <Link href="/" className="flex shrink-0 items-center gap-2.5 group">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-400 font-black text-slate-950 shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#00F5A0] via-teal-400 to-[#00D9F5] font-black text-black shadow-[0_0_20px_rgba(0,245,160,0.35),inset_0_1px_0_rgba(255,255,255,0.7)] group-hover:scale-105 transition">
               F
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-black tracking-wider text-white leading-none">
-                FNO <span className="text-cyan-400 font-extrabold text-xs">SUITE</span>
+              <span className="text-sm font-black tracking-wider text-white leading-none flex items-center gap-1.5">
+                FNO <span className="bg-gradient-to-r from-[#00F5A0] to-[#00D9F5] bg-clip-text text-transparent font-extrabold text-xs">SUITE</span>
               </span>
-              <span className="text-[10px] text-slate-400 font-medium tracking-tight">Algorithmic Futures</span>
+              <span className="text-[9px] text-slate-400 font-mono tracking-[0.18em] uppercase">Algorithmic Futures</span>
             </div>
           </Link>
 
@@ -58,8 +58,8 @@ export function Header() {
                   href={href}
                   className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                     active
-                      ? "bg-slate-800/90 text-white shadow-sm border border-slate-700/60"
-                      : "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200"
+                      ? "bg-white/[0.08] text-white shadow-sm border border-white/[0.12]"
+                      : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
                   }`}
                 >
                   {label}
@@ -72,8 +72,8 @@ export function Header() {
           <div className="flex shrink-0 items-center gap-3 text-xs">
             {/* Live IST Clock */}
             {currentIST && (
-              <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-slate-300 font-mono text-[11px] shadow-inner">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-black/60 px-3 py-1 text-slate-300 font-mono text-[11px] shadow-inner">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-pulse"></span>
                 <span>{currentIST}</span>
               </div>
             )}
@@ -81,10 +81,10 @@ export function Header() {
             {/* Live Trading Button */}
             <Link
               href="/live"
-              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-bold transition shadow-sm ${
+              className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 font-bold transition shadow-sm ${
                 pathname.startsWith("/live")
-                  ? "border-rose-500 bg-rose-600 text-white shadow-rose-600/30"
-                  : "border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 hover:border-rose-500/60"
+                  ? "border-rose-500/80 bg-gradient-to-r from-rose-600 to-rose-700 text-white shadow-[0_0_20px_rgba(225,29,72,0.4)]"
+                  : "border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 hover:border-rose-500/60"
               }`}
             >
               <span className="h-2 w-2 rounded-full bg-rose-400 animate-ping"></span>
@@ -94,7 +94,7 @@ export function Header() {
             {/* Logout Button */}
             <button
               onClick={logout}
-              className="rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition text-xs"
+              className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 font-semibold text-slate-400 hover:bg-white/[0.08] hover:text-white transition text-xs"
             >
               Sign out
             </button>

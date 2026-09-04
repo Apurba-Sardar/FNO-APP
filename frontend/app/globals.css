@@ -4,30 +4,104 @@
 
 :root { color-scheme: dark; }
 
-html { background: #020617; }
+html {
+  background: #040508;
+}
 
 body {
-  @apply min-h-screen bg-slate-950 text-slate-100 antialiased;
+  @apply min-h-screen text-slate-100 antialiased;
+  background-color: #040508;
   background-image:
-    radial-gradient(circle at 18% -10%, rgba(8, 145, 178, 0.11), transparent 28rem),
-    radial-gradient(circle at 92% 8%, rgba(99, 102, 241, 0.08), transparent 24rem);
+    radial-gradient(circle at 50% -15%, rgba(0, 245, 160, 0.05), transparent 45rem),
+    radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.04), transparent 35rem),
+    radial-gradient(circle at 15% 45%, rgba(6, 182, 212, 0.03), transparent 30rem),
+    radial-gradient(circle at 50% 100%, rgba(15, 23, 42, 0.8), transparent 50rem);
   font-feature-settings: "tnum" 1, "cv11" 1;
 }
 
-button, a, input, select { @apply transition-colors duration-150; }
+/* CRED Club Luxury Glassmorphic Surfaces */
+.cred-surface {
+  background: linear-gradient(180deg, rgba(16, 20, 30, 0.75) 0%, rgba(8, 10, 16, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.cred-surface-glow {
+  background: linear-gradient(180deg, rgba(16, 28, 26, 0.8) 0%, rgba(6, 14, 13, 0.95) 100%);
+  border: 1px solid rgba(0, 245, 160, 0.25);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 245, 160, 0.08), inset 0 1px 0 rgba(0, 245, 160, 0.3);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.cred-surface-gold {
+  background: linear-gradient(180deg, rgba(28, 24, 14, 0.8) 0%, rgba(14, 12, 6, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(245, 158, 11, 0.08), inset 0 1px 0 rgba(245, 158, 11, 0.3);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* CRED Luxury Buttons */
+.cred-btn-primary {
+  background: linear-gradient(135deg, #00F5A0 0%, #00D9F5 100%);
+  color: #030712;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  box-shadow: 0 0 25px rgba(0, 245, 160, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cred-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 35px rgba(0, 245, 160, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.cred-btn-primary:active {
+  transform: translateY(0px) scale(0.98);
+}
+
+.cred-btn-secondary {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cred-btn-secondary:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+.cred-btn-secondary:active {
+  transform: translateY(0px) scale(0.98);
+}
+
+/* Shimmer Progress Effect */
+@keyframes cred-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-shimmer {
+  animation: cred-shimmer 2.5s infinite;
+}
+
+button, a, input, select { @apply transition-all duration-150; }
 button { @apply outline-none; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
-  @apply ring-2 ring-cyan-400/70 ring-offset-2 ring-offset-slate-950;
+  @apply ring-2 ring-emerald-400/70 ring-offset-2 ring-offset-slate-950;
 }
 input, select {
-  @apply border-slate-700/80 bg-slate-950/80 placeholder:text-slate-600;
+  @apply border-white/10 bg-black/60 placeholder:text-slate-600;
 }
 table { font-variant-numeric: tabular-nums; }
-thead { @apply uppercase tracking-wide; }
+thead { @apply uppercase tracking-wider; }
 tbody tr { @apply transition-colors; }
-::selection { @apply bg-cyan-400/25 text-cyan-50; }
+::selection { @apply bg-emerald-400/25 text-emerald-200; }
 
-* { scrollbar-color: #334155 #0f172a; scrollbar-width: thin; }
-*::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-track { background: #0f172a; }
-*::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+* { scrollbar-color: #1e293b #040508; scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: #040508; }
+*::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 999px; }
+
