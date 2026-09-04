@@ -66,11 +66,11 @@ class Settings(BaseSettings):
     live_operator_token: str = "LIVE_OPERATOR_TOKEN_2026"
     live_emergency_token: str = "LIVE_EMERGENCY_TOKEN_2026"
     live_stage: int = Field(default=3, ge=0, le=5)
-    live_max_orders_per_day: int = Field(default=3, ge=1)
-    live_max_trades_per_day: int = Field(default=1, ge=1)
-    live_max_notional_per_trade: float = Field(default=25, gt=0)
+    live_max_orders_per_day: int = Field(default=50, ge=1)
+    live_max_trades_per_day: int = Field(default=25, ge=1)
+    live_max_notional_per_trade: float = Field(default=100, gt=0)
     live_max_daily_loss_percent: float = Field(default=0.25, gt=0)
-    live_max_open_positions: int = Field(default=10, ge=1)
+    live_max_open_positions: int = Field(default=5, ge=1)
     live_max_total_exposure: float = Field(default=2500, gt=0)
     live_max_order_retries: int = Field(default=1, ge=0, le=3)
     live_order_timeout_seconds: float = Field(default=10, gt=0)

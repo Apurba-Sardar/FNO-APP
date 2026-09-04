@@ -1180,7 +1180,7 @@ class LiveTestTradeRequest(LiveModel):
     symbol: str = "B-LTC_USDT"
     side: Literal["buy", "sell"] = "buy"
     quantity: float = 0.1
-    leverage: int = 1
+    leverage: int = 3
     confirmation_phrase: str
 
 
@@ -1196,13 +1196,14 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
         raise HTTPException(status_code=503, detail="CoinDCX live client unavailable")
 
     from app.services.coindcx.constants import FUTURES_CREATE_ORDER_PATH
+    target_leverage = body.leverage if body.leverage > 0 else 3
     order_payload = {
         "order": {
             "side": body.side,
             "pair": body.symbol,
             "order_type": "market_order",
             "total_quantity": body.quantity,
-            "leverage": body.leverage,
+            "leverage": target_leverage,
             "notification": "no_notification",
             "hidden": False,
             "post_only": False,
@@ -1219,6 +1220,8 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
         await asyncio.sleep(1.5)
         await runtime.reconcile(actor="operator-test-trade")
         await runtime.refresh_account()
+        # Immediately attach 3x scalp TP (+1.8%) and SL (-1.2%) to protect the new position
+        await runtime.monitor_and_auto_close_positions()
     except Exception as exc:
         import structlog
         structlog.get_logger().warning("POST_TRADE_RECONCILE_WARNING", error=str(exc))
@@ -1226,8 +1229,22 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
     return {
         "status": "submitted",
         "order_result": order_result,
+        "leverage": target_leverage,
         "open_positions": len(runtime.positions),
         "available_balance": getattr(runtime.account, "available_balance", None),
+    }
+
+
+@router.post("/live/auto-trading/toggle")
+async def toggle_auto_trading(request: Request, settings: SettingsDependency) -> dict:
+    authorize_live(request, settings)
+    runtime = live_runtime_from(request)
+    runtime.auto_trading_enabled = not getattr(runtime, "auto_trading_enabled", False)
+    return {
+        "auto_trading_enabled": runtime.auto_trading_enabled,
+        "auto_close_active": True,
+        "enforced_leverage": 3,
+        "status": runtime.status(),
     }
 
 

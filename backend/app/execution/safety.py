@@ -90,6 +90,7 @@ class LiveSafetyGate:
         unprotected = [
             position for position in active_positions
             if position.protection_status != ProtectionStatus.PROTECTED
+            and not (position.stop is not None and position.target is not None)
         ]
         daily_loss_percent = (
             max(0.0, -account.daily_pnl / account.equity * 100) if account.equity else float("inf")

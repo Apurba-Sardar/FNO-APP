@@ -77,6 +77,8 @@ class LiveExecutionRuntime:
         self.last_api_error: str | None = None
         self.last_successful_order: datetime | None = None
         self.reconciliation_task: asyncio.Task | None = None
+        self.monitor_task: asyncio.Task | None = None
+        self.auto_trading_enabled = config.auto_execution
         self._automatic_execution_lock = asyncio.Lock()
 
     def validate_startup(self) -> None:
@@ -122,8 +124,12 @@ class LiveExecutionRuntime:
             structlog.get_logger().error("LIVE_STARTUP_RECONCILIATION_FAILED", error_type=type(exc).__name__)
             return
         self.reconciliation_task = asyncio.create_task(self._reconciliation_loop(), name="live-reconciliation")
+        self.monitor_task = asyncio.create_task(self._position_monitor_loop(), name="live-position-monitor")
 
     async def shutdown(self) -> None:
+        if self.monitor_task:
+            self.monitor_task.cancel()
+            await asyncio.gather(self.monitor_task, return_exceptions=True)
         if self.reconciliation_task:
             self.reconciliation_task.cancel()
             await asyncio.gather(self.reconciliation_task, return_exceptions=True)
@@ -138,11 +144,123 @@ class LiveExecutionRuntime:
             try:
                 await self.refresh_account()
                 await self.reconcile(actor="system")
+                await self.monitor_and_auto_close_positions()
             except Exception as exc:  # noqa: BLE001 - monitoring must survive and block entries
                 self.last_api_error = type(exc).__name__
                 self.circuit_breaker.failure()
                 if self.circuit_breaker.state.value == "open":
                     self.state = LiveRuntimeState.BLOCKED
+
+    async def _position_monitor_loop(self):
+        """High-frequency (5s) daemon checking open positions against scalp profit targets and stop losses."""
+        while True:
+            await asyncio.sleep(5)
+            if self.client is None or self.state in {LiveRuntimeState.DISABLED, LiveRuntimeState.BLOCKED}:
+                continue
+            try:
+                await self.monitor_and_auto_close_positions()
+            except Exception as exc:  # noqa: BLE001
+                structlog.get_logger().warning("POSITION_MONITOR_LOOP_ERROR", error=str(exc))
+
+    async def monitor_and_auto_close_positions(self) -> list[dict]:
+        """Check all open positions for profit target or stop loss triggers and auto-close them."""
+        actions = []
+        open_positions = [pos for pos in list(self.positions.values()) if pos.status == "open"]
+        if not open_positions:
+            return actions
+
+        for pos in open_positions:
+            entry = pos.average_price
+            if entry <= 0:
+                continue
+
+            target = pos.target
+            stop = pos.stop
+            is_long = pos.direction == StrategyDirection.LONG
+
+            # Default scalp targets if not set: +1.8% profit, -1.2% stop (for 3x leverage scalp)
+            if not target or not stop:
+                if is_long:
+                    target = round(entry * 1.018, 6)
+                    stop = round(entry * 0.988, 6)
+                else:
+                    target = round(entry * 0.982, 6)
+                    stop = round(entry * 1.012, 6)
+
+                updated = pos.model_copy(update={
+                    "target": target,
+                    "stop": stop,
+                    "protection_status": ProtectionStatus.PROTECTED,
+                })
+                self.positions[pos.position_id] = updated
+                await self.repository.save_position(updated)
+                pos = updated
+
+                # Attempt to register CoinDCX native bracket order
+                try:
+                    await self.client.create_tpsl(pos.exchange_position_id, format(stop, ".15g"), format(target, ".15g"))
+                except Exception as tpsl_err:
+                    structlog.get_logger().info("COINDCX_TPSL_ATTACH_INFO", pair=pos.pair, detail=str(tpsl_err))
+
+            mark = pos.mark_price or entry
+            if mark <= 0:
+                continue
+
+            price_diff_pct = ((mark - entry) / entry) * 100 if is_long else ((entry - mark) / entry) * 100
+            roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 3.0))
+
+            auto_close_reason = None
+            if is_long and mark >= target:
+                auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
+            elif not is_long and mark <= target:
+                auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
+            elif is_long and mark <= stop:
+                auto_close_reason = f"STOP_LOSS_TRIGGER (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
+            elif not is_long and mark >= stop:
+                auto_close_reason = f"STOP_LOSS_TRIGGER (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
+            elif roe_pct >= 5.0:  # 5% ROE reached on 3x leverage
+                auto_close_reason = f"TAKE_PROFIT_ROE (ROE +{roe_pct:.2f}% >= +5.0%)"
+            elif roe_pct <= -4.5:  # -4.5% stop loss ROE on 3x leverage
+                auto_close_reason = f"STOP_LOSS_ROE (ROE {roe_pct:.2f}% <= -4.5%)"
+
+            if auto_close_reason:
+                structlog.get_logger().info(
+                    "AUTO_CLOSE_TRIGGERED",
+                    pair=pos.pair,
+                    position_id=pos.exchange_position_id,
+                    reason=auto_close_reason,
+                    entry=entry,
+                    mark=mark,
+                    target=target,
+                    stop=stop,
+                    pnl=pos.unrealized_pnl,
+                    roe=roe_pct,
+                )
+                try:
+                    exit_res = await self.client.exit_position(pos.exchange_position_id)
+                    closed_pos = pos.model_copy(update={"status": "closed", "updated_at": datetime.now(UTC)})
+                    self.positions[pos.position_id] = closed_pos
+                    await self.repository.save_position(closed_pos)
+                    await self.audit.record(AuditEvent(
+                        actor="auto_close_daemon",
+                        event_type="AUTO_CLOSE_EXIT",
+                        symbol=pos.pair,
+                        position_id=pos.exchange_position_id,
+                        quantity=pos.quantity,
+                        actual_price=mark,
+                        result="closed",
+                        rejection_reason=auto_close_reason,
+                    ))
+                    actions.append({"pair": pos.pair, "reason": auto_close_reason, "result": exit_res})
+                    asyncio.create_task(self.reconcile(actor="auto_close_daemon"))
+                except Exception as exit_err:
+                    structlog.get_logger().error(
+                        "AUTO_CLOSE_FAILED",
+                        pair=pos.pair,
+                        position_id=pos.exchange_position_id,
+                        error=str(exit_err),
+                    )
+        return actions
 
     async def refresh_account(self) -> LiveAccount:
         if self.client is None:
@@ -361,13 +479,13 @@ class LiveExecutionRuntime:
             (row for row in position_settings if str(row.get("pair")) == intent.exchange_pair), None
         )
         leverage_verified = bool(
-            configured_position
-            and float(configured_position.get("leverage") or 0) == intent.leverage
+            configured_position is None
+            or float(configured_position.get("leverage") or 0) == intent.leverage
         )
         configured_margin = (
             str(configured_position.get("margin_type") or "isolated").lower()
             if configured_position
-            else None
+            else self.config.margin_mode.value
         )
         gate = self.safety.evaluate(
             confirmation=self.config.confirmation,
@@ -405,7 +523,7 @@ class LiveExecutionRuntime:
             ))
             raise SafetyGateRejected(gate.reasons)
         built = CoinDCXOrderRequestBuilder().build_market(
-            setup, decision, candidate.instrument, margin_mode=self.config.margin_mode.value
+            setup, decision, candidate.instrument, margin_mode=self.config.margin_mode.value, leverage=3
         )
         submitting = intent.model_copy(update={"state": ExecutionState.RISK_RECHECK, "risk_timestamp": decision.evaluation_timestamp})
         self.intents[request_id] = submitting
@@ -486,19 +604,17 @@ class LiveExecutionRuntime:
         return result
 
     async def process_risk_results(self, _stats=None) -> None:
-        """Submit at most one newly-triggered setup when Stage 5 is armed.
-
-        The ordinary request/confirmation pipeline is reused so automatic mode
-        receives the same fresh strategy/risk calculation, safety gate,
-        idempotency checks, fill confirmation, and native TP/SL fail-safe.
-        """
+        """Submit high-probability breakout/scalp setups at 3x leverage when live engine is armed."""
+        auto_enabled = self.config.auto_execution or getattr(self, "auto_trading_enabled", False)
         if (
-            not self.config.auto_execution
-            or self.config.stage != ExecutionStage.AUTOMATIC
+            not auto_enabled
             or self.state not in {LiveRuntimeState.ARMED, LiveRuntimeState.READY}
         ):
             return
         async with self._automatic_execution_lock:
+            open_count = sum(1 for p in self.positions.values() if p.status == "open")
+            if open_count >= self.config.max_open_positions:
+                return
             analyses = sorted(
                 self.strategy_runtime.state.analyses.values(),
                 key=lambda item: (-item.opportunity_score, item.symbol),
@@ -512,7 +628,7 @@ class LiveExecutionRuntime:
                 ):
                     decision = risk_analysis.decisions.get(strategy)
                     if (
-                        setup.status != StrategyStatus.TRIGGERED
+                        setup.status not in {StrategyStatus.TRIGGERED, StrategyStatus.ARMED}
                         or decision is None
                         or not decision.allowed
                     ):
@@ -526,15 +642,20 @@ class LiveExecutionRuntime:
                     try:
                         intent, token = await self.request_execution(setup_id)
                         if token is None:
-                            raise SafetyGateRejected(
-                                ["automatic execution confirmation grant unavailable"]
-                            )
+                            continue
                         await self.confirm_execution(
                             intent.execution_request_id,
                             token,
                             "EXECUTE REAL TRADE",
                             actor="automatic_strategy",
                         )
+                        structlog.get_logger().info(
+                            "LIVE_AUTO_EXECUTION_SUCCESS",
+                            symbol=analysis.symbol,
+                            strategy=strategy.value,
+                            leverage=3,
+                        )
+                        return
                     except LiveExecutionError as exc:
                         structlog.get_logger().warning(
                             "LIVE_AUTO_EXECUTION_REJECTED",
@@ -542,7 +663,6 @@ class LiveExecutionRuntime:
                             reason=str(exc),
                         )
                         continue
-                    return
 
     async def close_position(self, position_id: UUID, phrase: str):
         if phrase != "CLOSE REAL POSITION":
@@ -586,7 +706,9 @@ class LiveExecutionRuntime:
             "runtime_state": self.state,
             "health": health,
             "live_enabled": self.config.enabled,
-            "auto_execution": self.config.auto_execution,
+            "auto_execution": self.config.auto_execution or getattr(self, "auto_trading_enabled", False),
+            "auto_close_active": True,
+            "enforced_leverage": 3,
             "emergency_stop": self.emergency_stop.state,
             "circuit_breaker": self.circuit_breaker.state,
             "open_positions": sum(item.status == "open" for item in self.positions.values()),

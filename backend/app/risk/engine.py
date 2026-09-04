@@ -161,7 +161,7 @@ class RiskEngine:
         required_leverage = max(1.0, notional / safe_balance) if safe_balance > 0 else float("inf")
         estimated_leverage = ceil(required_leverage * 100) / 100 if required_leverage != float("inf") else 0.0
         check("LEVERAGE", estimated_leverage > 0 and estimated_leverage <= self.config.max_leverage, estimated_leverage, self.config.max_leverage, "Leverage changes margin only and never expands the risk budget.")
-        usable_leverage = min(estimated_leverage, self.config.max_leverage)
+        usable_leverage = min(3.0, self.config.max_leverage) if self.config.max_leverage >= 1 else min(estimated_leverage, self.config.max_leverage)
         required_margin = notional / usable_leverage if usable_leverage > 0 else 0.0
         remaining_margin = available - required_margin if available is not None else None
         margin_ok = available is not None and required_margin <= safe_balance

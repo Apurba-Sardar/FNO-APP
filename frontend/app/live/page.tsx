@@ -130,6 +130,23 @@ export default function LivePage() {
     }
   };
 
+  const toggleAutoTrading = async () => {
+    try {
+      setMessage("Toggling Autonomous Scalp Trading...");
+      const apiBase = getApiUrl();
+      const response = await fetch(`${apiBase}/live/auto-trading/toggle`, {
+        method: "POST",
+        headers: headers(),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail ?? "Failed to toggle auto trading");
+      setMessage(data.auto_trading_enabled ? "Auto-Purchase is now ACTIVE! 3x Scalp Engine is scanning setups." : "Auto-Purchase is PAUSED.");
+      await load();
+    } catch (err: any) {
+      setMessage(err.message ?? "Toggle failed");
+    }
+  };
+
   const isArmed = status.runtime_state === "armed";
 
   // Build tradeInfo for currently selected symbol
@@ -266,6 +283,32 @@ export default function LivePage() {
               Last updated: <b className="text-slate-200">{formatIST(lastRefreshedAt.getTime())}</b> ({timeAgo(lastRefreshedAt.getTime())})
             </div>
           )}
+        </div>
+
+        {/* Autonomous Scalp & 3x Leverage Control Strip */}
+        <div className="mt-3.5 pt-3.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-xs text-emerald-300 font-medium">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span><b>Auto-Close:</b> ACTIVE (Target +1.8% / Stop -1.2%)</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30 px-3 py-1.5 text-xs text-indigo-300 font-medium">
+              <span className="font-bold">⚡ 3x Isolated Leverage</span>
+              <span className="text-slate-400 font-normal">Enforced</span>
+            </div>
+          </div>
+
+          <button
+            onClick={toggleAutoTrading}
+            className={`flex items-center gap-2 rounded-lg border px-4 py-1.5 text-xs font-bold transition shadow-sm ${
+              status.auto_execution
+                ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 shadow-emerald-500/10"
+                : "border-slate-700 bg-slate-800/90 text-slate-300 hover:bg-slate-700 hover:text-white"
+            }`}
+          >
+            <span className={`h-2 w-2 rounded-full ${status.auto_execution ? "bg-emerald-400 animate-ping" : "bg-slate-500"}`}></span>
+            Auto-Purchase: {status.auto_execution ? "ACTIVE (Scanning Setups)" : "PAUSED (Click to Activate)"}
+          </button>
         </div>
       </header>
 
@@ -533,9 +576,12 @@ export default function LivePage() {
                     </div>
 
                     <div className="mt-2.5 flex items-center justify-between text-xs px-1 text-slate-400">
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-2.5">
                         {p.target && <span>Target: <b className="text-emerald-400">${balance(p.target)}</b></span>}
                         {p.stop && <span>Stop: <b className="text-rose-400">${balance(p.stop)}</b></span>}
+                        <span className="rounded bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 font-bold border border-emerald-500/20">
+                          🛡️ Auto-Close Active
+                        </span>
                       </div>
                       <span className="text-[11px] text-cyan-400 font-semibold hover:underline">
                         Inspect Chart →

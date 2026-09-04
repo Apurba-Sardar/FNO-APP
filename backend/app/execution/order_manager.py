@@ -25,23 +25,23 @@ class CoinDCXOrderRequestBuilder:
         market: Market,
         *,
         margin_mode: str = "isolated",
+        leverage: int = 3,
     ) -> BuiltOrder:
         if not decision.allowed or setup.direction not in {StrategyDirection.LONG, StrategyDirection.SHORT}:
             raise ValueError("setup and risk decision do not authorize an entry")
         pair = InstrumentMapper.exchange_pair(setup.symbol, market)
         quantity = InstrumentMapper.floor_quantity(decision.position_quantity, market)
+        target_leverage = leverage if leverage > 0 else int(decision.estimated_leverage or 3)
         payload = {
-            "order": {
-                "side": "buy" if setup.direction == StrategyDirection.LONG else "sell",
-                "pair": pair,
-                "order_type": "market_order",
-                "total_quantity": quantity,
-                "leverage": int(decision.estimated_leverage),
-                "notification": "no_notification",
-                "hidden": False,
-                "post_only": False,
-                "margin_currency_short_name": "USDT",
-                "position_margin_type": margin_mode,
-            }
+            "side": "buy" if setup.direction == StrategyDirection.LONG else "sell",
+            "pair": pair,
+            "order_type": "market_order",
+            "total_quantity": quantity,
+            "leverage": target_leverage,
+            "notification": "no_notification",
+            "hidden": False,
+            "post_only": False,
+            "margin_currency_short_name": "USDT",
+            "position_margin_type": margin_mode,
         }
         return BuiltOrder(payload=payload, quantity=quantity, pair=pair)
