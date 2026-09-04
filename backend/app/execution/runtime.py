@@ -362,7 +362,7 @@ class LiveExecutionRuntime:
         self.last_reconciliation = report.timestamp
         if not report.healthy:
             self.state = LiveRuntimeState.BLOCKED
-        elif preserve_armed:
+        elif preserve_armed or getattr(self, "auto_trading_enabled", False) or self.config.auto_execution:
             self.state = LiveRuntimeState.ARMED
         else:
             self.state = LiveRuntimeState.RECONCILED
@@ -650,7 +650,7 @@ class LiveExecutionRuntime:
         auto_enabled = self.config.auto_execution or getattr(self, "auto_trading_enabled", False)
         if (
             not auto_enabled
-            or self.state not in {LiveRuntimeState.ARMED, LiveRuntimeState.READY}
+            or self.state in {LiveRuntimeState.BLOCKED, LiveRuntimeState.RECONCILING}
         ):
             return
 
