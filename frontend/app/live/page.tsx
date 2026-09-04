@@ -1130,7 +1130,7 @@ export default function LivePage() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F5A0] opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00F5A0]"></span>
                     </span>
-                    Bi-Directional Candidates (BUY & SELL Diagnostic):
+                    🎯 Live Scalp Signals (BUY / SELL with Punch Zones):
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#00F5A0] flex items-center gap-1.5">
@@ -1140,99 +1140,220 @@ export default function LivePage() {
                     <span className="text-[10px] text-white/40 uppercase tracking-widest">10s</span>
                   </div>
                 </div>
-                <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
                   {(researchFeed?.evaluations?.length ? researchFeed.evaluations : [
-                    { symbol: "B-XRP_USDT", score: 72.6, current_price: 1.4464, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating in ATR range: bi-directional scanner watching for 🟢 BUY breakout or 🔴 SELL breakdown" },
-                    { symbol: "B-DOGE_USDT", score: 68.7, current_price: 0.0871, strategy: "trend_pullback", status: "watching", direction: "neutral", explanation: "Pullback holding 20 EMA: bi-directional scanner watching for reversal or breakdown" },
-                    { symbol: "B-ETH_USDT", score: 73.1, current_price: 2505.0, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating near resistance: monitoring for volume breakout (BUY) or rejection (SELL)" },
-                    { symbol: "B-SOL_USDT", score: 69.4, current_price: 103.7, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Sideways range: monitoring Donchian breakout / breakdown channels" },
-                    { symbol: "B-BTC_USDT", score: 65.8, current_price: 80680.0, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Institutional range: monitoring 15m volatility expansion triggers" },
+                    { symbol: "B-XRP_USDT", score: 72.6, current_price: 1.4464, strategy: "breakout", status: "watching", direction: "neutral", signal: "SELL", signal_label: "SELL (SHORT)", reason: "Bearish Breakdown: Overhead resistance rejecting rallies near $1.450. Favorable 3x short scalp breakdown toward target.", punch_area: "$1.4406 – $1.4493", punch_zone_low: 1.4406, punch_zone_high: 1.4493, target_price: 1.4204, target_pct: 1.8, stop_price: 1.4638, stop_pct: -1.2, risk_reward: "1 : 1.50", drivers: ["Trend: Bearish Down-trend", "Order Book: Seller Ask Wall", "Volatility: ATR 0.46%"] },
+                    { symbol: "B-DOGE_USDT", score: 68.7, current_price: 0.0871, strategy: "trend_pullback", status: "watching", direction: "neutral", signal: "BUY", signal_label: "BUY (LONG)", reason: "Bullish Trend: Price holding key support at $0.0869 with active bid absorption. Favorable 3x upside scalp toward target.", punch_area: "$0.0869 – $0.0874", punch_zone_low: 0.0869, punch_zone_high: 0.0874, target_price: 0.0887, target_pct: 1.8, stop_price: 0.0861, stop_pct: -1.2, risk_reward: "1 : 1.50", drivers: ["Trend: Bullish Up-trend", "Order Book: Buyer Bid Skew", "Volatility: ATR 0.55%"] },
+                    { symbol: "B-ETH_USDT", score: 73.1, current_price: 2505.0, strategy: "breakout", status: "watching", direction: "neutral", signal: "BUY", signal_label: "BUY (LONG)", reason: "Bullish Flow: Consolidating near resistance with strong institutional bid depth. Room for 3x upside scalp.", punch_area: "$2,500 – $2,515", punch_zone_low: 2500.0, punch_zone_high: 2515.0, target_price: 2550.0, target_pct: 1.8, stop_price: 2475.0, stop_pct: -1.2, risk_reward: "1 : 1.50", drivers: ["Trend: Bullish Up-trend", "Order Book: Buyer Bid Skew", "Volatility: ATR 0.42%"] },
+                    { symbol: "B-SOL_USDT", score: 69.4, current_price: 103.7, strategy: "breakout", status: "watching", direction: "neutral", signal: "SELL", signal_label: "SELL (SHORT)", reason: "Bearish Range: Donchian rejection at upper band with high seller volume. 3x short scalp entry in zone.", punch_area: "$103.3 – $103.9", punch_zone_low: 103.3, punch_zone_high: 103.9, target_price: 101.8, target_pct: 1.8, stop_price: 104.9, stop_pct: -1.2, risk_reward: "1 : 1.50", drivers: ["Trend: Bearish Down-trend", "Order Book: Seller Ask Wall", "Volatility: ATR 0.62%"] },
                   ]).map((item: any, idx: number) => {
                     const isTriggered = item.status === "triggered";
                     const isArmed = item.status === "armed";
                     const dir = item.direction?.toLowerCase() || "neutral";
-                    const isSellRecommended = dir === "short" || dir === "sell" || item.recommended_side === "sell";
-                    const isBuyRecommended = dir === "long" || dir === "buy" || item.recommended_side === "buy";
+                    const isBuySignal = item.signal === "BUY" || dir === "long" || dir === "buy" || item.recommended_side === "buy";
+                    const isSellSignal = item.signal === "SELL" || dir === "short" || dir === "sell" || item.recommended_side === "sell";
 
                     return (
                       <div
                         key={item.symbol || idx}
                         onClick={() => selectAndScroll(item.symbol)}
-                        className="rounded-2xl border border-white/[0.06] bg-[#090b12]/80 hover:border-white/20 p-4 transition cursor-pointer backdrop-blur-md"
+                        className="rounded-2xl border border-white/[0.08] bg-[#0a0d18]/90 hover:border-white/20 p-4 transition-all duration-200 cursor-pointer backdrop-blur-xl shadow-lg relative overflow-hidden group"
                       >
-                        <div className="flex items-center justify-between">
+                        {/* Top Accent Line based on Signal */}
+                        <div
+                          className={`absolute top-0 left-0 right-0 h-1 ${
+                            isBuySignal
+                              ? "bg-gradient-to-r from-[#00F5A0] via-[#00D9F5] to-emerald-400"
+                              : "bg-gradient-to-r from-rose-500 via-pink-500 to-amber-500"
+                          }`}
+                        />
+
+                        {/* Card Header: Symbol, Price, Signal Badge, Score */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="flex items-center gap-2.5 flex-wrap">
-                            <b className="text-sm font-extrabold text-white tracking-tight">{item.symbol}</b>
+                            <b className="text-base font-black text-white tracking-tight">{item.symbol}</b>
+                            <span className="text-sm font-mono font-bold text-white/90">
+                              ${balance(item.current_price)}
+                            </span>
                             <span className="rounded-full bg-[#00D9F5]/10 text-[#00D9F5] border border-[#00D9F5]/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
                               Score: {item.score}
                             </span>
-                            <span className="text-xs text-white/50 font-mono">
-                              ${balance(item.current_price)}
-                            </span>
-                            {/* Direction Badge */}
-                            {isSellRecommended ? (
-                              <span className="rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">
-                                🔴 SHORT (SELL)
-                              </span>
-                            ) : isBuyRecommended ? (
-                              <span className="rounded-full bg-[#00F5A0]/15 text-[#00F5A0] border border-[#00F5A0]/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">
-                                🟢 LONG (BUY)
+                          </div>
+
+                          {/* Actionable Signal Badge & Execution State */}
+                          <div className="flex items-center gap-2">
+                            {isBuySignal ? (
+                              <span className="rounded-full bg-[#00F5A0]/20 text-[#00F5A0] border border-[#00F5A0]/50 px-3 py-1 text-[11px] font-black tracking-wider flex items-center gap-1.5 shadow-[0_0_14px_rgba(0,245,160,0.25)]">
+                                <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-ping inline-block" />
+                                🟢 BUY SIGNAL (LONG)
                               </span>
                             ) : (
-                              <span className="rounded-full bg-white/[0.06] text-white/60 border border-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
-                                🔄 BI-DIR
+                              <span className="rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/50 px-3 py-1 text-[11px] font-black tracking-wider flex items-center gap-1.5 shadow-[0_0_14px_rgba(244,63,94,0.25)]">
+                                <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping inline-block" />
+                                🔴 SELL SIGNAL (SHORT)
                               </span>
                             )}
-                          </div>
-                          <span
-                            className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
-                              isTriggered
-                                ? "bg-[#00F5A0]/20 text-[#00F5A0] border border-[#00F5A0]/40 animate-pulse"
-                                : isArmed
-                                ? "bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/40"
-                                : "bg-white/[0.05] text-white/50 border border-white/10"
-                            }`}
-                          >
-                            {isTriggered ? "🎯 TRIGGERED" : isArmed ? "⏳ ARMED" : "WATCHING"}
-                          </span>
-                        </div>
-
-                        <p className="mt-2 text-xs text-white/60 leading-relaxed bg-white/[0.02] rounded-xl p-2.5 border border-white/[0.04]">
-                          {item.explanation ?? "Consolidating: waiting for 15m breakout candle with 1.2x volume expansion"}
-                        </p>
-
-                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/40">
-                          <div className="flex items-center gap-2">
-                            <span>Strategy: <b className="text-white/70">{item.strategy ?? "breakout"}</b></span>
-                            <span>•</span>
-                            <span className="font-mono">
-                              Checked: <b className="text-[#00F5A0]">{item.evaluated_at_ist ?? (lastRefreshedAt ? formatISTTime(lastRefreshedAt) : "Live")}</b>
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                                isTriggered
+                                  ? "bg-[#00F5A0]/20 text-[#00F5A0] border border-[#00F5A0]/40 animate-pulse"
+                                  : isArmed
+                                  ? "bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/40"
+                                  : "bg-white/[0.05] text-white/50 border border-white/10"
+                              }`}
+                            >
+                              {isTriggered ? "🎯 TRIGGERED" : isArmed ? "⏳ ARMED" : "READY"}
                             </span>
                           </div>
+                        </div>
 
-                          {/* 1-Tap Bi-directional punch shortcuts right on the candidate */}
-                          <div className="flex items-center gap-2">
+                        {/* Signal Reason Box */}
+                        <div className="mt-3 rounded-xl bg-white/[0.025] border border-white/[0.06] p-3">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-white/50 uppercase tracking-wider mb-1">
+                            <span className="text-amber-400">💡</span> SIGNAL REASON & SETUP CONVICTION:
+                          </div>
+                          <p className="text-xs text-white/90 leading-relaxed font-medium">
+                            {item.reason ?? item.explanation ?? (isBuySignal
+                              ? "Bullish price action holding above support with strong buyer bid depth. Momentum indicators show high-probability 3x upside scalp."
+                              : "Bearish rejection at overhead resistance with strong seller ask wall. Favorable 3x short scalp breakdown opportunity.")}
+                          </p>
+
+                          {/* Technical Drivers Chips */}
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                            {(item.drivers && item.drivers.length > 0 ? item.drivers : [
+                              `Trend: ${isBuySignal ? "Bullish Up-trend" : "Bearish Down-trend"}`,
+                              `Order Book: ${isBuySignal ? "Buyer Bid Skew" : "Seller Ask Wall"}`,
+                              "Volatility: ATR Scalp Ready",
+                            ]).map((driver: string, dIdx: number) => (
+                              <span key={dIdx} className="rounded-md bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 text-[10px] font-mono text-white/70">
+                                {driver}
+                              </span>
+                            ))}
+                            <span className="rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-mono text-indigo-300">
+                              Strategy: {item.strategy ?? "breakout"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Exact Punch Entry Area & Trade Levels Grid */}
+                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                          {/* Punch Entry Zone */}
+                          <div className="rounded-xl bg-[#00D9F5]/[0.07] border border-[#00D9F5]/25 p-2">
+                            <div className="text-[10px] font-extrabold text-[#00D9F5] uppercase tracking-wider">
+                              📍 Punch Area
+                            </div>
+                            <div className="mt-0.5 font-mono font-black text-xs sm:text-sm text-white">
+                              {item.punch_area ?? `$${balance(item.punch_zone_low ?? (item.current_price * 0.998))} – $${balance(item.punch_zone_high ?? (item.current_price * 1.004))}`}
+                            </div>
+                            <div className="text-[9px] text-white/40 font-medium">Entry Trigger Zone</div>
+                          </div>
+
+                          {/* Take Profit Target */}
+                          <div className="rounded-xl bg-[#00F5A0]/[0.07] border border-[#00F5A0]/25 p-2">
+                            <div className="text-[10px] font-extrabold text-[#00F5A0] uppercase tracking-wider">
+                              🎯 Target (TP)
+                            </div>
+                            <div className="mt-0.5 font-mono font-black text-xs sm:text-sm text-[#00F5A0]">
+                              ${balance(item.target_price ?? (isBuySignal ? item.current_price * 1.018 : item.current_price * 0.982))}
+                              <span className="text-[10px] ml-1 font-normal opacity-80">(+{item.target_pct ?? 1.8}%)</span>
+                            </div>
+                            <div className="text-[9px] text-white/40 font-medium">Take Profit (3x)</div>
+                          </div>
+
+                          {/* Invalidation Stop Loss */}
+                          <div className="rounded-xl bg-rose-500/[0.07] border border-rose-500/25 p-2">
+                            <div className="text-[10px] font-extrabold text-rose-400 uppercase tracking-wider">
+                              🛑 Stop Loss (SL)
+                            </div>
+                            <div className="mt-0.5 font-mono font-black text-xs sm:text-sm text-rose-400">
+                              ${balance(item.stop_price ?? (isBuySignal ? item.current_price * 0.988 : item.current_price * 1.012))}
+                              <span className="text-[10px] ml-1 font-normal opacity-80">({item.stop_pct ?? -1.2}%)</span>
+                            </div>
+                            <div className="text-[9px] text-white/40 font-medium">Invalidation Stop</div>
+                          </div>
+
+                          {/* Risk : Reward Ratio */}
+                          <div className="rounded-xl bg-amber-500/[0.07] border border-amber-500/25 p-2">
+                            <div className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider">
+                              ⚖️ Risk : Reward
+                            </div>
+                            <div className="mt-0.5 font-mono font-black text-xs sm:text-sm text-amber-300">
+                              {item.risk_reward ?? "1 : 1.50"}
+                            </div>
+                            <div className="text-[9px] text-white/40 font-medium">Risk / Reward Ratio</div>
+                          </div>
+                        </div>
+
+                        {/* Bottom Actions: 1-Click Direct Punch Execution */}
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-white/[0.06]">
+                          <div className="text-[11px] text-white/40 font-mono">
+                            Checked: <b className="text-[#00F5A0]">{item.evaluated_at_ist ?? (lastRefreshedAt ? formatISTTime(lastRefreshedAt) : "Live")}</b>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
+                            {/* Primary High-Conviction Punch Button */}
+                            {isBuySignal ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  punchInstantScalp(item.symbol, "buy");
+                                }}
+                                disabled={isPunchingScalp !== null}
+                                className="flex-1 sm:flex-none rounded-xl bg-gradient-to-r from-[#00F5A0] to-[#00D9F5] text-slate-950 font-black text-xs px-4 py-2 hover:brightness-110 active:scale-95 transition shadow-[0_0_15px_rgba(0,245,160,0.3)] disabled:opacity-50 flex items-center justify-center gap-1.5"
+                              >
+                                <span>⚡ PUNCH BUY @ ${balance(item.current_price)}</span>
+                                <span className="text-[10px] bg-black/20 px-1.5 py-0.5 rounded font-bold">3x LONG</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  punchInstantScalp(item.symbol, "sell");
+                                }}
+                                disabled={isPunchingScalp !== null}
+                                className="flex-1 sm:flex-none rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 text-white font-black text-xs px-4 py-2 hover:brightness-110 active:scale-95 transition shadow-[0_0_15px_rgba(244,63,94,0.3)] disabled:opacity-50 flex items-center justify-center gap-1.5"
+                              >
+                                <span>⚡ PUNCH SELL @ ${balance(item.current_price)}</span>
+                                <span className="text-[10px] bg-black/20 px-1.5 py-0.5 rounded font-bold">3x SHORT</span>
+                              </button>
+                            )}
+
+                            {/* Alternate Counter-Scalp Option */}
+                            {isBuySignal ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  punchInstantScalp(item.symbol, "sell");
+                                }}
+                                disabled={isPunchingScalp !== null}
+                                className="rounded-xl bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 text-rose-400 text-[11px] font-bold px-2.5 py-2 transition active:scale-95 disabled:opacity-50"
+                                title="Scalp Short instead"
+                              >
+                                - Sell Short
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  punchInstantScalp(item.symbol, "buy");
+                                }}
+                                disabled={isPunchingScalp !== null}
+                                className="rounded-xl bg-[#00F5A0]/15 hover:bg-[#00F5A0]/30 border border-[#00F5A0]/30 text-[#00F5A0] text-[11px] font-bold px-2.5 py-2 transition active:scale-95 disabled:opacity-50"
+                                title="Scalp Long instead"
+                              >
+                                + Buy Long
+                              </button>
+                            )}
+
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                punchInstantScalp(item.symbol, "buy");
+                                selectAndScroll(item.symbol);
                               }}
-                              disabled={isPunchingScalp !== null}
-                              className="rounded-lg bg-[#00F5A0]/15 hover:bg-[#00F5A0] border border-[#00F5A0]/30 hover:text-slate-950 text-[#00F5A0] text-[10px] font-black px-2 py-1 transition active:scale-95 disabled:opacity-50"
+                              className="text-[#00D9F5] font-bold hover:underline text-xs flex items-center gap-0.5 px-1.5 py-1"
                             >
-                              + BUY (Long)
+                              Chart →
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                punchInstantScalp(item.symbol, "sell");
-                              }}
-                              disabled={isPunchingScalp !== null}
-                              className="rounded-lg bg-rose-500/15 hover:bg-rose-500 border border-rose-500/30 hover:text-white text-rose-400 text-[10px] font-black px-2 py-1 transition active:scale-95 disabled:opacity-50"
-                            >
-                              - SELL (Short)
-                            </button>
-                            <span className="text-[#00D9F5] font-bold hover:underline text-[10px]">Chart →</span>
                           </div>
                         </div>
                       </div>

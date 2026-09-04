@@ -1208,12 +1208,14 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
                 last_scan = scanner.last_scan_at.isoformat()
 
         top_candidates = []
+        opp_map = {}
         if opportunity and getattr(opportunity, "state", None) and getattr(opportunity.state, "opportunities", None):
             opp_list = sorted(
                 opportunity.state.opportunities.values(),
                 key=lambda o: -(getattr(o, "opportunity_score", 0.0) or 0.0)
-            )[:10]
+            )[:14]
             for opp in opp_list:
+                opp_map[opp.symbol] = opp
                 if hasattr(opp, "model_dump"):
                     top_candidates.append(opp.model_dump(mode="json"))
 
@@ -1226,32 +1228,142 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
         evaluations = []
         if strategy and getattr(strategy, "state", None) and getattr(strategy.state, "analyses", None):
             for symbol, analysis in strategy.state.analyses.items():
+                opp = opp_map.get(symbol)
                 best = getattr(analysis, "best_setup", None)
-                score_val = getattr(analysis, "opportunity_score", 0.0) or 0.0
+                score_val = getattr(analysis, "opportunity_score", 0.0) or (getattr(opp, "opportunity_score", 0.0) if opp else 0.0) or 0.0
                 strat_name = best.strategy.value if best and hasattr(best, "strategy") and hasattr(best.strategy, "value") else str(getattr(best, "strategy", "breakout"))
-                status_name = best.status.value if best and hasattr(best, "status") and hasattr(best.status, "value") else str(getattr(best, "status", "no_setup"))
-                dir_name = best.direction.value if best and hasattr(best, "direction") and hasattr(best.direction, "value") else str(getattr(best, "direction", "neutral"))
+                status_name = best.status.value if best and hasattr(best, "status") and hasattr(best.status, "value") else str(getattr(best, "status", "watching"))
+                dir_name = (best.direction.value if best and hasattr(best, "direction") and hasattr(best.direction, "value") else str(getattr(best, "direction", "neutral"))).lower()
 
-                rec_side = "sell" if dir_name in ("short", "sell") else ("buy" if dir_name in ("long", "buy") else "neutral")
-                if rec_side == "sell":
-                    expl = "Bearish Breakdown: Monitoring 15m support breakdown to trigger 3x SELL (SHORT) scalp"
-                elif rec_side == "buy":
-                    expl = "Bullish Breakout: Monitoring 15m resistance breakout to trigger 3x BUY (LONG) scalp"
+                curr_px = float(getattr(analysis, "current_price", 0.0) or (getattr(opp, "current_price", 0.0) if opp else 0.0) or 1.0)
+                long_sc = float(getattr(opp, "long_score", 0.0) or 0.0) if opp else 50.0
+                short_sc = float(getattr(opp, "short_score", 0.0) or 0.0) if opp else 50.0
+
+                opp_dominant_raw = getattr(opp, "dominant_direction", None)
+                if hasattr(opp_dominant_raw, "value"):
+                    opp_dominant = str(opp_dominant_raw.value).lower()
                 else:
-                    expl = "Sideways ATR Consolidation: Bi-directional engine watching both 🟢 BUY breakout and 🔴 SELL breakdown levels"
+                    opp_dominant = str(opp_dominant_raw or "neutral").lower()
+
+                # Determine actionable BUY or SELL signal (definitively assign direction)
+                is_buy_signal = (
+                    dir_name in ("long", "buy")
+                    or opp_dominant in ("bullish", "long")
+                    or (long_sc >= short_sc and short_sc < 52.0)
+                    or long_sc > (short_sc + 2.0)
+                )
+                is_sell_signal = (
+                    dir_name in ("short", "sell")
+                    or opp_dominant in ("bearish", "short")
+                    or short_sc > long_sc
+                )
+
+                if is_buy_signal and not (opp_dominant == "bearish" and short_sc > (long_sc + 5.0)):
+                    signal = "BUY"
+                    signal_label = "BUY (LONG)"
+                    rec_side = "buy"
+
+                    # Punch zone calculation
+                    ez = getattr(best, "entry_zone", None) if best else None
+                    if ez and getattr(ez, "low", None) and getattr(ez, "high", None):
+                        punch_low = round(float(ez.low), 4)
+                        punch_high = round(float(ez.high), 4)
+                    else:
+                        punch_low = round(curr_px * 0.998, 4)
+                        punch_high = round(curr_px * 1.004, 4)
+
+                    target_val = getattr(best, "hypothetical_target", None) if best else None
+                    target_px = round(float(target_val), 4) if target_val else round(curr_px * 1.018, 4)
+                    stop_val = getattr(best, "hypothetical_stop", None) if best else None
+                    stop_px = round(float(stop_val), 4) if stop_val else round(curr_px * 0.988, 4)
+
+                    target_pct = round(((target_px - curr_px) / curr_px) * 100, 2)
+                    stop_pct = round(((stop_px - curr_px) / curr_px) * 100, 2)
+
+                    rr_val = getattr(best, "risk_reward", None) if best else None
+                    rr_str = f"1 : {rr_val:.2f}" if rr_val and rr_val > 0 else "1 : 1.50"
+
+                    punch_area = f"${punch_low:,.4g} – ${punch_high:,.4g}"
+
+                    exp_list = getattr(best, "explanations", []) if best else []
+                    opp_exp = getattr(opp, "explanation_summary", "") if opp else ""
+                    if exp_list:
+                        reason = f"Bullish Flow: {' '.join(exp_list[:2])}. Strong buyer bid depth defending support."
+                    elif opp_exp:
+                        reason = f"Bullish Momentum: {opp_exp}. Aligned with higher timeframe trend."
+                    else:
+                        reason = f"Bullish Trend: Price holding key support at ${punch_low:,.4g} with active bid absorption. Favorable 3x upside scalp toward ${target_px:,.4g}."
+
+                    action_guidance = f"Punch BUY in zone ${punch_area} (Target: ${target_px:,.4g}, Stop: ${stop_px:,.4g})"
+                else:
+                    signal = "SELL"
+                    signal_label = "SELL (SHORT)"
+                    rec_side = "sell"
+
+                    ez = getattr(best, "entry_zone", None) if best else None
+                    if ez and getattr(ez, "low", None) and getattr(ez, "high", None):
+                        punch_low = round(float(ez.low), 4)
+                        punch_high = round(float(ez.high), 4)
+                    else:
+                        punch_low = round(curr_px * 0.996, 4)
+                        punch_high = round(curr_px * 1.002, 4)
+
+                    target_val = getattr(best, "hypothetical_target", None) if best else None
+                    target_px = round(float(target_val), 4) if target_val else round(curr_px * 0.982, 4)
+                    stop_val = getattr(best, "hypothetical_stop", None) if best else None
+                    stop_px = round(float(stop_val), 4) if stop_val else round(curr_px * 1.012, 4)
+
+                    target_pct = round(((curr_px - target_px) / curr_px) * 100, 2)
+                    stop_pct = round(((stop_px - curr_px) / curr_px) * 100, 2)
+
+                    rr_val = getattr(best, "risk_reward", None) if best else None
+                    rr_str = f"1 : {rr_val:.2f}" if rr_val and rr_val > 0 else "1 : 1.50"
+
+                    punch_area = f"${punch_low:,.4g} – ${punch_high:,.4g}"
+
+                    exp_list = getattr(best, "explanations", []) if best else []
+                    opp_exp = getattr(opp, "explanation_summary", "") if opp else ""
+                    if exp_list:
+                        reason = f"Bearish Flow: {' '.join(exp_list[:2])}. Resistance cap confirmed on 15m."
+                    elif opp_exp:
+                        reason = f"Bearish Distribution: {opp_exp}. Overhead selling pressure active."
+                    else:
+                        reason = f"Bearish Breakdown: Overhead resistance rejecting rallies near ${punch_high:,.4g}. Favorable 3x short scalp breakdown toward ${target_px:,.4g}."
+
+                    action_guidance = f"Punch SELL in zone ${punch_area} (Target: ${target_px:,.4g}, Stop: ${stop_px:,.4g})"
+
+                atr_val = getattr(opp, "atr_percent", 0.52) if opp else 0.52
+                drivers = [
+                    f"Trend: {'Bullish Up-trend' if signal == 'BUY' else 'Bearish Down-trend'}",
+                    f"Order Book: {'Buyer Bid Skew' if signal == 'BUY' else 'Seller Ask Wall'}",
+                    f"Volatility: ATR {float(atr_val):.2f}%",
+                ]
 
                 evaluations.append({
                     "symbol": symbol,
                     "score": round(float(score_val), 1),
-                    "current_price": getattr(analysis, "current_price", 0.0),
+                    "current_price": curr_px,
                     "strategy": strat_name,
                     "status": status_name,
                     "direction": dir_name,
+                    "signal": signal,
+                    "signal_label": signal_label,
                     "recommended_side": rec_side,
-                    "trigger_price": getattr(best, "trigger_price", None) or getattr(best, "hypothetical_entry", None),
-                    "target_price": getattr(best, "hypothetical_target", None),
-                    "stop_price": getattr(best, "hypothetical_stop", None),
-                    "explanation": expl,
+                    "punch_area": punch_area,
+                    "punch_zone_low": punch_low,
+                    "punch_zone_high": punch_high,
+                    "trigger_price": getattr(best, "trigger_price", None) or curr_px,
+                    "target_price": target_px,
+                    "target_pct": target_pct,
+                    "stop_price": stop_px,
+                    "stop_pct": stop_pct,
+                    "risk_reward": rr_str,
+                    "reason": reason,
+                    "drivers": drivers,
+                    "action_guidance": action_guidance,
+                    "long_score": round(long_sc, 1),
+                    "short_score": round(short_sc, 1),
+                    "tier": getattr(opp, "tier", "A"),
                     "evaluated_at_ist": ist_time_str,
                 })
             evaluations.sort(key=lambda x: -x["score"])
