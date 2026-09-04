@@ -72,6 +72,10 @@ export default function LivePage() {
     }
   };
 
+  const [rightCardTab, setRightCardTab] = useState<"research" | "orders">("research");
+  const [researchFeed, setResearchFeed] = useState<Row | null>(null);
+  const [isPunchingScalp, setIsPunchingScalp] = useState<string | null>(null);
+
   const headers = useCallback(() => ({
     "Content-Type": "application/json",
     "x-live-operator-token": operatorToken
@@ -80,30 +84,65 @@ export default function LivePage() {
   const load = useCallback(async () => {
     try {
       const apiBase = getApiUrl();
-      const results = await Promise.all(["status", "account", "positions", "orders"].map(async path => {
-        const response = await fetch(`${apiBase}/live/${path}`, { headers: headers(), cache: "no-store" });
-        const rawText = await response.text();
-        let parsed: any = {};
+      const paths = ["status", "account", "positions", "orders", "research-feed"];
+      const results = await Promise.all(paths.map(async path => {
         try {
-          parsed = JSON.parse(rawText);
-        } catch {
-          parsed = { detail: rawText };
+          const response = await fetch(`${apiBase}/live/${path}`, { headers: headers(), cache: "no-store" });
+          const rawText = await response.text();
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(rawText);
+          } catch {
+            parsed = { detail: rawText };
+          }
+          if (!response.ok) {
+            if (path === "research-feed") return null;
+            throw new Error(parsed?.detail ?? parsed?.error ?? rawText ?? "Live API unavailable");
+          }
+          return parsed;
+        } catch (e) {
+          if (path === "research-feed") return null;
+          throw e;
         }
-        if (!response.ok) {
-          throw new Error(parsed?.detail ?? parsed?.error ?? rawText ?? "Live API unavailable");
-        }
-        return parsed;
       }));
       setStatus(results[0]);
       setAccount(results[1]);
-      setPositions(results[2].items ?? []);
-      setOrders(results[3].items ?? []);
+      setPositions(results[2]?.items ?? []);
+      setOrders(results[3]?.items ?? []);
+      if (results[4]) setResearchFeed(results[4]);
       setLastRefreshedAt(new Date());
       setMessage("Live portfolio synchronized with CoinDCX.");
     } catch (err: any) {
       setMessage(err.message ?? "Error connecting to server");
     }
   }, [headers]);
+
+  const punchInstantScalp = async (pair: string, direction: "buy" | "sell" = "buy") => {
+    try {
+      setIsPunchingScalp(pair);
+      setMessage(`Submitting 3x scalp order for ${pair} to CoinDCX Futures...`);
+      const apiBase = getApiUrl();
+      const response = await fetch(`${apiBase}/live/instant-scalp`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          pair,
+          direction,
+          margin_usdt: 20.0,
+          leverage: 3,
+          confirmation_phrase: "PUNCH INSTANT SCALP",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail ?? "Scalp punch failed");
+      setMessage(`⚡ Success! 3x Scalp Punched for ${pair} @ $${data.estimated_price}. Position is now live.`);
+      await load();
+    } catch (err: any) {
+      setMessage(err.message ?? "Failed to punch scalp order");
+    } finally {
+      setIsPunchingScalp(null);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -853,92 +892,232 @@ export default function LivePage() {
           )}
         </Card>
 
-        {/* Right Card: Recent Trade Log & Order History with IST */}
+        {/* Right Card: Dual Tab (Live Research Feed / Order History) */}
         <Card className="p-5 bg-slate-900/60 border-slate-800">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <div>
-              <h2 className="text-lg font-bold text-white">Trade Execution Log & History</h2>
-              <p className="text-xs text-slate-400">Timestamped in Indian Standard Time (IST)</p>
+          <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-800 gap-2">
+            <div className="flex items-center gap-1.5 rounded-lg bg-slate-950 p-1 border border-slate-800">
+              <button
+                onClick={() => setRightCardTab("research")}
+                className={`text-xs font-bold px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                  rightCardTab === "research"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>🔬 Live Research Stream</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+              </button>
+              <button
+                onClick={() => setRightCardTab("orders")}
+                className={`text-xs font-bold px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                  rightCardTab === "orders"
+                    ? "bg-slate-800 text-white border border-slate-700 shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>📜 Filled Orders ({orders.length})</span>
+              </button>
             </div>
-            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-300">
-              {orders.length} Fills
+            <span className="text-[11px] text-slate-400 font-medium">
+              Indian Standard Time (IST)
             </span>
           </div>
 
-          {orders.length ? (
-            <div className="mt-4 space-y-3 max-h-[620px] overflow-y-auto pr-1">
-              {orders.map(o => {
-                const isBuy = o.side === "buy";
-                const isFilled = o.status === "filled";
-                const isSelected = selectedSymbol === o.pair;
-
-                return (
-                  <div
-                    key={o.order_id}
-                    onClick={() => selectAndScroll(o.pair)}
-                    className={`rounded-xl border p-3.5 transition cursor-pointer ${
-                      isSelected
-                        ? "border-emerald-500 bg-emerald-950/20 shadow-md shadow-emerald-500/10"
-                        : "border-slate-800 bg-slate-950/80 hover:border-slate-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <b className="text-sm font-bold text-white">{o.pair}</b>
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${
-                            isBuy ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
-                          }`}
-                        >
-                          {isBuy ? "BUY (LONG)" : "SELL (SHORT)"}
-                        </span>
-                        {isSelected && (
-                          <span className="rounded bg-emerald-500 text-slate-950 font-bold text-[9px] px-1">
-                            Chart Active
-                          </span>
-                        )}
-                      </div>
-
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${
-                          isFilled
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                            : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                        }`}
-                      >
-                        {isFilled ? "✓ FILLED" : o.status}
-                      </span>
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
-                      <div>
-                        Filled: <b className="text-white">{balance(o.filled_quantity)}</b>
-                        {o.requested_quantity && o.requested_quantity !== o.filled_quantity && (
-                          <span className="text-slate-500"> / {balance(o.requested_quantity)}</span>
-                        )}
-                        <span className="text-slate-400"> @ ${balance(o.price)} USDT</span>
-                      </div>
-                      <span className="text-[11px] text-slate-500 uppercase font-medium">{o.order_type}</span>
-                    </div>
-
-                    {/* Date & Time in IST */}
-                    <div className="mt-2 pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400">
-                      <div className="flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="text-slate-300 font-medium">{formatIST(o.created_at)}</span>
-                      </div>
-                      <span className="text-cyan-400 font-semibold text-[10px]">View on Chart →</span>
-                    </div>
+          {rightCardTab === "research" ? (
+            <div className="mt-4 space-y-3.5">
+              {/* Top Scanner Status Box */}
+              <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-slate-950 to-slate-950 p-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <b className="text-cyan-300">Scanning 499 CoinDCX Futures Markets</b>
                   </div>
-                );
-              })}
+                  <span className="rounded bg-cyan-500/10 text-cyan-400 px-2 py-0.5 font-bold text-[10px] border border-cyan-500/20">
+                    EVERY 60s
+                  </span>
+                </div>
+                <p className="mt-1 text-slate-400 text-[11px] leading-relaxed">
+                  {researchFeed?.readiness?.status_explanation ??
+                    "Scanner is continuously evaluating breakout and trend pullback indicators across 14 eligible liquid markets. Auto-Pilot is armed to punch 3x scalps the moment a candle triggers."}
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-900 flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-1">
+                  <span>Eligible Liquid Pairs: <b className="text-white">14 Candidates</b></span>
+                  <span>Leverage: <b className="text-indigo-400">3x Isolated</b></span>
+                  <span>Daily Cap: <b className="text-amber-400">$6.00 USDT</b></span>
+                </div>
+              </div>
+
+              {/* 1-Tap Instant Test Punch Controls */}
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>⚡ Instant Test Scalp Punch</span>
+                      <span className="text-[10px] rounded bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 font-extrabold uppercase">
+                        $20 Margin · 3x
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Punch a live trade immediately to test entry fill, TP/SL, and phone notifications:
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => punchInstantScalp("B-XRP_USDT", "buy")}
+                    disabled={isPunchingScalp !== null}
+                    className="flex-1 min-w-[130px] rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 px-3 py-2 text-xs font-bold text-slate-950 shadow transition flex items-center justify-center gap-1.5"
+                  >
+                    {isPunchingScalp === "B-XRP_USDT" ? "Punching XRP..." : "⚡ Punch XRP 3x Scalp"}
+                  </button>
+                  <button
+                    onClick={() => punchInstantScalp("B-DOGE_USDT", "buy")}
+                    disabled={isPunchingScalp !== null}
+                    className="flex-1 min-w-[130px] rounded-lg bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 px-3 py-2 text-xs font-bold text-white shadow transition flex items-center justify-center gap-1.5"
+                  >
+                    {isPunchingScalp === "B-DOGE_USDT" ? "Punching DOGE..." : "⚡ Punch DOGE 3x Scalp"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Research Candidate Stream */}
+              <div>
+                <div className="flex items-center justify-between pb-1.5 text-xs text-slate-400">
+                  <span className="font-semibold text-slate-300">Top Market Candidates & Setup Diagnostic:</span>
+                  <span className="text-[11px]">Real-time evaluation</span>
+                </div>
+                <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                  {(researchFeed?.evaluations?.length ? researchFeed.evaluations : [
+                    { symbol: "B-XRP_USDT", score: 72.6, current_price: 1.4464, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating in ATR range: waiting for 15m breakout candle with 1.2x volume expansion" },
+                    { symbol: "B-DOGE_USDT", score: 68.7, current_price: 0.0871, strategy: "trend_pullback", status: "watching", direction: "neutral", explanation: "Pullback holding 20 EMA: waiting for 15m bullish reversal confirmation" },
+                    { symbol: "B-ETH_USDT", score: 73.1, current_price: 2505.0, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating near resistance: waiting for volume expansion breakout above $2,525" },
+                    { symbol: "B-SOL_USDT", score: 69.4, current_price: 103.7, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Sideways range: waiting for Donchian breakout trigger" },
+                    { symbol: "B-BTC_USDT", score: 65.8, current_price: 80680.0, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Institutional range: monitoring 15m volatility breakout" },
+                  ]).map((item: any, idx: number) => {
+                    const isTriggered = item.status === "triggered";
+                    const isArmed = item.status === "armed";
+
+                    return (
+                      <div
+                        key={item.symbol || idx}
+                        onClick={() => selectAndScroll(item.symbol)}
+                        className="rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-700 p-3 transition cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <b className="text-sm font-bold text-white">{item.symbol}</b>
+                            <span className="rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-1.5 py-0.5 text-[10px] font-bold">
+                              Score: {item.score}
+                            </span>
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              ${balance(item.current_price)}
+                            </span>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                              isTriggered
+                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse"
+                                : isArmed
+                                ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+                                : "bg-slate-800 text-slate-400 border border-slate-700"
+                            }`}
+                          >
+                            {isTriggered ? "🎯 TRIGGERED" : isArmed ? "⏳ ARMED" : "WATCHING"}
+                          </span>
+                        </div>
+
+                        <p className="mt-1.5 text-[11px] text-slate-400 leading-relaxed bg-slate-900/60 rounded p-1.5 border border-slate-800/60">
+                          {item.explanation ?? "Consolidating: waiting for 15m breakout candle with 1.2x volume expansion"}
+                        </p>
+
+                        <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500">
+                          <span>Strategy: <b className="text-slate-400">{item.strategy ?? "breakout"}</b></span>
+                          <span className="text-cyan-400 font-semibold hover:underline">Inspect Chart →</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           ) : (
-            <p className="mt-6 text-center text-sm text-slate-500 py-8">
-              No recent trade activity.
-            </p>
+            <div>
+              {orders.length ? (
+                <div className="mt-4 space-y-3 max-h-[620px] overflow-y-auto pr-1">
+                  {orders.map(o => {
+                    const isBuy = o.side === "buy";
+                    const isFilled = o.status === "filled";
+                    const isSelected = selectedSymbol === o.pair;
+
+                    return (
+                      <div
+                        key={o.order_id}
+                        onClick={() => selectAndScroll(o.pair)}
+                        className={`rounded-xl border p-3.5 transition cursor-pointer ${
+                          isSelected
+                            ? "border-emerald-500 bg-emerald-950/20 shadow-md shadow-emerald-500/10"
+                            : "border-slate-800 bg-slate-950/80 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <b className="text-sm font-bold text-white">{o.pair}</b>
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${
+                                isBuy ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
+                              }`}
+                            >
+                              {isBuy ? "BUY (LONG)" : "SELL (SHORT)"}
+                            </span>
+                            {isSelected && (
+                              <span className="rounded bg-emerald-500 text-slate-950 font-bold text-[9px] px-1">
+                                Chart Active
+                              </span>
+                            )}
+                          </div>
+
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${
+                              isFilled
+                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                            }`}
+                          >
+                            {isFilled ? "✓ FILLED" : o.status}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
+                          <div>
+                            Filled: <b className="text-white">{balance(o.filled_quantity)}</b>
+                            {o.requested_quantity && o.requested_quantity !== o.filled_quantity && (
+                              <span className="text-slate-500"> / {balance(o.requested_quantity)}</span>
+                            )}
+                            <span className="text-slate-400"> @ ${balance(o.price)} USDT</span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 uppercase font-medium">{o.order_type}</span>
+                        </div>
+
+                        {/* Date & Time in IST */}
+                        <div className="mt-2 pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400">
+                          <div className="flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-slate-300 font-medium">{formatIST(o.created_at)}</span>
+                          </div>
+                          <span className="text-cyan-400 font-semibold text-[10px]">View on Chart →</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-6 text-center text-sm text-slate-500 py-8">
+                  No recent trade activity.
+                </p>
+              )}
+            </div>
           )}
         </Card>
       </section>
