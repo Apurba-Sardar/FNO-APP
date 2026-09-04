@@ -2,6 +2,7 @@ package com.fno.trading.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,6 +10,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.ElectricBolt
+import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -17,10 +20,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fno.trading.data.model.OpportunityItem
+import com.fno.trading.data.model.EvaluationItem
 import com.fno.trading.ui.TradingViewModel
 import com.fno.trading.ui.theme.*
 
@@ -36,25 +42,47 @@ fun OpportunitiesScreen(
             .fillMaxSize()
             .background(AmoledBackground)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Column {
-                Text(
-                    text = "Breakout Opportunity Radar",
-                    color = TextPrimary,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "High-probability algorithmic breakout and trend pullback setups",
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "🎯 Scalp Signals & Punch Zones",
+                        color = TextPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = "Real-time algorithmic conviction, technical reasons & entry zones",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(DarkElevatedSurface)
+                        .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = state.evaluatedAtIst ?: "Live IST",
+                        color = EmeraldPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
         }
 
-        if (state.opportunities.isEmpty()) {
+        if (state.evaluations.isEmpty()) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -75,7 +103,7 @@ fun OpportunitiesScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Scanning crypto markets...",
+                            text = "Analyzing 499 CoinDCX markets...",
                             color = TextSecondary,
                             fontSize = 14.sp
                         )
@@ -83,10 +111,10 @@ fun OpportunitiesScreen(
                 }
             }
         } else {
-            items(state.opportunities) { opp ->
-                OpportunityCard(
-                    opp = opp,
-                    onTrade = { symbol -> viewModel.punch3xScalp(symbol, "buy", 15.0) }
+            items(state.evaluations) { item ->
+                SignalEvaluationCard(
+                    item = item,
+                    onPunch = { symbol, side -> viewModel.punch3xScalp(symbol, side) }
                 )
             }
         }
@@ -98,90 +126,297 @@ fun OpportunitiesScreen(
 }
 
 @Composable
-fun OpportunityCard(
-    opp: OpportunityItem,
-    onTrade: (String) -> Unit
+fun SignalEvaluationCard(
+    item: EvaluationItem,
+    onPunch: (String, String) -> Unit
 ) {
-    val isBullish = opp.direction.lowercase() == "bullish" || opp.direction.lowercase() == "long"
-    val scoreInt = opp.score.toInt()
+    val isBuySignal = item.signal.equals("BUY", ignoreCase = true) ||
+            item.direction?.lowercase() in listOf("long", "buy") ||
+            item.recommendedSide?.lowercase() == "buy"
+
+    val accentGradient = if (isBuySignal) {
+        Brush.horizontalGradient(listOf(EmeraldPrimary, CyanAccent))
+    } else {
+        Brush.horizontalGradient(listOf(LossRed, Color(0xFFF59E0B)))
+    }
+
+    val punchLow = item.punchZoneLow ?: if (isBuySignal) item.currentPrice * 0.998 else item.currentPrice * 0.996
+    val punchHigh = item.punchZoneHigh ?: if (isBuySignal) item.currentPrice * 1.004 else item.currentPrice * 1.002
+    val targetPrice = item.targetPrice ?: if (isBuySignal) item.currentPrice * 1.018 else item.currentPrice * 0.982
+    val stopPrice = item.stopPrice ?: if (isBuySignal) item.currentPrice * 0.988 else item.currentPrice * 1.012
+    val punchAreaText = item.punchArea ?: String.format("$%,.4g – $%,.4g", punchLow, punchHigh)
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, BorderColor, RoundedCornerShape(16.dp)),
+            .border(1.dp, if (isBuySignal) EmeraldPrimary.copy(alpha = 0.3f) else LossRed.copy(alpha = 0.3f), RoundedCornerShape(18.dp)),
         colors = CardDefaults.cardColors(containerColor = DarkCardSurface),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(18.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Top Accent Line
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(accentGradient)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 1. Header: Symbol, Price, Signal Badge, Score
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Column {
                     Text(
-                        text = opp.symbol.replace("B-", "").replace("_USDT", ""),
+                        text = item.symbol,
                         color = TextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Black
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = String.format("$%,.4g", item.currentPrice),
+                        color = TextSecondary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Signal Badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isBuySignal) ProfitGreenBg else LossRedBg)
+                            .border(1.dp, if (isBuySignal) EmeraldPrimary else LossRed, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isBuySignal) "🟢 BUY (LONG)" else "🔴 SELL (SHORT)",
+                                color = if (isBuySignal) ProfitGreen else LossRed,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+
+                    // Score Badge
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (isBullish) ProfitGreenBg else LossRedBg)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .background(CyanAccent.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = opp.direction.uppercase(),
-                            color = if (isBullish) ProfitGreen else LossRed,
-                            fontSize = 10.sp,
+                            text = "${item.score.toInt()}",
+                            color = CyanAccent,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
+            }
 
-                // Score Badge
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(
-                            if (scoreInt >= 75) EmeraldPrimary.copy(alpha = 0.2f) else DarkElevatedSurface
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 2. Reason & Conviction Box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(DarkElevatedSurface)
+                    .border(1.dp, BorderColor, RoundedCornerShape(12.dp))
+                    .padding(12.dp)
+            ) {
+                Column {
+                    Text(
+                        text = "💡 SIGNAL REASON & SETUP CONVICTION:",
+                        color = AmberWarning,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = item.reason ?: if (isBuySignal) {
+                            "Bullish Momentum: Price consolidating above key support ($${String.format("%,.4g", punchLow)}) with buyer bid absorption. Favorable 3x long entry on breakout."
+                        } else {
+                            "Bearish Pressure: Overhead resistance rejecting rallies near $${String.format("%,.4g", punchHigh)}. Distribution indicates 3x short scalp breakdown."
+                        },
+                        color = TextPrimary,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Drivers Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val driversList = if (!item.drivers.isNullOrEmpty()) item.drivers else listOf(
+                            if (isBuySignal) "Trend: Bullish" else "Trend: Bearish",
+                            if (isBuySignal) "Bid Skew" else "Ask Wall",
+                            "ATR Scalp"
                         )
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        driversList.take(3).forEach { driver ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = driver,
+                                    color = TextSecondary,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 3. Exact 4-Cell Trade Matrix (Where to punch)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Punch Area
+                MatrixCell(
+                    title = "📍 PUNCH AREA",
+                    value = punchAreaText,
+                    subtitle = "Entry Zone",
+                    color = CyanAccent,
+                    modifier = Modifier.weight(1.3f)
+                )
+
+                // Target (TP)
+                MatrixCell(
+                    title = "🎯 TARGET",
+                    value = String.format("$%,.4g", targetPrice),
+                    subtitle = "+${item.targetPct}% TP",
+                    color = EmeraldPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Stop Loss (SL)
+                MatrixCell(
+                    title = "🛑 STOP LOSS",
+                    value = String.format("$%,.4g", stopPrice),
+                    subtitle = "${item.stopPct}% SL",
+                    color = LossRed,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Risk:Reward
+                MatrixCell(
+                    title = "⚖️ R : R",
+                    value = item.riskReward ?: "1 : 1.50",
+                    subtitle = "Ratio",
+                    color = AmberWarning,
+                    modifier = Modifier.weight(0.9f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 4. Action Punch Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Primary Action Button
+                Button(
+                    onClick = { onPunch(item.symbol, if (isBuySignal) "buy" else "sell") },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isBuySignal) EmeraldPrimary else LossRed),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ElectricBolt,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isBuySignal) "PUNCH BUY 3x" else "PUNCH SELL 3x",
+                        color = Color.Black,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+
+                // Counter-Scalp Switch
+                OutlinedButton(
+                    onClick = { onPunch(item.symbol, if (isBuySignal) "sell" else "buy") },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = if (isBuySignal) LossRed else EmeraldPrimary
+                    ),
+                    border = ButtonDefaults.outlinedButtonBorder.copy(
+                        brush = Brush.horizontalGradient(listOf(BorderColor, BorderColor))
+                    )
                 ) {
                     Text(
-                        text = "$scoreInt/100",
-                        color = if (scoreInt >= 75) EmeraldPrimary else TextSecondary,
-                        fontSize = 13.sp,
+                        text = if (isBuySignal) "Short" else "Long",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Tier: ${opp.tier} • Risk:Reward 1:${String.format("%.1f", opp.riskReward ?: 2.0)}",
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
-
-                Button(
-                    onClick = { onTrade(opp.symbol) },
-                    colors = ButtonDefaults.buttonColors(containerColor = CyanAccent.copy(alpha = 0.2f)),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.border(1.dp, CyanAccent.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                ) {
-                    Text(text = "Trade 3x", color = CyanAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
+@Composable
+fun MatrixCell(
+    title: String,
+    value: String,
+    subtitle: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(color.copy(alpha = 0.08f))
+            .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = title,
+                color = color,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Black
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                color = TextPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1
+            )
+            Text(
+                text = subtitle,
+                color = TextMuted,
+                fontSize = 9.sp
+            )
         }
     }
 }

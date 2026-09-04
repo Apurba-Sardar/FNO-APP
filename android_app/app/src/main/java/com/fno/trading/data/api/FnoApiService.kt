@@ -37,6 +37,17 @@ interface FnoApiService {
     @GET("opportunities/top")
     suspend fun getTopOpportunities(): OpportunitiesResponse
 
+    @GET("live/research-feed")
+    suspend fun getResearchFeed(
+        @Header("x-live-operator-token") token: String = "LIVE_OPERATOR_TOKEN_2026"
+    ): ResearchFeedResponse
+
+    @POST("live/instant-scalp")
+    suspend fun punchInstantScalp(
+        @Body request: InstantScalpRequest,
+        @Header("x-live-operator-token") token: String = "LIVE_OPERATOR_TOKEN_2026"
+    ): SimpleActionResponse
+
     @POST("live/test-trade")
     suspend fun punchTestTrade(
         @Body request: TestTradeRequest,
@@ -63,7 +74,7 @@ interface FnoApiService {
     suspend fun sendTestNotification(): SimpleActionResponse
 
     companion object {
-        var currentServerUrl = "http://20.244.21.190:8000/api/v1/"
+        var currentServerUrl = "http://20.244.21.190:3000/api/v1/"
 
         fun create(baseUrl: String = currentServerUrl): FnoApiService {
             val logging = HttpLoggingInterceptor().apply {

@@ -3,6 +3,7 @@ package com.fno.trading.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -468,31 +469,101 @@ fun EngineStatusStrip(
             )
         }
 
+        // Bi-Directional Toggle & Scalp Action Buttons
+        var selectedSide by remember { mutableStateOf("buy") }
+        val isBuy = selectedSide == "buy"
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "⚡ 1-Tap Scalp Execution",
+                color = TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            // BUY vs SELL Switch
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(DarkElevatedSurface)
+                    .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
+                    .padding(2.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isBuy) EmeraldPrimary else Color.Transparent)
+                        .clickable { selectedSide = "buy" }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "BUY / LONG",
+                        color = if (isBuy) Color.Black else TextSecondary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (!isBuy) LossRed else Color.Transparent)
+                        .clickable { selectedSide = "sell" }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "SELL / SHORT",
+                        color = if (!isBuy) Color.White else TextSecondary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        }
+
         // Scalp Action Buttons Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
-                onClick = { onPunchScalp("B-XRP_USDT", "buy", 15.0) },
-                colors = ButtonDefaults.buttonColors(containerColor = DarkElevatedSurface),
+                onClick = { onPunchScalp("B-XRP_USDT", selectedSide, 15.0) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isBuy) EmeraldPrimary.copy(alpha = 0.15f) else LossRed.copy(alpha = 0.15f)
+                ),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .border(1.dp, CyanAccent.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .border(1.dp, if (isBuy) EmeraldPrimary else LossRed, RoundedCornerShape(12.dp))
             ) {
-                Text(text = "⚡ XRP 3x Scalp", color = CyanAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (isBuy) "⚡ XRP BUY 3x" else "⚡ XRP SELL 3x",
+                    color = if (isBuy) EmeraldPrimary else LossRed,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black
+                )
             }
 
             Button(
-                onClick = { onPunchScalp("B-DOGE_USDT", "buy", 100.0) },
-                colors = ButtonDefaults.buttonColors(containerColor = DarkElevatedSurface),
+                onClick = { onPunchScalp("B-DOGE_USDT", selectedSide, 100.0) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isBuy) CyanAccent.copy(alpha = 0.15f) else AmberWarning.copy(alpha = 0.15f)
+                ),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .border(1.dp, AmberWarning.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .border(1.dp, if (isBuy) CyanAccent else AmberWarning, RoundedCornerShape(12.dp))
             ) {
-                Text(text = "⚡ DOGE 3x Scalp", color = AmberWarning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (isBuy) "⚡ DOGE BUY 3x" else "⚡ DOGE SELL 3x",
+                    color = if (isBuy) CyanAccent else AmberWarning,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black
+                )
             }
         }
     }
