@@ -7,7 +7,7 @@ from uuid import UUID
 import structlog
 
 from app.risk.models import AccountSnapshot, OpenPosition
-from app.strategy.models import StrategyName, StrategyStatus
+from app.strategy.models import StrategyDirection, StrategyName, StrategyStatus
 
 from .audit import LiveAuditLogger
 from .coindcx_executor import CoinDCXTradeExecutor
@@ -145,6 +145,10 @@ class LiveExecutionRuntime:
                 await self.refresh_account()
                 await self.reconcile(actor="system")
                 await self.monitor_and_auto_close_positions()
+                self.last_api_error = None
+                self.circuit_breaker.success()
+                if self.state == LiveRuntimeState.BLOCKED and self.circuit_breaker.state.value != "open":
+                    self.state = LiveRuntimeState.ARMED
             except Exception as exc:  # noqa: BLE001 - monitoring must survive and block entries
                 self.last_api_error = type(exc).__name__
                 self.circuit_breaker.failure()
@@ -176,7 +180,7 @@ class LiveExecutionRuntime:
 
             target = pos.target
             stop = pos.stop
-            is_long = pos.direction == StrategyDirection.LONG
+            is_long = str(pos.direction).lower() in {"long", "buy", "strategydirection.long"} or pos.direction == StrategyDirection.LONG
 
             # Default scalp targets if not set: +1.8% profit, -1.2% stop (for 3x leverage scalp)
             if not target or not stop:

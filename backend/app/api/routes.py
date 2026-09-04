@@ -1265,6 +1265,29 @@ async def toggle_auto_trading(request: Request, settings: SettingsDependency) ->
     }
 
 
+@router.post("/live/reset-circuit")
+async def reset_circuit(request: Request, settings: SettingsDependency) -> dict:
+    authorize_live(request, settings)
+    runtime = live_runtime_from(request)
+    runtime.last_api_error = None
+    if hasattr(runtime, "circuit_breaker"):
+        runtime.circuit_breaker.success()
+    runtime.state = LiveRuntimeState.ARMED
+    try:
+        await runtime.refresh_account()
+        await runtime.reconcile(actor="operator-manual-reset")
+        await runtime.monitor_and_auto_close_positions()
+    except Exception as exc:
+        pass
+    await runtime._persist_runtime()
+    return {
+        "status": "success",
+        "runtime_state": runtime.state.value,
+        "circuit_breaker": runtime.circuit_breaker.state.value if hasattr(runtime, "circuit_breaker") else "unknown",
+        "account": getattr(runtime, "account", None),
+    }
+
+
 class LiveExitPositionRequest(LiveModel):
     position_id: str
     confirmation_phrase: str = "EXIT REAL POSITION"
