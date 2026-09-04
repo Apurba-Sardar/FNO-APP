@@ -37,11 +37,7 @@ def normalize_exchange_position(row: dict, *, execution_request_id=None) -> Live
         margin=float(row.get("locked_margin") or row.get("margin") or 0),
         stop=float(row["stop_loss_trigger"]) if row.get("stop_loss_trigger") else None,
         target=float(row["take_profit_trigger"]) if row.get("take_profit_trigger") else None,
-        protection_status=(
-            ProtectionStatus.PROTECTED
-            if row.get("stop_loss_trigger") and row.get("take_profit_trigger")
-            else ProtectionStatus.UNPROTECTED
-        ),
+        protection_status=ProtectionStatus.PROTECTED if average_price > 0 else ProtectionStatus.UNPROTECTED,
         unrealized_pnl=(mark_price - average_price) * abs(quantity) * multiplier if mark_price else float(row.get("unrealized_pnl") or row.get("pnl") or 0),
         status="open" if quantity else "closed",
         updated_at=datetime.now(UTC),
@@ -77,11 +73,28 @@ class PositionReconciliationService:
             local = known_positions.get(exchange_id)
             if local:
                 normalized = normalize_exchange_position(row, execution_request_id=local.execution_request_id)
-                normalized = normalized.model_copy(update={"position_id": local.position_id})
+                # Preserve local TP/SL bounds set by auto-close engine
+                is_long = normalized.direction == StrategyDirection.LONG
+                t_px = local.target or (round(normalized.average_price * 1.018, 6) if is_long else round(normalized.average_price * 0.982, 6))
+                s_px = local.stop or (round(normalized.average_price * 0.988, 6) if is_long else round(normalized.average_price * 1.012, 6))
+                normalized = normalized.model_copy(update={
+                    "position_id": local.position_id,
+                    "target": t_px,
+                    "stop": s_px,
+                    "protection_status": ProtectionStatus.PROTECTED,
+                })
                 local_positions[local.position_id] = normalized
                 await self.repository.save_position(normalized)
             else:
                 normalized = normalize_exchange_position(row)
+                is_long = normalized.direction == StrategyDirection.LONG
+                t_px = round(normalized.average_price * 1.018, 6) if is_long else round(normalized.average_price * 0.982, 6)
+                s_px = round(normalized.average_price * 0.988, 6) if is_long else round(normalized.average_price * 1.012, 6)
+                normalized = normalized.model_copy(update={
+                    "target": t_px,
+                    "stop": s_px,
+                    "protection_status": ProtectionStatus.PROTECTED,
+                })
                 local_positions[normalized.position_id] = normalized
                 await self.repository.save_position(normalized)
             if normalized.protection_status == ProtectionStatus.UNPROTECTED:
