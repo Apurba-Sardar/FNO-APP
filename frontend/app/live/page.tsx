@@ -296,7 +296,7 @@ export default function LivePage() {
         stopPrice: pos.stop,
         margin: pos.margin,
         unrealizedPnl: pos.unrealized_pnl,
-        positionId: pos.position_id,
+        positionId: (pos as any).exchange_position_id || pos.position_id,
         status: "open",
         entryTimeIST: formatIST(pos.created_at || (Date.now() - 3600000)),
       };
@@ -819,9 +819,20 @@ export default function LivePage() {
                           🛡️ Auto-Close Active
                         </span>
                       </div>
-                      <span className="text-[11px] text-cyan-400 font-semibold hover:underline">
-                        Inspect Chart →
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            exitPosition((p as any).exchange_position_id || p.position_id, p.pair);
+                          }}
+                          className="rounded-lg bg-rose-600/90 hover:bg-rose-500 px-2.5 py-1 text-[11px] font-bold text-white transition shadow-sm"
+                        >
+                          ⚡ Take Profit / Exit
+                        </button>
+                        <span className="text-[11px] text-cyan-400 font-semibold hover:underline">
+                          Inspect Chart →
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );

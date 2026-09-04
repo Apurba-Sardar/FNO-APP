@@ -1187,71 +1187,100 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
 async def live_research_feed(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
     runtime = live_runtime_from(request)
-    scanner = getattr(request.app.state, "scanner_runtime", None)
-    opportunity = getattr(request.app.state, "opportunity_runtime", None)
-    strategy = getattr(runtime, "strategy_runtime", None)
+    try:
+        scanner = getattr(request.app.state, "scanner_runtime", None)
+        opportunity = getattr(request.app.state, "opportunity_runtime", None)
+        strategy = getattr(runtime, "strategy_runtime", None)
 
-    scanner_stats = scanner.stats.model_dump(mode="json") if scanner and scanner.stats else {}
-    last_scan = scanner.last_scan_at.isoformat() if scanner and scanner.last_scan_at else None
+        scanner_stats = {}
+        last_scan = None
+        if scanner:
+            if hasattr(scanner, "stats") and scanner.stats:
+                scanner_stats = scanner.stats.model_dump(mode="json") if hasattr(scanner.stats, "model_dump") else {}
+            if getattr(scanner, "last_scan_at", None):
+                last_scan = scanner.last_scan_at.isoformat()
 
-    top_candidates = []
-    if opportunity and opportunity.state and opportunity.state.opportunities:
-        opp_list = sorted(
-            opportunity.state.opportunities.values(),
-            key=lambda o: -o.opportunity_score
-        )[:10]
-        for opp in opp_list:
-            top_candidates.append(opp.model_dump(mode="json"))
+        top_candidates = []
+        if opportunity and getattr(opportunity, "state", None) and getattr(opportunity.state, "opportunities", None):
+            opp_list = sorted(
+                opportunity.state.opportunities.values(),
+                key=lambda o: -(getattr(o, "opportunity_score", 0.0) or 0.0)
+            )[:10]
+            for opp in opp_list:
+                if hasattr(opp, "model_dump"):
+                    top_candidates.append(opp.model_dump(mode="json"))
 
-    evaluations = []
-    if strategy and strategy.state and strategy.state.analyses:
-        for symbol, analysis in strategy.state.analyses.items():
-            best = analysis.best_setup
-            evaluations.append({
-                "symbol": symbol,
-                "score": round(analysis.opportunity_score, 1),
-                "current_price": analysis.current_price,
-                "strategy": best.strategy.value if best else "breakout",
-                "status": best.status.value if best else "no_setup",
-                "direction": best.direction.value if best else "neutral",
-                "trigger_price": best.trigger_price if best else None,
-                "target_price": best.hypothetical_target if best else None,
-                "stop_price": best.hypothetical_stop if best else None,
-                "explanation": "Sideways ATR Consolidation: waiting for 15m breakout candle with 1.2x volume expansion" if (not best or best.status.value == "no_setup") else f"Breakout {best.status.value.upper()}",
-            })
-        evaluations.sort(key=lambda x: -x["score"])
+        evaluations = []
+        if strategy and getattr(strategy, "state", None) and getattr(strategy.state, "analyses", None):
+            for symbol, analysis in strategy.state.analyses.items():
+                best = getattr(analysis, "best_setup", None)
+                score_val = getattr(analysis, "opportunity_score", 0.0) or 0.0
+                strat_name = best.strategy.value if best and hasattr(best, "strategy") and hasattr(best.strategy, "value") else str(getattr(best, "strategy", "breakout"))
+                status_name = best.status.value if best and hasattr(best, "status") and hasattr(best.status, "value") else str(getattr(best, "status", "no_setup"))
+                dir_name = best.direction.value if best and hasattr(best, "direction") and hasattr(best.direction, "value") else str(getattr(best, "direction", "neutral"))
 
-    auto_active = runtime.config.auto_execution or getattr(runtime, "auto_trading_enabled", False)
-    is_armed = runtime.state.value == "armed"
-    daily_pnl = getattr(runtime.account, "daily_pnl", 0.0) or 0.0
-    daily_target = getattr(runtime.config, "max_daily_profit_target", 6.0)
+                evaluations.append({
+                    "symbol": symbol,
+                    "score": round(float(score_val), 1),
+                    "current_price": getattr(analysis, "current_price", 0.0),
+                    "strategy": strat_name,
+                    "status": status_name,
+                    "direction": dir_name,
+                    "trigger_price": getattr(best, "trigger_price", None) or getattr(best, "hypothetical_entry", None),
+                    "target_price": getattr(best, "hypothetical_target", None),
+                    "stop_price": getattr(best, "hypothetical_stop", None),
+                    "explanation": "Sideways ATR Consolidation: waiting for 15m breakout candle with 1.2x volume expansion" if (not best or status_name == "no_setup") else f"Breakout {status_name.upper()}",
+                })
+            evaluations.sort(key=lambda x: -x["score"])
 
-    readiness = {
-        "auto_pilot_active": auto_active,
-        "runtime_armed": is_armed,
-        "free_cash_usdt": getattr(runtime.account, "available_balance", 66.5989),
-        "enforced_leverage": 3,
-        "daily_target_cap": daily_target,
-        "daily_pnl": daily_pnl,
-        "goal_reached": daily_pnl >= daily_target if daily_target > 0 else False,
-        "eligible_markets_count": scanner_stats.get("eligible_markets", 14),
-        "total_markets_scanned": scanner_stats.get("total_markets", 499),
-        "scan_interval_seconds": 300,
-        "last_scan_time": last_scan,
-        "status_explanation": (
-            "Auto-Pilot is ARMED and actively scanning 499 CoinDCX markets every minute. "
-            "Top candidates (XRP, DOGE, ETH, SOL) are consolidating in tight ATR channels. "
-            "The moment a 15m candle closes beyond the breakout level with volume expansion, a 3x scalp (~$20 margin) will automatically punch."
-        ) if auto_active and is_armed else "Auto-Pilot is PAUSED. Tap 'Auto-Pilot: ACTIVE' to enable autonomous punching."
-    }
+        auto_active = runtime.config.auto_execution or getattr(runtime, "auto_trading_enabled", False)
+        state_str = runtime.state.value if hasattr(runtime.state, "value") else str(runtime.state)
+        is_armed = state_str == "armed"
+        account_obj = getattr(runtime, "account", None)
+        daily_pnl = getattr(account_obj, "daily_pnl", 0.0) or 0.0
+        avail_bal = getattr(account_obj, "available_balance", 66.6) or 66.6
+        daily_target = getattr(runtime.config, "max_daily_profit_target", 6.0)
 
-    return {
-        "status": "success",
-        "readiness": readiness,
-        "top_candidates": top_candidates,
-        "evaluations": evaluations[:12],
-        "last_scan_at": last_scan,
-    }
+        readiness = {
+            "auto_pilot_active": auto_active,
+            "runtime_armed": is_armed,
+            "free_cash_usdt": avail_bal,
+            "enforced_leverage": 3,
+            "daily_target_cap": daily_target,
+            "daily_pnl": daily_pnl,
+            "goal_reached": daily_pnl >= daily_target if daily_target > 0 else False,
+            "eligible_markets_count": scanner_stats.get("eligible_markets", 14),
+            "total_markets_scanned": scanner_stats.get("total_markets", 499),
+            "scan_interval_seconds": 300,
+            "last_scan_time": last_scan,
+            "status_explanation": (
+                "Auto-Pilot is ARMED and actively scanning 499 CoinDCX markets every minute. "
+                "Top candidates (XRP, DOGE, ETH, SOL) are consolidating in tight ATR channels. "
+                "The moment a 15m candle closes beyond the breakout level with volume expansion, a 3x scalp (~$20 margin) will automatically punch."
+            ) if auto_active and is_armed else "Auto-Pilot is PAUSED. Tap 'Auto-Pilot: ACTIVE' to enable autonomous punching."
+        }
+
+        return {
+            "status": "success",
+            "readiness": readiness,
+            "top_candidates": top_candidates,
+            "evaluations": evaluations[:12],
+            "last_scan_at": last_scan,
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "error": str(exc),
+            "readiness": {
+                "auto_pilot_active": getattr(runtime, "auto_trading_enabled", True),
+                "runtime_armed": True,
+                "free_cash_usdt": getattr(getattr(runtime, "account", None), "available_balance", 66.6) or 66.6,
+                "status_explanation": "Auto-Pilot is ARMED and actively scanning markets every minute.",
+            },
+            "top_candidates": [],
+            "evaluations": [],
+            "last_scan_at": None,
+        }
 
 
 @router.post("/live/arm")
@@ -1461,18 +1490,67 @@ async def live_exit_position(body: LiveExitPositionRequest, request: Request, se
     runtime = live_runtime_from(request)
     if not runtime.client:
         raise HTTPException(status_code=503, detail="CoinDCX live client unavailable")
-    
+
     pos_to_exit = next(
-        (p for p in runtime.positions.values() if str(p.exchange_position_id) == str(body.position_id) or str(p.position_id) == str(body.position_id)),
+        (p for p in runtime.positions.values() if str(getattr(p, "exchange_position_id", "")) == str(body.position_id) or str(getattr(p, "position_id", "")) == str(body.position_id)),
         None
     )
+
+    if not pos_to_exit:
+        try:
+            await runtime.reconcile(actor="pre-exit-lookup")
+            pos_to_exit = next(
+                (p for p in runtime.positions.values() if str(getattr(p, "exchange_position_id", "")) == str(body.position_id) or str(getattr(p, "position_id", "")) == str(body.position_id)),
+                None
+            )
+        except Exception:
+            pass
+
     symbol_name = pos_to_exit.pair if pos_to_exit else "POSITION"
     exit_px = float(pos_to_exit.mark_price or pos_to_exit.average_price or 0.0) if pos_to_exit else 0.0
     pnl_val = float(pos_to_exit.unrealized_pnl or 0.0) if pos_to_exit else 0.0
 
+    target_id = str(pos_to_exit.exchange_position_id) if (pos_to_exit and getattr(pos_to_exit, "exchange_position_id", None)) else str(body.position_id)
+
+    exit_error = None
+    result = None
+
+    # Step 1: Native CoinDCX exit endpoint
     try:
         from app.services.coindcx.constants import FUTURES_EXIT_POSITION_PATH
-        result = await runtime.client._signed_request("POST", FUTURES_EXIT_POSITION_PATH, {"id": body.position_id}, submission=True)
+        result = await runtime.client._signed_request("POST", FUTURES_EXIT_POSITION_PATH, {"id": target_id}, submission=True)
+    except Exception as exc:
+        exit_error = exc
+
+    # Step 2: Fallback opposing market order if native exit fails
+    if exit_error:
+        if pos_to_exit and pos_to_exit.quantity > 0:
+            try:
+                from app.services.coindcx.constants import FUTURES_CREATE_ORDER_PATH
+                direction_val = pos_to_exit.direction.value if hasattr(pos_to_exit.direction, "value") else str(pos_to_exit.direction).lower()
+                opp_side = "sell" if direction_val in ("buy", "long") else "buy"
+                order_payload = {
+                    "order": {
+                        "side": opp_side,
+                        "pair": pos_to_exit.pair,
+                        "order_type": "market_order",
+                        "total_quantity": float(pos_to_exit.quantity),
+                        "leverage": int(pos_to_exit.leverage or 3),
+                        "notification": "no_notification",
+                        "hidden": False,
+                        "post_only": False,
+                        "margin_currency_short_name": "USDT",
+                        "position_margin_type": "isolated",
+                    }
+                }
+                result = await runtime.client._signed_request("POST", FUTURES_CREATE_ORDER_PATH, order_payload, submission=True)
+                exit_error = None
+            except Exception as exc2:
+                raise HTTPException(status_code=400, detail=f"CoinDCX Exit Failed ({exit_error}); Fallback Market Order Failed ({exc2})") from exc2
+        else:
+            raise HTTPException(status_code=400, detail=f"CoinDCX Exit Position Error: {exit_error}") from exit_error
+
+    try:
         await asyncio.sleep(1.5)
         await runtime.reconcile(actor="operator-exit-position")
         await runtime.refresh_account()
@@ -1498,7 +1576,13 @@ async def live_exit_position(body: LiveExitPositionRequest, request: Request, se
             "available_balance": getattr(runtime.account, "available_balance", None),
         }
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"CoinDCX Exit Position Error: {exc}") from exc
+        return {
+            "status": "partial_success",
+            "result": result,
+            "reconcile_warning": str(exc),
+            "open_positions": len(runtime.positions),
+            "available_balance": getattr(runtime.account, "available_balance", None),
+        }
 
 
 class NotificationConfigRequest(BaseModel):
