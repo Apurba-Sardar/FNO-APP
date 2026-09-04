@@ -1134,8 +1134,12 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
     if qty <= 0:
         qty = 1.0
 
+    is_sell = body.direction.lower() in ("sell", "short")
+    side_str = "sell" if is_sell else "buy"
+    dir_str = "short" if is_sell else "long"
+
     order_payload = {
-        "side": body.direction.lower(),
+        "side": side_str,
         "pair": body.pair,
         "order_type": "market_order",
         "total_quantity": qty,
@@ -1149,15 +1153,16 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
         await runtime.reconcile(actor="operator-instant-scalp")
         await runtime.refresh_account()
 
-        target_px = round(px * 1.018, 4) if body.direction.lower() == "buy" else round(px * 0.982, 4)
-        stop_px = round(px * 0.988, 4) if body.direction.lower() == "buy" else round(px * 1.012, 4)
+        # Bi-directional scalp targets: +1.8% profit / -1.2% stop
+        target_px = round(px * 0.982, 4) if is_sell else round(px * 1.018, 4)
+        stop_px = round(px * 1.012, 4) if is_sell else round(px * 0.988, 4)
 
         try:
             from app.services.notifications import notification_service
             asyncio.create_task(
                 notification_service.notify_trade_entry(
                     symbol=body.pair,
-                    direction="long" if body.direction.lower() == "buy" else "short",
+                    direction=dir_str,
                     quantity=qty,
                     entry_price=px,
                     leverage=body.leverage,
@@ -1171,8 +1176,10 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
 
         return {
             "status": "success",
-            "message": f"Successfully punched 3x scalp for {body.pair} on CoinDCX Futures!",
+            "message": f"Successfully punched 3x {dir_str.upper()} scalp for {body.pair} on CoinDCX Futures!",
             "order": res,
+            "side": side_str,
+            "direction": dir_str,
             "quantity": qty,
             "estimated_price": px,
             "target_price": target_px,
@@ -1225,6 +1232,14 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
                 status_name = best.status.value if best and hasattr(best, "status") and hasattr(best.status, "value") else str(getattr(best, "status", "no_setup"))
                 dir_name = best.direction.value if best and hasattr(best, "direction") and hasattr(best.direction, "value") else str(getattr(best, "direction", "neutral"))
 
+                rec_side = "sell" if dir_name in ("short", "sell") else ("buy" if dir_name in ("long", "buy") else "neutral")
+                if rec_side == "sell":
+                    expl = "Bearish Breakdown: Monitoring 15m support breakdown to trigger 3x SELL (SHORT) scalp"
+                elif rec_side == "buy":
+                    expl = "Bullish Breakout: Monitoring 15m resistance breakout to trigger 3x BUY (LONG) scalp"
+                else:
+                    expl = "Sideways ATR Consolidation: Bi-directional engine watching both 🟢 BUY breakout and 🔴 SELL breakdown levels"
+
                 evaluations.append({
                     "symbol": symbol,
                     "score": round(float(score_val), 1),
@@ -1232,10 +1247,11 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
                     "strategy": strat_name,
                     "status": status_name,
                     "direction": dir_name,
+                    "recommended_side": rec_side,
                     "trigger_price": getattr(best, "trigger_price", None) or getattr(best, "hypothetical_entry", None),
                     "target_price": getattr(best, "hypothetical_target", None),
                     "stop_price": getattr(best, "hypothetical_stop", None),
-                    "explanation": "Sideways ATR Consolidation: waiting for 15m breakout candle with 1.2x volume expansion" if (not best or status_name == "no_setup") else f"Breakout {status_name.upper()}",
+                    "explanation": expl,
                     "evaluated_at_ist": ist_time_str,
                 })
             evaluations.sort(key=lambda x: -x["score"])
@@ -1251,6 +1267,7 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
         readiness = {
             "auto_pilot_active": auto_active,
             "runtime_armed": is_armed,
+            "bi_directional_active": True,
             "free_cash_usdt": avail_bal,
             "enforced_leverage": 3,
             "daily_target_cap": daily_target,

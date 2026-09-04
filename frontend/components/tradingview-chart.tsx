@@ -178,11 +178,11 @@ export function TradingViewChart({
         <div className="bg-black/60 border-b border-white/[0.08] p-4 sm:p-5 backdrop-blur-xl">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 text-xs">
             {/* Entry Box */}
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-3">
-              <div className="flex items-center justify-between text-emerald-400 font-bold text-[11px]">
+            <div className={`rounded-xl border p-3 ${isLong ? "border-emerald-500/40 bg-emerald-950/20" : "border-rose-500/40 bg-rose-950/20"}`}>
+              <div className={`flex items-center justify-between font-bold text-[11px] ${isLong ? "text-emerald-400" : "text-rose-400"}`}>
                 <span>ENTRY PRICE</span>
-                <span className="rounded bg-emerald-500/20 px-1 py-0.2 text-[10px] uppercase">
-                  {isLong ? "BUY" : "SELL"}
+                <span className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${isLong ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"}`}>
+                  {isLong ? "BUY · LONG" : "SELL · SHORT"}
                 </span>
               </div>
               <p className="mt-1 text-base font-black text-white">

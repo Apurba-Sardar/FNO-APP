@@ -75,6 +75,7 @@ export default function LivePage() {
   const [rightCardTab, setRightCardTab] = useState<"research" | "orders">("research");
   const [researchFeed, setResearchFeed] = useState<Row | null>(null);
   const [isPunchingScalp, setIsPunchingScalp] = useState<string | null>(null);
+  const [scalpDirection, setScalpDirection] = useState<"buy" | "sell">("buy");
 
   const headers = useCallback(() => ({
     "Content-Type": "application/json",
@@ -390,6 +391,10 @@ export default function LivePage() {
               </span>
               <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-3 py-1 text-[11px] text-slate-300 font-mono">
                 Indian Standard Time (IST) Active
+              </span>
+              <span className="rounded-full bg-emerald-500/10 border border-emerald-500/25 px-3 py-1 text-[11px] font-black text-[#00F5A0] flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-pulse"></span>
+                <span>🔄 Bi-Directional: BUY & SELL Scalping Active</span>
               </span>
               <span className="rounded-full bg-indigo-500/10 border border-indigo-500/25 px-3 py-1 text-[11px] font-bold text-indigo-300">
                 ⚡ 3x Isolated Leverage Enforced
@@ -1040,35 +1045,79 @@ export default function LivePage() {
                 </div>
               </div>
 
-              {/* 1-Tap Instant Test Punch Controls */}
-              <div className="rounded-2xl border border-[#00F5A0]/30 bg-gradient-to-r from-[#00F5A0]/[0.06] via-transparent to-transparent p-4">
-                <div className="flex items-center justify-between">
+              {/* 1-Tap Bi-Directional Instant Scalp Punch Controls */}
+              <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-white/[0.04] to-transparent p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
-                      <span>⚡ Instant Test Scalp Punch</span>
+                      <span>⚡ 1-Tap Scalp Punch</span>
                       <span className="text-[9px] rounded-full bg-[#00F5A0]/20 text-[#00F5A0] px-2 py-0.5 font-black border border-[#00F5A0]/30">
-                        $20 MARGIN · 3x
+                        $20 MARGIN · 3x ISOLATED
                       </span>
                     </h4>
-                    <p className="text-xs text-white/50 mt-1">
-                      Execute a live trade immediately to test order fill, TP/SL triggers, and phone alerts:
+                    <p className="text-xs text-white/50 mt-0.5">
+                      Bi-directional execution: Punch live BUY (Long) or SELL (Short) scalps as per research.
                     </p>
                   </div>
+                  {/* CRED Pill Direction Selector */}
+                  <div className="flex items-center self-start sm:self-auto gap-1 bg-black/60 p-1 rounded-2xl border border-white/10 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setScalpDirection("buy")}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${
+                        scalpDirection === "buy"
+                          ? "bg-[#00F5A0] text-slate-950 shadow-md shadow-[#00F5A0]/20"
+                          : "text-white/50 hover:text-white"
+                      }`}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-slate-950"></span>
+                      <span>BUY / LONG</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScalpDirection("sell")}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${
+                        scalpDirection === "sell"
+                          ? "bg-rose-500 text-white shadow-md shadow-rose-500/30"
+                          : "text-white/50 hover:text-white"
+                      }`}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-white"></span>
+                      <span>SELL / SHORT</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2.5">
+
+                <div className="mt-3.5 flex flex-wrap gap-2.5">
                   <button
-                    onClick={() => punchInstantScalp("B-XRP_USDT", "buy")}
+                    onClick={() => punchInstantScalp("B-XRP_USDT", scalpDirection)}
                     disabled={isPunchingScalp !== null}
-                    className="cred-btn-primary flex-1 min-w-[140px] py-2.5 text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                    className={`flex-1 min-w-[150px] py-2.5 px-4 text-xs font-black rounded-xl transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 active:scale-95 ${
+                      scalpDirection === "buy"
+                        ? "bg-[#00F5A0] text-slate-950 hover:bg-[#00F5A0]/90 shadow-[#00F5A0]/20"
+                        : "bg-rose-500 text-white hover:bg-rose-400 shadow-rose-500/25"
+                    }`}
                   >
-                    <span>{isPunchingScalp === "B-XRP_USDT" ? "Punching XRP..." : "⚡ Punch XRP 3x Scalp"}</span>
+                    <span>
+                      {isPunchingScalp === "B-XRP_USDT"
+                        ? `Punching XRP ${scalpDirection.toUpperCase()}...`
+                        : `⚡ Punch XRP ${scalpDirection === "buy" ? "BUY (Long)" : "SELL (Short)"} 3x`}
+                    </span>
                   </button>
                   <button
-                    onClick={() => punchInstantScalp("B-DOGE_USDT", "buy")}
+                    onClick={() => punchInstantScalp("B-DOGE_USDT", scalpDirection)}
                     disabled={isPunchingScalp !== null}
-                    className="cred-btn-secondary flex-1 min-w-[140px] py-2.5 text-xs text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                    className={`flex-1 min-w-[150px] py-2.5 px-4 text-xs font-black rounded-xl transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 active:scale-95 ${
+                      scalpDirection === "buy"
+                        ? "bg-indigo-500 text-white hover:bg-indigo-400 shadow-indigo-500/25"
+                        : "bg-amber-600 text-white hover:bg-amber-500 shadow-amber-600/25"
+                    }`}
                   >
-                    <span>{isPunchingScalp === "B-DOGE_USDT" ? "Punching DOGE..." : "⚡ Punch DOGE 3x Scalp"}</span>
+                    <span>
+                      {isPunchingScalp === "B-DOGE_USDT"
+                        ? `Punching DOGE ${scalpDirection.toUpperCase()}...`
+                        : `⚡ Punch DOGE ${scalpDirection === "buy" ? "BUY (Long)" : "SELL (Short)"} 3x`}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1081,7 +1130,7 @@ export default function LivePage() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F5A0] opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00F5A0]"></span>
                     </span>
-                    Top Market Candidates & Setup Diagnostic:
+                    Bi-Directional Candidates (BUY & SELL Diagnostic):
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#00F5A0] flex items-center gap-1.5">
@@ -1091,16 +1140,19 @@ export default function LivePage() {
                     <span className="text-[10px] text-white/40 uppercase tracking-widest">10s</span>
                   </div>
                 </div>
-                <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
                   {(researchFeed?.evaluations?.length ? researchFeed.evaluations : [
-                    { symbol: "B-XRP_USDT", score: 72.6, current_price: 1.4464, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating in ATR range: waiting for 15m breakout candle with 1.2x volume expansion" },
-                    { symbol: "B-DOGE_USDT", score: 68.7, current_price: 0.0871, strategy: "trend_pullback", status: "watching", direction: "neutral", explanation: "Pullback holding 20 EMA: waiting for 15m bullish reversal confirmation" },
-                    { symbol: "B-ETH_USDT", score: 73.1, current_price: 2505.0, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating near resistance: waiting for volume expansion breakout above $2,525" },
-                    { symbol: "B-SOL_USDT", score: 69.4, current_price: 103.7, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Sideways range: waiting for Donchian breakout trigger" },
-                    { symbol: "B-BTC_USDT", score: 65.8, current_price: 80680.0, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Institutional range: monitoring 15m volatility breakout" },
+                    { symbol: "B-XRP_USDT", score: 72.6, current_price: 1.4464, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating in ATR range: bi-directional scanner watching for 🟢 BUY breakout or 🔴 SELL breakdown" },
+                    { symbol: "B-DOGE_USDT", score: 68.7, current_price: 0.0871, strategy: "trend_pullback", status: "watching", direction: "neutral", explanation: "Pullback holding 20 EMA: bi-directional scanner watching for reversal or breakdown" },
+                    { symbol: "B-ETH_USDT", score: 73.1, current_price: 2505.0, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Consolidating near resistance: monitoring for volume breakout (BUY) or rejection (SELL)" },
+                    { symbol: "B-SOL_USDT", score: 69.4, current_price: 103.7, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Sideways range: monitoring Donchian breakout / breakdown channels" },
+                    { symbol: "B-BTC_USDT", score: 65.8, current_price: 80680.0, strategy: "breakout", status: "watching", direction: "neutral", explanation: "Institutional range: monitoring 15m volatility expansion triggers" },
                   ]).map((item: any, idx: number) => {
                     const isTriggered = item.status === "triggered";
                     const isArmed = item.status === "armed";
+                    const dir = item.direction?.toLowerCase() || "neutral";
+                    const isSellRecommended = dir === "short" || dir === "sell" || item.recommended_side === "sell";
+                    const isBuyRecommended = dir === "long" || dir === "buy" || item.recommended_side === "buy";
 
                     return (
                       <div
@@ -1117,6 +1169,20 @@ export default function LivePage() {
                             <span className="text-xs text-white/50 font-mono">
                               ${balance(item.current_price)}
                             </span>
+                            {/* Direction Badge */}
+                            {isSellRecommended ? (
+                              <span className="rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">
+                                🔴 SHORT (SELL)
+                              </span>
+                            ) : isBuyRecommended ? (
+                              <span className="rounded-full bg-[#00F5A0]/15 text-[#00F5A0] border border-[#00F5A0]/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">
+                                🟢 LONG (BUY)
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-white/[0.06] text-white/60 border border-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                                🔄 BI-DIR
+                              </span>
+                            )}
                           </div>
                           <span
                             className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
@@ -1135,7 +1201,7 @@ export default function LivePage() {
                           {item.explanation ?? "Consolidating: waiting for 15m breakout candle with 1.2x volume expansion"}
                         </p>
 
-                        <div className="mt-2.5 flex items-center justify-between text-[11px] text-white/40">
+                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/40">
                           <div className="flex items-center gap-2">
                             <span>Strategy: <b className="text-white/70">{item.strategy ?? "breakout"}</b></span>
                             <span>•</span>
@@ -1143,7 +1209,31 @@ export default function LivePage() {
                               Checked: <b className="text-[#00F5A0]">{item.evaluated_at_ist ?? (lastRefreshedAt ? formatISTTime(lastRefreshedAt) : "Live")}</b>
                             </span>
                           </div>
-                          <span className="text-[#00D9F5] font-bold hover:underline">Inspect Chart →</span>
+
+                          {/* 1-Tap Bi-directional punch shortcuts right on the candidate */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                punchInstantScalp(item.symbol, "buy");
+                              }}
+                              disabled={isPunchingScalp !== null}
+                              className="rounded-lg bg-[#00F5A0]/15 hover:bg-[#00F5A0] border border-[#00F5A0]/30 hover:text-slate-950 text-[#00F5A0] text-[10px] font-black px-2 py-1 transition active:scale-95 disabled:opacity-50"
+                            >
+                              + BUY (Long)
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                punchInstantScalp(item.symbol, "sell");
+                              }}
+                              disabled={isPunchingScalp !== null}
+                              className="rounded-lg bg-rose-500/15 hover:bg-rose-500 border border-rose-500/30 hover:text-white text-rose-400 text-[10px] font-black px-2 py-1 transition active:scale-95 disabled:opacity-50"
+                            >
+                              - SELL (Short)
+                            </button>
+                            <span className="text-[#00D9F5] font-bold hover:underline text-[10px]">Chart →</span>
+                          </div>
                         </div>
                       </div>
                     );
