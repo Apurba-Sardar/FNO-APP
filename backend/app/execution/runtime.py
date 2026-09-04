@@ -654,9 +654,9 @@ class LiveExecutionRuntime:
         ):
             return
 
-        # Check if daily profit goal ($10.00 USDT) has been reached to secure profits
+        # Check if daily profit goal ($6.00 USDT) has been reached to secure profits
         today_pnl = getattr(self.account, "daily_pnl", 0.0) or 0.0
-        max_target = getattr(self.config, "max_daily_profit_target", 10.0)
+        max_target = getattr(self.config, "max_daily_profit_target", 6.0)
         if max_target > 0 and today_pnl >= max_target:
             if not getattr(self, "_daily_profit_target_notified_today", False):
                 self._daily_profit_target_notified_today = True
@@ -793,11 +793,11 @@ class LiveExecutionRuntime:
             "auto_execution": self.config.auto_execution or getattr(self, "auto_trading_enabled", False),
             "auto_close_active": True,
             "enforced_leverage": 3,
-            "daily_profit_target": getattr(self.config, "max_daily_profit_target", 10.0),
+            "daily_profit_target": getattr(self.config, "max_daily_profit_target", 6.0),
             "daily_pnl": getattr(self.account, "daily_pnl", 0.0) or 0.0,
             "daily_profit_goal_reached": bool(
-                getattr(self.config, "max_daily_profit_target", 10.0) > 0
-                and (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= getattr(self.config, "max_daily_profit_target", 10.0)
+                getattr(self.config, "max_daily_profit_target", 6.0) > 0
+                and (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= getattr(self.config, "max_daily_profit_target", 6.0)
             ),
             "emergency_stop": self.emergency_stop.state,
             "circuit_breaker": self.circuit_breaker.state,

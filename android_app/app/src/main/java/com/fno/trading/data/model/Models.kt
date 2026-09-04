@@ -10,7 +10,7 @@ data class LiveStatusResponse(
     @SerializedName("auto_execution") val autoExecution: Boolean = false,
     @SerializedName("auto_close_active") val autoCloseActive: Boolean = true,
     @SerializedName("enforced_leverage") val enforcedLeverage: Int = 3,
-    @SerializedName("daily_profit_target") val dailyProfitTarget: Double = 10.0
+    @SerializedName("daily_profit_target") val dailyProfitTarget: Double = 6.0
 )
 
 data class LiveAccountResponse(

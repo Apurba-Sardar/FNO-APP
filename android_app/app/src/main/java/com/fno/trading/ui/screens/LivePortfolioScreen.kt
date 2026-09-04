@@ -219,7 +219,7 @@ fun AccountBalanceCard(
 ) {
     val account = state.account
     val dailyPnl = account?.dailyPnl ?: 0.0
-    val target = state.status?.dailyProfitTarget ?: 10.0
+    val target = state.status?.dailyProfitTarget ?: 6.0
     val progress = (dailyPnl / target).coerceIn(0.0, 1.0).toFloat()
     val isProfit = dailyPnl >= 0
 
@@ -315,7 +315,7 @@ fun AccountBalanceCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Daily Profit Target Progress Bar ($10 Cap)
+            // Daily Profit Target Progress Bar ($6 Cap)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -329,7 +329,7 @@ fun AccountBalanceCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Daily Goal ($10.00 Cap)",
+                            text = "Daily Goal ($${String.format("%.2f", target)} Cap - Scalp Plan)",
                             color = TextSecondary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
@@ -378,6 +378,71 @@ fun EngineStatusStrip(
     val autoActive = state.status?.autoExecution == true
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Auto-Pilot Control Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    1.dp,
+                    if (autoActive) EmeraldPrimary.copy(alpha = 0.6f) else BorderColor,
+                    RoundedCornerShape(16.dp)
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (autoActive) EmeraldPrimary.copy(alpha = 0.08f) else DarkCardSurface
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (autoActive) EmeraldPrimary else TextMuted)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (autoActive) "AUTO-PILOT RUNNING" else "AUTO-PILOT STANDBY",
+                            color = if (autoActive) EmeraldPrimary else TextMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Auto Research • Plan • Entry • Exit",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Real-time alerts sent to your S24 Ultra",
+                        color = TextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Switch(
+                    checked = autoActive,
+                    onCheckedChange = { onToggleAutoTrading() },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = EmeraldPrimary,
+                        checkedTrackColor = EmeraldPrimary.copy(alpha = 0.35f),
+                        uncheckedThumbColor = TextMuted,
+                        uncheckedTrackColor = DarkElevatedSurface
+                    )
+                )
+            }
+        }
+
         // Badges Row
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -390,9 +455,15 @@ fun EngineStatusStrip(
                 modifier = Modifier.weight(1f)
             )
             BadgeChip(
-                label = "3x Isolated",
-                subLabel = "Enforced",
+                label = "3x Leverage",
+                subLabel = "Isolated",
                 color = CyanAccent,
+                modifier = Modifier.weight(1f)
+            )
+            BadgeChip(
+                label = "Daily Target",
+                subLabel = "$6.00 Cap",
+                color = AmberWarning,
                 modifier = Modifier.weight(1f)
             )
         }

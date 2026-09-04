@@ -119,7 +119,7 @@ class LiveSafetyGate:
             GateCheck(name="POSITION_LIMIT", passed=len(active_positions) < self.config.max_open_positions, detail="live open-position limit reached"),
             GateCheck(name="EXPOSURE_LIMIT", passed=total_exposure + decision.position_notional <= self.config.max_total_exposure, detail="live total-exposure limit reached"),
             GateCheck(name="NOTIONAL_LIMIT", passed=decision.position_notional <= self.config.max_notional_per_trade, detail="live per-trade notional limit reached"),
-            GateCheck(name="DAILY_PROFIT_GOAL", passed=not daily_profit_reached, detail=f"daily profit target (${getattr(self.config, 'max_daily_profit_target', 10.0):.2f}) reached; trading paused to secure daily earnings"),
+            GateCheck(name="DAILY_PROFIT_GOAL", passed=not daily_profit_reached, detail=f"daily profit target (${getattr(self.config, 'max_daily_profit_target', 6.0):.2f}) reached; trading paused to secure daily earnings"),
             GateCheck(name="DAILY_LOSS", passed=daily_loss_percent < self.config.max_daily_loss_percent, detail="live daily-loss limit reached"),
             GateCheck(name="ORDER_LIMIT", passed=orders_today < self.config.max_orders_per_day, detail="live daily-order limit reached"),
             GateCheck(name="TRADE_LIMIT", passed=trades_today < self.config.max_trades_per_day, detail="live daily-trade limit reached"),
