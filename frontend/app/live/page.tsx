@@ -23,6 +23,28 @@ export default function LivePage() {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [showTokens, setShowTokens] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState<string>("B-XRP_USDT");
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertStatusMessage, setAlertStatusMessage] = useState<string | null>(null);
+  const [isTestingAlert, setIsTestingAlert] = useState(false);
+
+  const testPushNotification = async () => {
+    setIsTestingAlert(true);
+    setAlertStatusMessage(null);
+    try {
+      const apiBase = getApiUrl();
+      const res = await fetch(`${apiBase}/notifications/test`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setAlertStatusMessage("🚀 Test alert dispatched! Check your Samsung Galaxy S24 Ultra screen.");
+      } else {
+        setAlertStatusMessage(`Failed to send test alert: ${data.detail || "Server error"}`);
+      }
+    } catch (err: any) {
+      setAlertStatusMessage(`Error sending test alert: ${err.message}`);
+    } finally {
+      setIsTestingAlert(false);
+    }
+  };
 
   const headers = useCallback(() => ({
     "Content-Type": "application/json",
@@ -254,6 +276,14 @@ export default function LivePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setShowAlertModal(true)}
+              className="rounded-lg border border-cyan-500/50 bg-gradient-to-r from-cyan-950/80 to-blue-950/80 hover:border-cyan-400 hover:from-cyan-900/90 hover:to-blue-900/90 px-3.5 py-2 text-xs font-bold text-cyan-300 shadow-lg shadow-cyan-950/40 transition flex items-center gap-2"
+            >
+              <span className="text-sm">📱</span>
+              <span>S24 Ultra Alerts</span>
+              <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+            </button>
             <button
               onClick={() => setShowTokens(!showTokens)}
               className="rounded-lg border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition"
@@ -732,6 +762,168 @@ export default function LivePage() {
           )}
         </Card>
       </section>
+
+      {/* S24 Ultra Push Notification Modal */}
+      {showAlertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-cyan-500/40 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 p-6 shadow-2xl shadow-cyan-950/50">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-2xl shadow-inner">
+                  📱
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white">
+                      Samsung Galaxy S24 Ultra Push Alerts
+                    </h3>
+                    <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                      Live Active
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Instant sound & vibration alerts directly to your phone for all trade actions.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowAlertModal(false); setAlertStatusMessage(null); }}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Test Alert Button & Feedback */}
+            <div className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-950/30 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-cyan-200">
+                    <span>Topic:</span>
+                    <code className="rounded bg-slate-900/90 px-2 py-0.5 font-mono text-cyan-400 text-xs border border-cyan-500/30">
+                      fno_trades_apurba
+                    </code>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Delivered via high-priority push with IST timestamps.
+                  </p>
+                </div>
+                <button
+                  onClick={testPushNotification}
+                  disabled={isTestingAlert}
+                  className="rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 px-4 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-cyan-500/25 transition flex items-center justify-center gap-2 whitespace-nowrap"
+                >
+                  {isTestingAlert ? (
+                    <>
+                      <span className="h-3 w-3 rounded-full border-2 border-slate-950 border-t-transparent animate-spin"></span>
+                      <span>Pushing Alert...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🔔</span>
+                      <span>Send Test Alert to Phone</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {alertStatusMessage && (
+                <div className={`mt-3 rounded-lg p-2.5 text-xs font-medium border ${
+                  alertStatusMessage.includes("🚀")
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                }`}>
+                  {alertStatusMessage}
+                </div>
+              )}
+            </div>
+
+            {/* Quick 30-Second Setup on S24 Ultra */}
+            <div className="mt-5 space-y-2">
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                ⚡ Quick 30-Second Setup on your S24 Ultra:
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-slate-300">
+                <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-3">
+                  <div className="text-emerald-400 font-bold mb-1">Step 1</div>
+                  <p className="text-slate-400 text-[11px]">
+                    Open Google Play Store on your S24 Ultra & install the free <b className="text-white">ntfy</b> app.
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-3">
+                  <div className="text-cyan-400 font-bold mb-1">Step 2</div>
+                  <p className="text-slate-400 text-[11px]">
+                    Tap <b className="text-white">+ (Subscribe)</b> and enter topic: <code className="text-cyan-300 font-mono">fno_trades_apurba</code>
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-3">
+                  <div className="text-amber-400 font-bold mb-1">Step 3</div>
+                  <p className="text-slate-400 text-[11px]">
+                    Click the <b className="text-white">Send Test Alert</b> button above to verify phone sound & banner!
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Notification Types Covered */}
+            <div className="mt-5 space-y-2">
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                🔔 Automatic Notifications Delivered to your S24 Ultra:
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-slate-900/60 border border-slate-800/80 p-2.5 flex items-start gap-2.5">
+                  <span className="text-base">🚀</span>
+                  <div>
+                    <div className="font-semibold text-white">Trade Punched (Entry)</div>
+                    <div className="text-[11px] text-slate-400">Pair, BUY/SELL, 3x leverage, Entry Price, TP, SL, Margin & IST Time.</div>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/60 border border-slate-800/80 p-2.5 flex items-start gap-2.5">
+                  <span className="text-base">🎯</span>
+                  <div>
+                    <div className="font-semibold text-white">Trade Exit & Take-Profit</div>
+                    <div className="text-[11px] text-slate-400">Exit Price, Realized P&L ($ USDT & ROE %), Trigger reason & Cash balance.</div>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/60 border border-slate-800/80 p-2.5 flex items-start gap-2.5">
+                  <span className="text-base">⚡</span>
+                  <div>
+                    <div className="font-semibold text-white">Potential Breakout Setups</div>
+                    <div className="text-[11px] text-slate-400">Tier-A setups (Score ≥ 75) with Trigger Price, Target & Invalidation Stop.</div>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/60 border border-slate-800/80 p-2.5 flex items-start gap-2.5">
+                  <span className="text-base">🏆</span>
+                  <div>
+                    <div className="font-semibold text-white">Daily Profit Goal ($10)</div>
+                    <div className="text-[11px] text-slate-400">Instant alert when $10 profit target is locked for the day.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between text-xs">
+              <a
+                href="https://ntfy.sh/fno_trades_apurba"
+                target="_blank"
+                rel="noreferrer"
+                className="text-cyan-400 hover:text-cyan-300 font-semibold underline flex items-center gap-1"
+              >
+                <span>Open Web Feed on Mobile Browser</span>
+                <span>↗</span>
+              </a>
+              <button
+                onClick={() => { setShowAlertModal(false); setAlertStatusMessage(null); }}
+                className="rounded-lg bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     live_confirmation_ttl_seconds: int = Field(default=30, ge=5, le=120)
     live_reconciliation_interval_seconds: int = Field(default=15, ge=5)
     live_max_consecutive_api_failures: int = Field(default=3, ge=1)
+    ntfy_topic: str = "fno_trades_apurba"
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
     scanner: ScannerSettings = ScannerSettings()
     score_weights: ScoreWeights = ScoreWeights()
 

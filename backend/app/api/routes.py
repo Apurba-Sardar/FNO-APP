@@ -1222,6 +1222,23 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
         await runtime.refresh_account()
         # Immediately attach 3x scalp TP (+1.8%) and SL (-1.2%) to protect the new position
         await runtime.monitor_and_auto_close_positions()
+
+        # Push Notification to Samsung Galaxy S24 Ultra
+        from app.services.notifications import notification_service
+        pos = next((p for p in runtime.positions.values() if p.pair == body.symbol and p.status == "open"), None)
+        entry_price = float(pos.average_price) if pos and pos.average_price > 0 else 0.0
+        asyncio.create_task(
+            notification_service.notify_trade_entry(
+                symbol=body.symbol,
+                side=body.side,
+                quantity=float(body.quantity),
+                entry_price=entry_price,
+                leverage=target_leverage,
+                target_price=float(pos.target) if pos and pos.target else None,
+                stop_price=float(pos.stop) if pos and pos.stop else None,
+                margin=float(pos.margin) if pos and pos.margin else None,
+            )
+        )
     except Exception as exc:
         import structlog
         structlog.get_logger().warning("POST_TRADE_RECONCILE_WARNING", error=str(exc))
@@ -1259,12 +1276,36 @@ async def live_exit_position(body: LiveExitPositionRequest, request: Request, se
     runtime = live_runtime_from(request)
     if not runtime.client:
         raise HTTPException(status_code=503, detail="CoinDCX live client unavailable")
+    
+    pos_to_exit = next(
+        (p for p in runtime.positions.values() if str(p.exchange_position_id) == str(body.position_id) or str(p.position_id) == str(body.position_id)),
+        None
+    )
+    symbol_name = pos_to_exit.pair if pos_to_exit else "POSITION"
+    exit_px = float(pos_to_exit.mark_price or pos_to_exit.average_price or 0.0) if pos_to_exit else 0.0
+    pnl_val = float(pos_to_exit.unrealized_pnl or 0.0) if pos_to_exit else 0.0
+
     try:
         from app.services.coindcx.constants import FUTURES_EXIT_POSITION_PATH
         result = await runtime.client._signed_request("POST", FUTURES_EXIT_POSITION_PATH, {"id": body.position_id}, submission=True)
         await asyncio.sleep(1.5)
         await runtime.reconcile(actor="operator-exit-position")
         await runtime.refresh_account()
+
+        try:
+            from app.services.notifications import notification_service
+            asyncio.create_task(
+                notification_service.notify_trade_exit(
+                    symbol=symbol_name,
+                    exit_price=exit_px,
+                    pnl=pnl_val,
+                    reason="MANUAL_CLOSE_DASHBOARD",
+                    available_balance=getattr(runtime.account, "available_balance", None),
+                )
+            )
+        except Exception:
+            pass
+
         return {
             "status": "success",
             "result": result,
@@ -1273,4 +1314,43 @@ async def live_exit_position(body: LiveExitPositionRequest, request: Request, se
         }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"CoinDCX Exit Position Error: {exc}") from exc
+
+
+class NotificationConfigRequest(BaseModel):
+    ntfy_topic: str | None = None
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
+
+@router.post("/notifications/test")
+async def send_notification_test() -> dict:
+    from app.services.notifications import notification_service
+    return await notification_service.send_test_alert()
+
+
+@router.get("/notifications/config")
+async def get_notification_config() -> dict:
+    from app.services.notifications import notification_service
+    return {
+        "ntfy_topic": notification_service.ntfy_topic,
+        "ntfy_web_url": f"https://ntfy.sh/{notification_service.ntfy_topic}",
+        "telegram_configured": bool(notification_service.telegram_bot_token and notification_service.telegram_chat_id),
+        "telegram_chat_id": notification_service.telegram_chat_id if notification_service.telegram_chat_id else None,
+    }
+
+
+@router.post("/notifications/config")
+async def update_notification_config(body: NotificationConfigRequest) -> dict:
+    from app.services.notifications import notification_service
+    notification_service.update_config(
+        ntfy_topic=body.ntfy_topic,
+        telegram_bot_token=body.telegram_bot_token,
+        telegram_chat_id=body.telegram_chat_id,
+    )
+    return {
+        "status": "updated",
+        "ntfy_topic": notification_service.ntfy_topic,
+        "ntfy_web_url": f"https://ntfy.sh/{notification_service.ntfy_topic}",
+        "telegram_configured": bool(notification_service.telegram_bot_token and notification_service.telegram_chat_id),
+    }
 

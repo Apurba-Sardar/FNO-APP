@@ -253,6 +253,22 @@ class LiveExecutionRuntime:
                     ))
                     actions.append({"pair": pos.pair, "reason": auto_close_reason, "result": exit_res})
                     asyncio.create_task(self.reconcile(actor="auto_close_daemon"))
+
+                    try:
+                        from app.services.notifications import notification_service
+                        free_cash = getattr(self.account, "available_balance", None)
+                        asyncio.create_task(
+                            notification_service.notify_trade_exit(
+                                symbol=pos.pair,
+                                exit_price=float(mark),
+                                pnl=float(pos.unrealized_pnl),
+                                roe_pct=float(roe_pct),
+                                reason=auto_close_reason,
+                                available_balance=float(free_cash) if free_cash is not None else None,
+                            )
+                        )
+                    except Exception as notif_err:
+                        structlog.get_logger().warning("AUTO_CLOSE_NOTIFICATION_FAILED", error=str(notif_err))
                 except Exception as exit_err:
                     structlog.get_logger().error(
                         "AUTO_CLOSE_FAILED",
@@ -601,6 +617,28 @@ class LiveExecutionRuntime:
             fees=order.fees, result=final_intent.state.value,
             strategy_version=intent.strategy_version, risk_version=intent.risk_version,
         ))
+
+        try:
+            from app.services.notifications import notification_service
+            entry_px = float(order.average_price or intent.expected_entry or 0.0)
+            margin_used = float(getattr(position, "margin", 0.0) or 0.0)
+            if margin_used <= 0 and entry_px > 0 and order.filled_quantity > 0:
+                margin_used = (order.filled_quantity * entry_px) / float(intent.leverage or 3)
+            asyncio.create_task(
+                notification_service.notify_trade_entry(
+                    symbol=intent.symbol,
+                    side=intent.direction.value,
+                    quantity=float(order.filled_quantity or intent.quantity or 0.0),
+                    entry_price=entry_px,
+                    leverage=intent.leverage or 3,
+                    target_price=float(intent.target) if intent.target else None,
+                    stop_price=float(intent.stop) if intent.stop else None,
+                    margin=margin_used if margin_used > 0 else None,
+                )
+            )
+        except Exception as notif_err:
+            structlog.get_logger().warning("ENTRY_NOTIFICATION_FAILED", error=str(notif_err))
+
         return result
 
     async def process_risk_results(self, _stats=None) -> None:
@@ -616,6 +654,18 @@ class LiveExecutionRuntime:
         today_pnl = getattr(self.account, "daily_pnl", 0.0) or 0.0
         max_target = getattr(self.config, "max_daily_profit_target", 10.0)
         if max_target > 0 and today_pnl >= max_target:
+            if not getattr(self, "_daily_profit_target_notified_today", False):
+                self._daily_profit_target_notified_today = True
+                try:
+                    from app.services.notifications import notification_service
+                    asyncio.create_task(
+                        notification_service.notify_daily_profit_target(
+                            today_pnl=today_pnl,
+                            target_ceiling=max_target,
+                        )
+                    )
+                except Exception:
+                    pass
             structlog.get_logger().info(
                 "DAILY_PROFIT_GOAL_REACHED",
                 today_pnl=today_pnl,
@@ -623,6 +673,8 @@ class LiveExecutionRuntime:
                 action="PAUSING_NEW_ENTRIES_TO_SECURE_DAILY_GAINS",
             )
             return
+        elif max_target > 0 and today_pnl < max_target:
+            self._daily_profit_target_notified_today = False
 
         async with self._automatic_execution_lock:
             open_count = sum(1 for p in self.positions.values() if p.status == "open")
@@ -689,6 +741,21 @@ class LiveExecutionRuntime:
             actor="operator", event_type="EXIT_SUBMITTED", symbol=position.pair,
             position_id=position.exchange_position_id, quantity=position.quantity, result="submitted",
         ))
+        try:
+            from app.services.notifications import notification_service
+            exit_px = float(position.mark_price or position.average_price or 0.0)
+            free_cash = getattr(self.account, "available_balance", None)
+            asyncio.create_task(
+                notification_service.notify_trade_exit(
+                    symbol=position.pair,
+                    exit_price=exit_px,
+                    pnl=float(position.unrealized_pnl or 0.0),
+                    reason="MANUAL_CLOSE_BY_OPERATOR",
+                    available_balance=float(free_cash) if free_cash is not None else None,
+                )
+            )
+        except Exception as notif_err:
+            structlog.get_logger().warning("MANUAL_EXIT_NOTIFICATION_FAILED", error=str(notif_err))
         return response
 
     def _risk_account(self, now):

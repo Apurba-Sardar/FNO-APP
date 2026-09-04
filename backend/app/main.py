@@ -150,6 +150,29 @@ async def lifespan(application: FastAPI):
             await live_runtime.process_risk_results(risk_stats)
         else:
             await paper_runtime.process_risk_results(risk_stats)
+
+        # Broadcast high-probability Tier-A breakout setups to mobile (S24 Ultra)
+        try:
+            import asyncio
+            from app.services.notifications import notification_service
+            for analysis in strategy_runtime.state.analyses.values():
+                for res in analysis.results.values():
+                    if res.status.value in {"armed", "triggered"} and res.opportunity_score >= 75:
+                        asyncio.create_task(
+                            notification_service.notify_potential_setup(
+                                symbol=res.symbol,
+                                strategy=res.strategy.value,
+                                direction=res.direction.value,
+                                score=res.opportunity_score,
+                                trigger_price=res.trigger_price or res.hypothetical_entry,
+                                target_price=res.hypothetical_target,
+                                stop_price=res.hypothetical_stop,
+                                risk_reward=res.risk_reward,
+                            )
+                        )
+        except Exception as notify_err:
+            structlog.get_logger().warning("SETUP_NOTIFICATION_FAILED", error=str(notify_err))
+
         return risk_stats
 
     strategy_runtime.on_completed = risk_then_execution
