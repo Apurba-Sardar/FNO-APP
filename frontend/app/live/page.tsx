@@ -227,12 +227,24 @@ export default function LivePage() {
     }
   };
 
+  const [showClosedPositions, setShowClosedPositions] = useState(false);
+
+  // Filter only real active open positions (status == 'open' and quantity > 0)
+  const openPositions = useMemo(
+    () => positions.filter(p => (p.status ?? "open") === "open" && Number(p.quantity ?? 0) > 0),
+    [positions]
+  );
+  const closedPositions = useMemo(
+    () => positions.filter(p => p.status === "closed" || Number(p.quantity ?? 0) === 0),
+    [positions]
+  );
+
   const isArmed = status.runtime_state === "armed";
 
   // Build tradeInfo for currently selected symbol
   const currentTradeInfo: TradeDetailInfo | null = useMemo(() => {
     // 1. Check open positions
-    const pos = positions.find(p => p.pair === selectedSymbol);
+    const pos = openPositions.find(p => p.pair === selectedSymbol);
     if (pos) {
       return {
         pair: pos.pair,
@@ -271,14 +283,14 @@ export default function LivePage() {
       direction: "long",
       status: "unselected",
     };
-  }, [selectedSymbol, positions, orders]);
+  }, [selectedSymbol, openPositions, orders]);
 
   // Construct available symbols list for quick switching
   const availableSymbols = useMemo(() => {
     const list: { symbol: string; label: string; pnl?: number; isRecent?: boolean }[] = [];
     const seen = new Set<string>();
 
-    positions.forEach(p => {
+    openPositions.forEach(p => {
       seen.add(p.pair);
       list.push({
         symbol: p.pair,
@@ -299,8 +311,20 @@ export default function LivePage() {
       }
     });
 
+    // Default scalp pairs always accessible
+    ["B-XRP_USDT", "B-DOGE_USDT", "B-BTC_USDT", "B-SOL_USDT"].forEach(pair => {
+      if (!seen.has(pair)) {
+        seen.add(pair);
+        list.push({
+          symbol: pair,
+          label: pair.replace("B-", "").replace("_USDT", ""),
+          isRecent: false,
+        });
+      }
+    });
+
     return list;
-  }, [positions, orders]);
+  }, [openPositions, orders]);
 
   const selectAndScroll = (symbol: string) => {
     setSelectedSymbol(symbol);
@@ -428,7 +452,7 @@ export default function LivePage() {
       )}
 
       {/* Margin Notice Banner if cash < $5 */}
-      {Number(account.available_balance ?? 100) < 5.0 && positions.length > 0 && (
+      {Number(account.available_balance ?? 100) < 5.0 && openPositions.length > 0 && (
         <section className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 shadow-lg flex items-center gap-3">
           <span className="text-xl">ℹ️</span>
           <div>
@@ -436,7 +460,7 @@ export default function LivePage() {
               Margin Locked (${balance(account.locked_margin ?? 1021.60)} USDT)
             </h4>
             <p className="text-xs text-slate-300 mt-0.5">
-              Available cash is <b>${balance(account.available_balance ?? 0.11)} USDT</b> across {positions.length} active positions. To open new 3x scalps, close any open position below to release margin immediately.
+              Available cash is <b>${balance(account.available_balance ?? 0.11)} USDT</b> across {openPositions.length} active positions. To open new 3x scalps, close any open position below to release margin immediately.
             </p>
           </div>
         </section>
@@ -562,7 +586,7 @@ export default function LivePage() {
         <Card className="p-4 bg-slate-900/60 border-slate-800">
           <span className="text-xs font-semibold text-slate-400">Active Positions</span>
           <div className="mt-1.5 flex items-baseline gap-2">
-            <b className="text-xl font-bold text-white">{positions.length}</b>
+            <b className="text-xl font-bold text-white">{openPositions.length}</b>
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
               {isArmed ? "Engine Ready" : "Reconciled"}
             </span>
@@ -671,16 +695,16 @@ export default function LivePage() {
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div>
               <h2 className="text-lg font-bold text-white">Active Trades & Open Positions</h2>
-              <p className="text-xs text-slate-400">Click any trade to view its entry, target, and chart</p>
+              <p className="text-xs text-slate-400">Real-time live positions open on CoinDCX Futures</p>
             </div>
-            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-300">
-              {positions.length} Open
+            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-emerald-400 border border-slate-700">
+              {openPositions.length} Open
             </span>
           </div>
 
-          {positions.length ? (
+          {openPositions.length > 0 ? (
             <div className="mt-4 space-y-3 max-h-[620px] overflow-y-auto pr-1">
-              {positions.map(p => {
+              {openPositions.map(p => {
                 const isLong = p.direction === "long";
                 const pnl = Number(p.unrealized_pnl ?? 0);
                 const isProfit = pnl >= 0;
@@ -765,9 +789,67 @@ export default function LivePage() {
               })}
             </div>
           ) : (
-            <p className="mt-6 text-center text-sm text-slate-500 py-8">
-              No active live positions right now.
-            </p>
+            <div className="mt-4 flex flex-col items-center justify-center py-8 px-4 text-center rounded-xl border border-dashed border-slate-800 bg-slate-950/40">
+              <div className="h-11 w-11 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 mb-2.5 border border-emerald-500/20">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-bold text-white">0 Active Trades · 100% Free Capital</h3>
+              <p className="mt-1 text-xs text-slate-400 max-w-sm">
+                No trades currently open on CoinDCX. All ${balance(account.available_balance ?? 66.6)} USDT is available cash. Auto-pilot is scanning for 3x micro scalps towards the $6.00 daily goal.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                <button
+                  onClick={() => selectAndScroll("B-XRP_USDT")}
+                  className="rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition"
+                >
+                  ⚡ Inspect XRP Scalp
+                </button>
+                <button
+                  onClick={() => selectAndScroll("B-DOGE_USDT")}
+                  className="rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition"
+                >
+                  ⚡ Inspect DOGE Scalp
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Collapsible Past Closed Holdings History */}
+          {closedPositions.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-slate-800/80">
+              <button
+                onClick={() => setShowClosedPositions(!showClosedPositions)}
+                className="w-full flex items-center justify-between text-xs text-slate-400 hover:text-slate-300 py-1 transition"
+              >
+                <span className="font-semibold flex items-center gap-1.5">
+                  <span className="text-[10px]">{showClosedPositions ? "▼" : "▶"}</span>
+                  Past Closed Holdings History ({closedPositions.length})
+                </span>
+                <span className="text-[11px] text-slate-500">Settled on CoinDCX</span>
+              </button>
+              {showClosedPositions && (
+                <div className="mt-2.5 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {closedPositions.map(p => (
+                    <div
+                      key={p.position_id}
+                      className="rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <b className="text-slate-300 font-semibold">{p.pair}</b>
+                        <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase font-bold text-slate-400 border border-slate-700/60">
+                          CLOSED
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400 text-[11px]">Margin Released: ${balance(p.margin)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </Card>
 

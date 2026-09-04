@@ -1026,7 +1026,7 @@ async def live_account(request: Request, settings: SettingsDependency) -> dict:
 
 
 @router.get("/live/positions")
-async def live_positions(request: Request, settings: SettingsDependency) -> dict:
+async def live_positions(request: Request, settings: SettingsDependency, status: str = "open") -> dict:
     authorize_live(request, settings)
     runtime = live_runtime_from(request)
     last_err = None
@@ -1035,7 +1035,12 @@ async def live_positions(request: Request, settings: SettingsDependency) -> dict
             await runtime.reconcile(actor="api")
         except Exception as exc:
             last_err = f"{type(exc).__name__}: {exc}"
-    rows = list(runtime.positions.values())
+    if status == "all":
+        rows = list(runtime.positions.values())
+    elif status == "closed":
+        rows = [item for item in runtime.positions.values() if item.status == "closed" or float(item.quantity or 0) == 0]
+    else:
+        rows = [item for item in runtime.positions.values() if item.status == "open" and float(item.quantity or 0) > 0]
     res = {"count": len(rows), "items": [item.model_dump(mode="json") for item in rows]}
     if last_err:
         res["api_error"] = last_err
