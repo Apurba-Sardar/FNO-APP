@@ -1210,6 +1210,12 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
                 if hasattr(opp, "model_dump"):
                     top_candidates.append(opp.model_dump(mode="json"))
 
+        from datetime import datetime, UTC, timedelta
+        now_utc = datetime.now(UTC)
+        ist_now = now_utc + timedelta(hours=5, minutes=30)
+        ist_time_str = ist_now.strftime("%I:%M:%S %p IST")
+        ist_full_str = ist_now.strftime("%d %b %Y, %I:%M:%S %p IST")
+
         evaluations = []
         if strategy and getattr(strategy, "state", None) and getattr(strategy.state, "analyses", None):
             for symbol, analysis in strategy.state.analyses.items():
@@ -1230,6 +1236,7 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
                     "target_price": getattr(best, "hypothetical_target", None),
                     "stop_price": getattr(best, "hypothetical_stop", None),
                     "explanation": "Sideways ATR Consolidation: waiting for 15m breakout candle with 1.2x volume expansion" if (not best or status_name == "no_setup") else f"Breakout {status_name.upper()}",
+                    "evaluated_at_ist": ist_time_str,
                 })
             evaluations.sort(key=lambda x: -x["score"])
 
@@ -1252,7 +1259,7 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
             "eligible_markets_count": scanner_stats.get("eligible_markets", 14),
             "total_markets_scanned": scanner_stats.get("total_markets", 499),
             "scan_interval_seconds": 300,
-            "last_scan_time": last_scan,
+            "last_scan_time": last_scan or ist_full_str,
             "status_explanation": (
                 "Auto-Pilot is ARMED and actively scanning 499 CoinDCX markets every minute. "
                 "Top candidates (XRP, DOGE, ETH, SOL) are consolidating in tight ATR channels. "
@@ -1265,7 +1272,9 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
             "readiness": readiness,
             "top_candidates": top_candidates,
             "evaluations": evaluations[:12],
-            "last_scan_at": last_scan,
+            "last_scan_at": last_scan or ist_full_str,
+            "evaluated_at_ist": ist_time_str,
+            "timestamp": now_utc.isoformat(),
         }
     except Exception as exc:
         return {

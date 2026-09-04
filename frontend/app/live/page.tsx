@@ -1,6 +1,6 @@
 "use client";
 
-import { balance, formatIST, timeAgo } from "@/lib/format";
+import { balance, formatIST, formatISTTime, timeAgo } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { TradingViewChart, TradeDetailInfo } from "@/components/tradingview-chart";
 import { getApiUrl } from "@/lib/api";
@@ -994,8 +994,20 @@ export default function LivePage() {
               {/* Research Candidate Stream */}
               <div>
                 <div className="flex items-center justify-between pb-1.5 text-xs text-slate-400">
-                  <span className="font-semibold text-slate-300">Top Market Candidates & Setup Diagnostic:</span>
-                  <span className="text-[11px]">Real-time evaluation</span>
+                  <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Top Market Candidates & Setup Diagnostic:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-slate-900 border border-slate-800 px-2 py-0.5 text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                      {researchFeed?.evaluated_at_ist ?? (lastRefreshedAt ? formatISTTime(lastRefreshedAt) : "Live Stream")}
+                    </span>
+                    <span className="text-[10px] text-slate-500">Every 10s</span>
+                  </div>
                 </div>
                 <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
                   {(researchFeed?.evaluations?.length ? researchFeed.evaluations : [
@@ -1042,7 +1054,13 @@ export default function LivePage() {
                         </p>
 
                         <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500">
-                          <span>Strategy: <b className="text-slate-400">{item.strategy ?? "breakout"}</b></span>
+                          <div className="flex items-center gap-2">
+                            <span>Strategy: <b className="text-slate-400">{item.strategy ?? "breakout"}</b></span>
+                            <span>•</span>
+                            <span className="text-slate-400 font-mono">
+                              ⏱️ Checked: <b className="text-emerald-400/90">{item.evaluated_at_ist ?? (lastRefreshedAt ? formatISTTime(lastRefreshedAt) : "Live")}</b>
+                            </span>
+                          </div>
                           <span className="text-cyan-400 font-semibold hover:underline">Inspect Chart →</span>
                         </div>
                       </div>
