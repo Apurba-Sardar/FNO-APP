@@ -56,6 +56,26 @@ class NotificationDispatcher:
         if telegram_chat_id is not None:
             self.telegram_chat_id = telegram_chat_id.strip()
 
+    def _send_ntfy_sync(
+        self,
+        url: str,
+        message: str,
+        headers: dict[str, str],
+    ) -> dict[str, Any]:
+        import urllib.request
+        try:
+            req = urllib.request.Request(
+                url,
+                data=message.encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = resp.read().decode("utf-8")
+                return {"success": 200 <= resp.status < 300, "status_code": resp.status, "body": body}
+        except Exception as exc:
+            return {"success": False, "error": str(exc), "error_type": type(exc).__name__}
+
     async def _send_ntfy(
         self,
         title: str,
@@ -64,12 +84,16 @@ class NotificationDispatcher:
         priority: str = "high",
         tags: list[str] | None = None,
         click_url: str | None = None,
-    ) -> bool:
+    ) -> dict[str, Any]:
         if not self.ntfy_topic:
-            return False
+            return {"success": False, "error": "ntfy_topic_empty"}
         url = f"https://ntfy.sh/{self.ntfy_topic}"
+        import base64
+        has_non_ascii = any(ord(c) >= 128 for c in title)
+        header_title = f"=?utf-8?B?{base64.b64encode(title.encode('utf-8')).decode('ascii')}?=" if has_non_ascii else title
+
         headers = {
-            "Title": title,
+            "Title": header_title,
             "Priority": priority,
         }
         if tags:
@@ -77,13 +101,19 @@ class NotificationDispatcher:
         if click_url:
             headers["Click"] = click_url
 
+        # Attempt 1: Async httpx with 10s timeout
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 res = await client.post(url, content=message.encode("utf-8"), headers=headers)
-                return res.is_success
+                if res.is_success:
+                    return {"success": True, "status_code": res.status_code, "body": res.text}
+                structlog.get_logger().warning("NTFY_HTTPX_UNSUCCESSFUL", status=res.status_code, text=res.text)
         except Exception as exc:
-            structlog.get_logger().warning("NTFY_PUSH_FAILED", error=str(exc))
-            return False
+            structlog.get_logger().warning("NTFY_HTTPX_FAILED_FALLBACK_TO_URLLIB", error=str(exc))
+
+        # Attempt 2: Standard library urllib via thread pool
+        fallback_res = await asyncio.to_thread(self._send_ntfy_sync, url, message, headers)
+        return fallback_res
 
     async def _send_telegram(self, message: str) -> bool:
         if not self.telegram_bot_token or not self.telegram_chat_id:
@@ -262,15 +292,21 @@ class NotificationDispatcher:
             f"• Test Sent: {format_ist()}",
         ]
         message = "\n".join(lines)
-        await self.broadcast(
+        
+        # Await delivery to verify immediate reachability
+        ntfy_res = await self._send_ntfy(
             title,
             message,
             priority="high",
             tags=["bell", "white_check_mark", "iphone"],
         )
+        tg_text = f"<b>{title}</b>\n\n{message}"
+        asyncio.create_task(self._send_telegram(tg_text))
+
         return {
-            "status": "dispatched",
+            "status": "success" if ntfy_res.get("success") else "failed",
             "ntfy_topic": self.ntfy_topic,
+            "ntfy_delivery": ntfy_res,
             "telegram_configured": bool(self.telegram_bot_token and self.telegram_chat_id),
             "timestamp": format_ist(),
         }

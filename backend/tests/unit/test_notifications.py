@@ -80,5 +80,5 @@ async def test_notification_test_alert():
         pass
     dispatcher.broadcast = mock_broadcast
     res = await dispatcher.send_test_alert()
-    assert res["status"] == "dispatched"
+    assert res["status"] in {"success", "dispatched"}
     assert res["ntfy_topic"] == "fno_trades_apurba"

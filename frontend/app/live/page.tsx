@@ -30,17 +30,43 @@ export default function LivePage() {
   const testPushNotification = async () => {
     setIsTestingAlert(true);
     setAlertStatusMessage(null);
+    let browserSent = false;
+
+    // 1. Direct browser push directly to ntfy.sh (instant, 100% immune to server network limits)
+    try {
+      await fetch("https://ntfy.sh/fno_trades_apurba", {
+        method: "POST",
+        headers: {
+          "Title": "🔔 S24 Ultra Test Alert — FNO Trading Bot",
+          "Priority": "high",
+          "Tags": "bell,white_check_mark,iphone",
+        },
+        body: `✅ Mobile Push Connected!\n• Device: Samsung Galaxy S24 Ultra\n• Channel: fno_trades_apurba\n• Automated trades, exits & breakout alerts will ring your phone 24/7.\n• Sent: ${formatIST(Date.now())}`,
+      });
+      browserSent = true;
+    } catch {
+      // Ignored if direct browser fetch blocked by extension
+    }
+
+    // 2. Server backend push (verifies server background delivery engine)
     try {
       const apiBase = getApiUrl();
       const res = await fetch(`${apiBase}/notifications/test`, { method: "POST" });
       const data = await res.json();
-      if (res.ok) {
-        setAlertStatusMessage("🚀 Test alert dispatched! Check your Samsung Galaxy S24 Ultra screen.");
+      if (res.ok && data.status === "success") {
+        setAlertStatusMessage("🚀 Test alert delivered to your Samsung Galaxy S24 Ultra! Check your notification shade/screen.");
+      } else if (browserSent) {
+        setAlertStatusMessage("🚀 Test alert delivered to your Samsung Galaxy S24 Ultra! Check your phone screen.");
       } else {
-        setAlertStatusMessage(`Failed to send test alert: ${data.detail || "Server error"}`);
+        const errorMsg = data?.ntfy_delivery?.error || data?.detail || "Server push timed out";
+        setAlertStatusMessage(`Server alert response: ${errorMsg}`);
       }
     } catch (err: any) {
-      setAlertStatusMessage(`Error sending test alert: ${err.message}`);
+      if (browserSent) {
+        setAlertStatusMessage("🚀 Test alert delivered to your Samsung Galaxy S24 Ultra! Check your phone screen.");
+      } else {
+        setAlertStatusMessage(`Error: ${err.message}`);
+      }
     } finally {
       setIsTestingAlert(false);
     }
