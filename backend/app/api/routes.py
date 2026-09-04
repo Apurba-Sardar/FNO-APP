@@ -1272,18 +1272,23 @@ async def reset_circuit(request: Request, settings: SettingsDependency) -> dict:
     runtime.last_api_error = None
     if hasattr(runtime, "circuit_breaker"):
         runtime.circuit_breaker.success()
+    if hasattr(runtime, "emergency_stop"):
+        runtime.emergency_stop.resume()
+    from app.execution.models import LiveRuntimeState
     runtime.state = LiveRuntimeState.ARMED
     try:
         await runtime.refresh_account()
         await runtime.reconcile(actor="operator-manual-reset")
         await runtime.monitor_and_auto_close_positions()
-    except Exception as exc:
+    except Exception:
         pass
     await runtime._persist_runtime()
+    state_str = runtime.state.value if hasattr(runtime.state, "value") else str(runtime.state)
+    cb_str = runtime.circuit_breaker.state.value if hasattr(runtime, "circuit_breaker") and hasattr(runtime.circuit_breaker.state, "value") else "closed"
     return {
         "status": "success",
-        "runtime_state": runtime.state.value,
-        "circuit_breaker": runtime.circuit_breaker.state.value if hasattr(runtime, "circuit_breaker") else "unknown",
+        "runtime_state": state_str,
+        "circuit_breaker": cb_str,
         "account": getattr(runtime, "account", None),
     }
 

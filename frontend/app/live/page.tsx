@@ -82,8 +82,17 @@ export default function LivePage() {
       const apiBase = getApiUrl();
       const results = await Promise.all(["status", "account", "positions", "orders"].map(async path => {
         const response = await fetch(`${apiBase}/live/${path}`, { headers: headers(), cache: "no-store" });
-        if (!response.ok) throw new Error((await response.json()).detail ?? "Live API unavailable");
-        return response.json();
+        const rawText = await response.text();
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(rawText);
+        } catch {
+          parsed = { detail: rawText };
+        }
+        if (!response.ok) {
+          throw new Error(parsed?.detail ?? parsed?.error ?? rawText ?? "Live API unavailable");
+        }
+        return parsed;
       }));
       setStatus(results[0]);
       setAccount(results[1]);
@@ -203,8 +212,14 @@ export default function LivePage() {
         method: "POST",
         headers: headers(),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail ?? "Reset rejected");
+      const rawText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { detail: rawText };
+      }
+      if (!response.ok) throw new Error(data.detail ?? data.error ?? rawText ?? "Reset rejected");
       setMessage("Engine unblocked and reconciled successfully!");
       await load();
     } catch (err: any) {
