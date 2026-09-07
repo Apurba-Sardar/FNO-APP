@@ -31,7 +31,7 @@ class ClaudeScalpAdvisor:
         api_key: str = "",
         model: str = "claude-sonnet-4-5-20250929",
         min_conviction: int = 75,
-        timeout_seconds: float = 6.0,
+        timeout_seconds: float = 12.0,
     ) -> None:
         self.api_key = api_key.strip()
         self.model = model
