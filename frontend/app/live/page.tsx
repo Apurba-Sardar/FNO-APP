@@ -550,7 +550,7 @@ export default function LivePage() {
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
-                Autonomous capital compounding plan for your $66.69 balance. Position entries automatically pause once today&apos;s net earnings reach $6.00 USDT.
+                Autonomous capital compounding plan. Position entries automatically pause once today&apos;s net earnings reach ${balance(status.daily_profit_target ?? 10.0)} USDT.
               </p>
             </div>
           </div>
@@ -579,7 +579,7 @@ export default function LivePage() {
             <span className="font-semibold flex items-center gap-2">
               <span>Goal Progress:</span>
               <b className="text-amber-300 font-mono">
-                {Math.min(Math.round(((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 6.0)) * 100), 100)}%
+                {Math.min(Math.round(((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 10.0)) * 100), 100)}%
               </b>
             </span>
             <span className="text-slate-400 text-[11px]">
@@ -591,7 +591,7 @@ export default function LivePage() {
             <div
               className="h-full rounded-full bg-gradient-to-r from-amber-400 via-[#00F5A0] to-[#00D9F5] relative transition-all duration-500 shadow-[0_0_15px_rgba(0,245,160,0.5)]"
               style={{
-                width: `${Math.min(Math.max((((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 6.0)) * 100), 4), 100)}%`
+                width: `${Math.min(Math.max((((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 10.0)) * 100), 4), 100)}%`
               }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
