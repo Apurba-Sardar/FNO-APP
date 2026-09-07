@@ -90,8 +90,8 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
     anthropic_api_key: str = ""
     claude_model: str = "claude-sonnet-4-5-20250929"
-    claude_scalp_enabled: bool = True
-    claude_min_conviction: int = 75
+    claude_scalp_enabled: bool = False
+    claude_min_conviction: int = 70
     scanner: ScannerSettings = ScannerSettings()
     score_weights: ScoreWeights = ScoreWeights()
 
