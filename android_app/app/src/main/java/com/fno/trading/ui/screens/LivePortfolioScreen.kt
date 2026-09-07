@@ -450,20 +450,20 @@ fun EngineStatusStrip(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             BadgeChip(
-                label = "Auto-Close",
-                subLabel = "+1.8% / -1.2%",
+                label = "Target Profit",
+                subLabel = "+$1.00+ USDT",
                 color = ProfitGreen,
                 modifier = Modifier.weight(1f)
             )
             BadgeChip(
-                label = "3x Leverage",
-                subLabel = "Isolated",
+                label = "4x Leverage",
+                subLabel = "$25 Margin",
                 color = CyanAccent,
                 modifier = Modifier.weight(1f)
             )
             BadgeChip(
-                label = "Daily Target",
-                subLabel = "$6.00 Cap",
+                label = "Breakeven Lock",
+                subLabel = "$0 Risk @ +$0.50",
                 color = AmberWarning,
                 modifier = Modifier.weight(1f)
             )
@@ -541,7 +541,7 @@ fun EngineStatusStrip(
                     .border(1.dp, if (isBuy) EmeraldPrimary else LossRed, RoundedCornerShape(12.dp))
             ) {
                 Text(
-                    text = if (isBuy) "⚡ XRP BUY 3x" else "⚡ XRP SELL 3x",
+                    text = if (isBuy) "⚡ XRP BUY 4x" else "⚡ XRP SELL 4x",
                     color = if (isBuy) EmeraldPrimary else LossRed,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Black
@@ -559,7 +559,7 @@ fun EngineStatusStrip(
                     .border(1.dp, if (isBuy) CyanAccent else AmberWarning, RoundedCornerShape(12.dp))
             ) {
                 Text(
-                    text = if (isBuy) "⚡ DOGE BUY 3x" else "⚡ DOGE SELL 3x",
+                    text = if (isBuy) "⚡ DOGE BUY 4x" else "⚡ DOGE SELL 4x",
                     color = if (isBuy) CyanAccent else AmberWarning,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Black

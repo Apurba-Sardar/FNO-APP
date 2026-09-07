@@ -79,12 +79,15 @@ class PositionReconciliationService:
                 origin = getattr(local, "origin", "manual")
                 t_px = local.target
                 s_px = local.stop
-                if bot_mgr and (not t_px or not s_px):
-                    t_px = t_px or (round(normalized.average_price * 1.012, 6) if is_long else round(normalized.average_price * 0.988, 6))
-                    s_px = s_px or (round(normalized.average_price * 0.990, 6) if is_long else round(normalized.average_price * 1.010, 6))
+                is_stop_sane = (s_px is not None) and ((s_px < normalized.average_price * 1.005) if is_long else (s_px > normalized.average_price * 0.995))
+                is_target_sane = (t_px is not None) and ((t_px > normalized.average_price * 1.005) if is_long else (t_px < normalized.average_price * 0.995))
+                if bot_mgr and (not t_px or not s_px or not is_stop_sane or not is_target_sane):
+                    t_px = round(normalized.average_price * 1.014, 6) if is_long else round(normalized.average_price * 0.986, 6)
+                    s_px = round(normalized.average_price * 0.990, 6) if is_long else round(normalized.average_price * 1.010, 6)
                 
                 normalized = normalized.model_copy(update={
                     "position_id": local.position_id,
+                    "created_at": getattr(local, "created_at", None) or normalized.created_at,
                     "target": t_px,
                     "stop": s_px,
                     "bot_managed": bot_mgr,

@@ -189,14 +189,17 @@ class LiveExecutionRuntime:
             stop = pos.stop
             is_long = str(pos.direction).lower() in {"long", "buy", "strategydirection.long"} or pos.direction == StrategyDirection.LONG
 
-            # Pro-trader tight micro-scalp targets: +1.1% profit, -0.9% stop (approx +3.3% / -2.7% ROE at 3x)
-            if not target or not stop:
+            # Pro-trader scalp targets: Target at least +$1.00 USDT profit (+1.3% to +1.5%), tight stop (-0.9% to -1.0%)
+            is_stop_sane = (stop is not None) and ((stop < entry * 1.005) if is_long else (stop > entry * 0.995))
+            is_target_sane = (target is not None) and ((target > entry * 1.005) if is_long else (target < entry * 0.995))
+
+            if not target or not stop or not is_stop_sane or not is_target_sane:
                 if is_long:
-                    target = round(entry * 1.011, 6)
-                    stop = round(entry * 0.991, 6)
+                    target = round(entry * 1.014, 6)
+                    stop = round(entry * 0.990, 6)
                 else:
-                    target = round(entry * 0.989, 6)
-                    stop = round(entry * 1.009, 6)
+                    target = round(entry * 0.986, 6)
+                    stop = round(entry * 1.010, 6)
 
                 updated = pos.model_copy(update={
                     "target": target,
@@ -227,11 +230,11 @@ class LiveExecutionRuntime:
                 continue
 
             price_diff_pct = ((mark - entry) / entry) * 100 if is_long else ((entry - mark) / entry) * 100
-            roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 3.0))
+            roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 4.0))
 
             # Dynamic Pro-Trader Breakeven Lock:
-            # Once in profit by >= +0.6% (+1.8% ROE), shift stop to entry to guarantee a zero-loss trade!
-            if price_diff_pct >= 0.6 and not getattr(pos, "breakeven_activated", False):
+            # Once in profit by >= +0.50 USDT (or +0.5% move), shift stop to entry + 0.05% to lock in zero loss!
+            if (pos.unrealized_pnl >= 0.50 or price_diff_pct >= 0.50) and not getattr(pos, "breakeven_activated", False):
                 be_stop = round(entry * 1.0005, 6) if is_long else round(entry * 0.9995, 6)
                 pos = pos.model_copy(update={"stop": be_stop, "breakeven_activated": True})
                 self.positions[pos.position_id] = pos
@@ -242,25 +245,41 @@ class LiveExecutionRuntime:
                     entry=entry,
                     mark=mark,
                     new_stop=be_stop,
+                    pnl=pos.unrealized_pnl,
                     price_diff_pct=round(price_diff_pct, 2),
                 )
                 stop = be_stop
 
             auto_close_reason = None
-            if is_long and mark >= target:
+            # Condition 1: Primary Target Profit Reached (PnL >= +$1.00 USDT or price reaches target)
+            if pos.unrealized_pnl >= 1.00:
+                auto_close_reason = f"PROFIT_TARGET_REACHED (PnL +${pos.unrealized_pnl:.2f} USDT >= +$1.00 USDT | +{price_diff_pct:.2f}%)"
+            elif is_long and mark >= target:
                 auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
             elif not is_long and mark <= target:
                 auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
-            elif is_long and mark <= stop:
-                trigger_name = "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
-                auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
-            elif not is_long and mark >= stop:
-                trigger_name = "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
-                auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
-            elif roe_pct >= 3.6:  # Pro-trader +3.6% ROE profit ceiling
-                auto_close_reason = f"TAKE_PROFIT_ROE (ROE +{roe_pct:.2f}% >= +3.6%)"
-            elif roe_pct <= -2.7 and not getattr(pos, "breakeven_activated", False):  # Strict -2.7% ROE stop ceiling
-                auto_close_reason = f"STOP_LOSS_ROE (ROE {roe_pct:.2f}% <= -2.7%)"
+            else:
+                # Stop Loss Evaluation: Apply 20s grace period to allow order to fill and breathe
+                pos_created = getattr(pos, "created_at", None)
+                if pos_created:
+                    if getattr(pos_created, "tzinfo", None) is None:
+                        pos_created = pos_created.replace(tzinfo=UTC)
+                    age_seconds = (datetime.now(UTC) - pos_created).total_seconds()
+                else:
+                    age_seconds = 0.0  # Brand new, give full grace period
+                
+                # Grace period: first 20s allows momentum to build; only emergency deep loss triggers
+                can_trigger_stop = age_seconds >= 20.0 or price_diff_pct <= -2.5 or pos.unrealized_pnl <= -1.50
+
+                if can_trigger_stop:
+                    if is_long and mark <= stop:
+                        trigger_name = "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                        auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
+                    elif not is_long and mark >= stop:
+                        trigger_name = "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                        auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
+                    elif pos.unrealized_pnl <= -1.00 and not getattr(pos, "breakeven_activated", False):
+                        auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.00 USDT)"
 
             if auto_close_reason:
                 structlog.get_logger().info(

@@ -128,7 +128,9 @@ data class EvaluationItem(
 data class InstantScalpRequest(
     @SerializedName("symbol") val symbol: String,
     @SerializedName("side") val side: String = "buy",
-    @SerializedName("target_margin") val targetMargin: Double = 20.0
+    @SerializedName("target_margin") val targetMargin: Double = 25.0,
+    @SerializedName("leverage") val leverage: Int = 4,
+    @SerializedName("confirmation_phrase") val confirmationPhrase: String = "PUNCH INSTANT SCALP"
 )
 
 data class TestTradeRequest(

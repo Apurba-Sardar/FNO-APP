@@ -206,27 +206,27 @@ class TradingViewModel(application: Application) : AndroidViewModel(application)
 
     fun punch3xScalp(symbol: String = "B-XRP_USDT", side: String = "buy", qty: Double = 15.0) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, statusMessage = "Punching 3x ${side.uppercase()} Scalp on $symbol...")
+            _uiState.value = _uiState.value.copy(isLoading = true, statusMessage = "Punching 4x ${side.uppercase()} Scalp on $symbol...")
             try {
                 try {
-                    api.punchInstantScalp(InstantScalpRequest(symbol = symbol, side = side, targetMargin = 20.0))
+                    api.punchInstantScalp(InstantScalpRequest(symbol = symbol, side = side, targetMargin = 25.0, leverage = 4))
                 } catch (_: Exception) {
                     api.punchTestTrade(
                         TestTradeRequest(
                             symbol = symbol,
                             side = side,
                             quantity = qty,
-                            leverage = 3
+                            leverage = 4
                         )
                     )
                 }
                 _uiState.value = _uiState.value.copy(
-                    statusMessage = "Order Punched! 3x ${side.uppercase()} scalp active with auto TP/SL."
+                    statusMessage = "Order Punched! 4x ${side.uppercase()} scalp active (Target: +$1.00+ USDT)."
                 )
                 FnoNotificationHelper.showTradeNotification(
                     getApplication(),
                     "⚡ Scalp Punched: $symbol",
-                    "${side.uppercase()} @ 3x leverage (Margin ~$20) • Auto-Protected"
+                    "${side.uppercase()} @ 4x leverage (Margin $25) • Target +$1.00+ USDT"
                 )
                 delay(1500)
                 loadData()

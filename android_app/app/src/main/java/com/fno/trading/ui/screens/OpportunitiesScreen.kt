@@ -394,7 +394,7 @@ fun SignalEvaluationCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isBuySignal) "PUNCH BUY 3x" else "PUNCH SELL 3x",
+                        text = if (isBuySignal) "PUNCH BUY 4x" else "PUNCH SELL 4x",
                         color = Color.Black,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black

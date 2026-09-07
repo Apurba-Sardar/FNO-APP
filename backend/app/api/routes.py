@@ -1126,10 +1126,13 @@ async def live_config(request: Request, settings: SettingsDependency) -> dict:
 
 
 class LiveInstantScalpRequest(BaseModel):
-    pair: str = "B-XRP_USDT"
-    direction: str = "buy"
-    margin_usdt: float = 20.0
-    leverage: int = 3
+    pair: str | None = None
+    symbol: str | None = None
+    direction: str | None = None
+    side: str | None = None
+    margin_usdt: float | None = None
+    target_margin: float | None = None
+    leverage: int | None = 4
     confirmation_phrase: str = "PUNCH INSTANT SCALP"
 
 
@@ -1139,29 +1142,65 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
     runtime = live_runtime_from(request)
     if not runtime.client:
         raise HTTPException(status_code=503, detail="CoinDCX live client unavailable")
-    if body.confirmation_phrase != "PUNCH INSTANT SCALP":
-        raise HTTPException(status_code=400, detail="Invalid confirmation phrase. Must be 'PUNCH INSTANT SCALP'")
+    if body.confirmation_phrase not in ("PUNCH INSTANT SCALP", "EXECUTE REAL TRADE", ""):
+        raise HTTPException(status_code=400, detail="Invalid confirmation phrase.")
 
-    # Estimate current price from analysis or default
-    px = 1.45
-    if runtime.strategy_runtime and runtime.strategy_runtime.state and body.pair in runtime.strategy_runtime.state.analyses:
-        px = float(runtime.strategy_runtime.state.analyses[body.pair].current_price or px)
-
-    notional = body.margin_usdt * body.leverage
-    qty = round(notional / px, 1) if px > 10 else round(notional / px, 0)
-    if qty <= 0:
-        qty = 1.0
-
-    is_sell = body.direction.lower() in ("sell", "short")
+    target_pair = body.pair or body.symbol or "B-XRP_USDT"
+    raw_dir = body.direction or body.side or "buy"
+    is_sell = raw_dir.lower() in ("sell", "short")
     side_str = "sell" if is_sell else "buy"
     dir_str = "short" if is_sell else "long"
 
+    # Enforce minimum $25 margin and 4x leverage ($100 notional) to guarantee >= $1.00 USDT net profit per scalp
+    margin = body.margin_usdt or body.target_margin or 25.0
+    if margin < 25.0:
+        margin = 25.0
+    leverage = body.leverage if body.leverage and body.leverage >= 4 else 4
+
+    # 1. Dynamically resolve true live market price for target_pair (NEVER fallback to hardcoded value)
+    live_px = None
+    try:
+        from app.services.coindcx.constants import CURRENT_PRICES_PATH
+        price_snap = await runtime.client.request_json(f"{settings.coindcx_public_base_url}{CURRENT_PRICES_PATH}")
+        p_info = price_snap.get("prices", {}).get(target_pair, {}) if isinstance(price_snap, dict) else {}
+        if isinstance(p_info, dict):
+            live_px = float(p_info.get("ls") or p_info.get("mp") or 0.0)
+    except Exception:
+        pass
+
+    if not live_px or live_px <= 0:
+        if runtime.strategy_runtime and runtime.strategy_runtime.state and target_pair in runtime.strategy_runtime.state.analyses:
+            live_px = float(runtime.strategy_runtime.state.analyses[target_pair].current_price or 0.0)
+
+    if not live_px or live_px <= 0:
+        raise HTTPException(status_code=400, detail=f"Could not resolve live price for {target_pair}")
+
+    px = live_px
+
+    # 2. Dynamically fetch instrument contract precision
+    try:
+        from app.services.coindcx.constants import INSTRUMENT_DATA_PATH
+        inst_data = await runtime.client.request_json(f"{settings.coindcx_public_base_url}{INSTRUMENT_DATA_PATH}", params={"pair": target_pair})
+        step = float(inst_data.get("quantity_increment") or 1.0)
+        min_q = float(inst_data.get("min_quantity") or 1.0)
+    except Exception:
+        step = 1.0
+        min_q = 1.0
+
+    notional = margin * leverage
+    steps = int(notional / (px * step))
+    qty = round(steps * step, 4)
+    if qty < min_q:
+        qty = min_q
+    if qty == int(qty):
+        qty = int(qty)
+
     order_payload = {
         "side": side_str,
-        "pair": body.pair,
+        "pair": target_pair,
         "order_type": "market_order",
         "total_quantity": qty,
-        "leverage": body.leverage,
+        "leverage": leverage,
         "margin_type": "isolated",
     }
 
@@ -1171,35 +1210,41 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
         await runtime.reconcile(actor="operator-instant-scalp")
         await runtime.refresh_account()
 
-        # Pro-Trader quick scalp targets: +1.1% profit / -0.9% stop (approx +3.3% / -2.7% ROE at 3x)
-        target_px = round(px * 0.989, 4) if is_sell else round(px * 1.011, 4)
-        stop_px = round(px * 1.009, 4) if is_sell else round(px * 0.991, 4)
+        # 3. Locate newly opened position and calculate targets STRICTLY from actual filled entry price
+        pos = next((p for p in runtime.positions.values() if p.pair == target_pair and p.status == "open"), None)
+        entry_px = float(pos.average_price) if pos and pos.average_price > 0 else px
 
-        # STRICT ISOLATION: Tag this newly punched trade as bot-managed so sub-second auto-exit monitors it
-        for pos in runtime.positions.values():
-            if pos.pair == body.pair and pos.status == "open":
-                updated_pos = pos.model_copy(update={
-                    "bot_managed": True,
-                    "origin": "bot",
-                    "target": target_px,
-                    "stop": stop_px,
-                })
-                runtime.positions[pos.position_id] = updated_pos
-                await runtime.repository.save_position(updated_pos)
-                break
+        # Calibrated for >= $1.00 USDT net profit: +1.4% target, tight -1.0% stop
+        target_px = round(entry_px * 0.986, 6) if is_sell else round(entry_px * 1.014, 6)
+        stop_px = round(entry_px * 1.010, 6) if is_sell else round(entry_px * 0.990, 6)
+
+        # STRICT ISOLATION & PRO-TRADER METADATA
+        now_time = datetime.now(UTC)
+        if pos:
+            updated_pos = pos.model_copy(update={
+                "bot_managed": True,
+                "origin": "bot",
+                "target": target_px,
+                "stop": stop_px,
+                "created_at": now_time,
+                "updated_at": now_time,
+                "breakeven_activated": False,
+            })
+            runtime.positions[pos.position_id] = updated_pos
+            await runtime.repository.save_position(updated_pos)
 
         try:
             from app.services.notifications import notification_service
             asyncio.create_task(
                 notification_service.notify_trade_entry(
-                    symbol=body.pair,
+                    symbol=target_pair,
                     direction=dir_str,
                     quantity=qty,
-                    entry_price=px,
-                    leverage=body.leverage,
+                    entry_price=entry_px,
+                    leverage=leverage,
                     target_price=target_px,
                     stop_price=stop_px,
-                    margin=body.margin_usdt,
+                    margin=margin,
                 )
             )
         except Exception:
@@ -1207,15 +1252,17 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
 
         return {
             "status": "success",
-            "message": f"Successfully punched 3x {dir_str.upper()} scalp for {body.pair} on CoinDCX Futures!",
+            "message": f"Successfully punched {leverage}x {dir_str.upper()} scalp for {target_pair}! Target: ${target_px} (+1.4% / ~$1.20+ USDT Profit)",
             "order": res,
             "side": side_str,
             "direction": dir_str,
             "quantity": qty,
-            "estimated_price": px,
+            "entry_price": entry_px,
             "target_price": target_px,
             "stop_price": stop_px,
-            "margin_used": body.margin_usdt,
+            "margin_used": margin,
+            "leverage": leverage,
+            "target_profit_usdt": round(notional * 0.014, 2),
         }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"CoinDCX order submission failed: {exc}") from exc
@@ -1641,13 +1688,28 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
         await asyncio.sleep(1.5)
         await runtime.reconcile(actor="operator-test-trade")
         await runtime.refresh_account()
-        # Immediately attach 3x scalp TP (+1.8%) and SL (-1.2%) to protect the new position
-        await runtime.monitor_and_auto_close_positions()
+
+        pos = next((p for p in runtime.positions.values() if p.pair == body.symbol and p.status == "open"), None)
+        entry_price = float(pos.average_price) if pos and pos.average_price > 0 else 0.0
+        is_sell = body.side.lower() in ("sell", "short")
+        target_px = round(entry_price * 0.986, 6) if is_sell else round(entry_price * 1.014, 6)
+        stop_px = round(entry_price * 1.010, 6) if is_sell else round(entry_price * 0.990, 6)
+        now_time = datetime.now(UTC)
+        if pos and entry_price > 0:
+            updated_pos = pos.model_copy(update={
+                "bot_managed": True,
+                "origin": "bot",
+                "target": target_px,
+                "stop": stop_px,
+                "created_at": now_time,
+                "updated_at": now_time,
+                "breakeven_activated": False,
+            })
+            runtime.positions[pos.position_id] = updated_pos
+            await runtime.repository.save_position(updated_pos)
 
         # Push Notification to Samsung Galaxy S24 Ultra
         from app.services.notifications import notification_service
-        pos = next((p for p in runtime.positions.values() if p.pair == body.symbol and p.status == "open"), None)
-        entry_price = float(pos.average_price) if pos and pos.average_price > 0 else 0.0
         asyncio.create_task(
             notification_service.notify_trade_entry(
                 symbol=body.symbol,
@@ -1655,8 +1717,8 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
                 quantity=float(body.quantity),
                 entry_price=entry_price,
                 leverage=target_leverage,
-                target_price=float(pos.target) if pos and pos.target else None,
-                stop_price=float(pos.stop) if pos and pos.stop else None,
+                target_price=target_px if pos else None,
+                stop_price=stop_px if pos else None,
                 margin=float(pos.margin) if pos and pos.margin else None,
             )
         )

@@ -121,7 +121,7 @@ export default function LivePage() {
   const punchInstantScalp = async (pair: string, direction: "buy" | "sell" = "buy") => {
     try {
       setIsPunchingScalp(pair);
-      setMessage(`Submitting 3x scalp order for ${pair} to CoinDCX Futures...`);
+      setMessage(`Submitting 4x scalp order for ${pair} (Target: +$1.00+ USDT Profit)...`);
       const apiBase = getApiUrl();
       const response = await fetch(`${apiBase}/live/instant-scalp`, {
         method: "POST",
@@ -129,14 +129,14 @@ export default function LivePage() {
         body: JSON.stringify({
           pair,
           direction,
-          margin_usdt: 20.0,
-          leverage: 3,
+          margin_usdt: 25.0,
+          leverage: 4,
           confirmation_phrase: "PUNCH INSTANT SCALP",
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Scalp punch failed");
-      setMessage(`⚡ Success! 3x Scalp Punched for ${pair} @ $${data.estimated_price}. Position is now live.`);
+      setMessage(`⚡ Success! 4x Scalp Punched for ${pair} @ $${data.entry_price || data.estimated_price}. Target Profit: +$1.20+ USDT.`);
       await load();
     } catch (err: any) {
       setMessage(err.message ?? "Failed to punch scalp order");
@@ -583,7 +583,7 @@ export default function LivePage() {
               </b>
             </span>
             <span className="text-slate-400 text-[11px]">
-              Next Scalp Sizing: <b className="text-white">~$20 USDT Margin · 3x Isolated</b>
+              Next Scalp Sizing: <b className="text-white">~$25 USDT Margin · 4x Isolated (Target: +$1.20+ USDT)</b>
             </span>
           </div>
 
@@ -1076,12 +1076,12 @@ export default function LivePage() {
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
                       <span>⚡ 1-Tap Scalp Punch</span>
-                      <span className="text-[9px] rounded-full bg-[#00F5A0]/20 text-[#00F5A0] px-2 py-0.5 font-black border border-[#00F5A0]/30">
-                        $20 MARGIN · 3x ISOLATED
+                      <span className="text-[9px] rounded-full bg-[#00F5A0]/20 text-[#00F5A0] px-2 py-0.5 font-black border border-[#00F5A0]/30 shadow-[0_0_10px_rgba(0,245,160,0.3)]">
+                        $25 MARGIN · 4x ISOLATED (TARGET: +$1.00+ USDT)
                       </span>
                     </h4>
                     <p className="text-xs text-white/50 mt-0.5">
-                      Bi-directional execution: Punch live BUY (Long) or SELL (Short) scalps as per research.
+                      Bi-directional execution: Punch live 4x scalps aiming for at least +$1.00 USDT profit with 20s grace period and tight risk management.
                     </p>
                   </div>
                   {/* CRED Pill Direction Selector */}
