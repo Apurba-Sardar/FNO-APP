@@ -161,6 +161,11 @@ class LivePosition(ExecutionModel):
     realized_pnl: float = 0
     fees: float = Field(default=0, ge=0)
     status: str = "open"
+    bot_managed: bool = False
+    origin: str = "manual"  # "bot" or "manual"
+    breakeven_activated: bool = False
+    trailing_stop: float | None = None
+    highest_roe: float = 0.0
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

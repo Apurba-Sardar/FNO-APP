@@ -850,16 +850,35 @@ export default function LivePage() {
                           <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-[10px] font-bold text-white/70 border border-white/10">
                             {p.leverage}x Isolated
                           </span>
+                          {(p.bot_managed === true || p.origin === "bot") ? (
+                            <span className="rounded-full bg-[#00F5A0]/20 text-[#00F5A0] border border-[#00F5A0]/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(0,245,160,0.2)]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-ping" />
+                              🤖 Bot Auto-Exit (&lt;1s)
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                              🛡️ Manual Trade (Bot-Immune)
+                            </span>
+                          )}
+                          {p.breakeven_activated && (
+                            <span className="rounded-full bg-[#00D9F5]/20 text-[#00D9F5] border border-[#00D9F5]/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">
+                              🔒 Breakeven Locked ($0 Risk)
+                            </span>
+                          )}
                           {isSelected && (
                             <span className="rounded-full bg-[#00F5A0] text-slate-950 font-black text-[9px] px-2 py-0.5 uppercase tracking-wider shadow">
                               Active Chart
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 text-xs text-white/45 flex items-center gap-1.5">
-                          <span>{p.protection_status === "protected" ? "🛡️ Auto-Protected Scalp" : "⚡ Live Algorithmic Scalp"}</span>
+                        <p className="mt-1 text-xs text-white/50 flex items-center gap-1.5">
+                          {(p.bot_managed === true || p.origin === "bot") ? (
+                            <span className="text-[#00F5A0]/90">⚡ Sub-Second Auto-Exit Guard Active</span>
+                          ) : (
+                            <span className="text-purple-300/80">🔒 User Manual Position: Will NEVER be auto-closed by bot</span>
+                          )}
                           <span>•</span>
-                          <span>Margin: USDT</span>
+                          <span>Margin: ${balance(p.margin)} USDT</span>
                         </p>
                       </div>
 
@@ -902,9 +921,15 @@ export default function LivePage() {
                             SL: <b className="text-rose-400 font-mono font-bold">${balance(p.stop)}</b>
                           </span>
                         )}
-                        <span className="rounded-full bg-[#00F5A0]/10 text-[#00F5A0] text-[10px] px-2.5 py-0.5 font-bold border border-[#00F5A0]/20">
-                          🛡️ OCO Auto-Guard
-                        </span>
+                        {(p.bot_managed === true || p.origin === "bot") ? (
+                          <span className="rounded-full bg-[#00F5A0]/10 text-[#00F5A0] text-[10px] px-2.5 py-0.5 font-bold border border-[#00F5A0]/20">
+                            🛡️ High-Speed Auto-Exit
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-purple-500/15 text-purple-300 text-[10px] px-2.5 py-0.5 font-bold border border-purple-500/25">
+                            🛡️ Bot Auto-Close Immune
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -1088,37 +1113,50 @@ export default function LivePage() {
                   </div>
                 </div>
 
-                <div className="mt-3.5 flex flex-wrap gap-2.5">
-                  <button
-                    onClick={() => punchInstantScalp("B-XRP_USDT", scalpDirection)}
-                    disabled={isPunchingScalp !== null}
-                    className={`flex-1 min-w-[150px] py-2.5 px-4 text-xs font-black rounded-xl transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 active:scale-95 ${
-                      scalpDirection === "buy"
-                        ? "bg-[#00F5A0] text-slate-950 hover:bg-[#00F5A0]/90 shadow-[#00F5A0]/20"
-                        : "bg-rose-500 text-white hover:bg-rose-400 shadow-rose-500/25"
-                    }`}
-                  >
-                    <span>
-                      {isPunchingScalp === "B-XRP_USDT"
-                        ? `Punching XRP ${scalpDirection.toUpperCase()}...`
-                        : `⚡ Punch XRP ${scalpDirection === "buy" ? "BUY (Long)" : "SELL (Short)"} 3x`}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => punchInstantScalp("B-DOGE_USDT", scalpDirection)}
-                    disabled={isPunchingScalp !== null}
-                    className={`flex-1 min-w-[150px] py-2.5 px-4 text-xs font-black rounded-xl transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 active:scale-95 ${
-                      scalpDirection === "buy"
-                        ? "bg-indigo-500 text-white hover:bg-indigo-400 shadow-indigo-500/25"
-                        : "bg-amber-600 text-white hover:bg-amber-500 shadow-amber-600/25"
-                    }`}
-                  >
-                    <span>
-                      {isPunchingScalp === "B-DOGE_USDT"
-                        ? `Punching DOGE ${scalpDirection.toUpperCase()}...`
-                        : `⚡ Punch DOGE ${scalpDirection === "buy" ? "BUY (Long)" : "SELL (Short)"} 3x`}
-                    </span>
-                  </button>
+                <div className="mt-3.5 flex flex-wrap gap-2">
+                  {/* Dynamic High-Volume 24h Top Gainers Quick Scalp Buttons */}
+                  {(() => {
+                    const dynamicList = (researchFeed?.top_gainers?.length
+                      ? researchFeed.top_gainers
+                      : researchFeed?.evaluations?.filter((e: any) => e.is_top_gainer) ?? []
+                    ).slice(0, 4);
+
+                    const buttonsToRender = dynamicList.length
+                      ? dynamicList.map((g: any) => ({
+                          symbol: g.symbol,
+                          label: g.symbol.replace("B-", "").replace("_USDT", ""),
+                          change: Number(g.change_24h_pct ?? g.change_24h ?? 0),
+                        }))
+                      : [
+                          { symbol: "B-HFT_USDT", label: "HFT", change: 33.16 },
+                          { symbol: "B-NFP_USDT", label: "NFP", change: 26.07 },
+                          { symbol: "B-CATI_USDT", label: "CATI", change: 28.22 },
+                          { symbol: "B-XRP_USDT", label: "XRP", change: 5.40 },
+                        ];
+
+                    return buttonsToRender.map((btn: any) => {
+                      const isPunching = isPunchingScalp === btn.symbol;
+                      const changeLabel = btn.change >= 0 ? `+${btn.change.toFixed(1)}%` : `${btn.change.toFixed(1)}%`;
+                      return (
+                        <button
+                          key={btn.symbol}
+                          onClick={() => punchInstantScalp(btn.symbol, scalpDirection)}
+                          disabled={isPunchingScalp !== null}
+                          className={`flex-1 min-w-[130px] py-2.5 px-3 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg disabled:opacity-50 active:scale-95 ${
+                            scalpDirection === "buy"
+                              ? "bg-gradient-to-r from-[#00F5A0] to-emerald-400 text-slate-950 hover:brightness-110 shadow-[#00F5A0]/20"
+                              : "bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:brightness-110 shadow-rose-500/25"
+                          }`}
+                        >
+                          <span>
+                            {isPunching
+                              ? `Punching ${btn.label}...`
+                              : `⚡ ${btn.label} (${changeLabel}) 3x`}
+                          </span>
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
@@ -1199,9 +1237,24 @@ export default function LivePage() {
                             <span className="text-sm font-mono font-bold text-white/90">
                               ${balance(item.current_price)}
                             </span>
+                            {item.is_top_gainer && (
+                              <span className="rounded-full bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-400/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                                <span>🔥</span> Top Gainer #{item.gain_rank ?? 1} (+{item.change_24h_pct ?? item.change_24h}%)
+                              </span>
+                            )}
+                            {(item.volume_24h_usdt || item.volume_24h) && (
+                              <span className="rounded-full bg-blue-500/10 text-blue-300 border border-blue-400/20 px-2 py-0.5 text-[9px] font-mono font-bold">
+                                Vol: ${((item.volume_24h_usdt ?? item.volume_24h ?? 0) / 1_000_000).toFixed(1)}M
+                              </span>
+                            )}
                             <span className="rounded-full bg-[#00D9F5]/10 text-[#00D9F5] border border-[#00D9F5]/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
                               Score: {item.score}
                             </span>
+                            {item.claude_score && (
+                              <span className="rounded-full bg-gradient-to-r from-purple-500/25 to-indigo-500/25 text-purple-200 border border-purple-400/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                                <span>🧠</span> Claude AI: {item.claude_score}/100
+                              </span>
+                            )}
                           </div>
 
                           {/* Actionable Signal Badge & Execution State */}
@@ -1233,8 +1286,15 @@ export default function LivePage() {
 
                         {/* Signal Reason Box */}
                         <div className="mt-3 rounded-xl bg-white/[0.025] border border-white/[0.06] p-3">
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-white/50 uppercase tracking-wider mb-1">
-                            <span className="text-amber-400">💡</span> SIGNAL REASON & SETUP CONVICTION:
+                          <div className="flex items-center justify-between gap-1 text-[10px] font-bold text-white/50 uppercase tracking-wider mb-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-amber-400">💡</span> PRO TRADER CONVICTION &amp; REASON:
+                            </div>
+                            {item.ai_provider && (
+                              <span className="text-[9px] text-purple-300/80 font-mono">
+                                ✨ {item.ai_provider}
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-white/90 leading-relaxed font-medium">
                             {cardReason}

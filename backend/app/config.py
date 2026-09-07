@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     live_max_orders_per_day: int = Field(default=50, ge=1)
     live_max_trades_per_day: int = Field(default=25, ge=1)
     live_max_notional_per_trade: float = Field(default=75.0, gt=0)
-    live_max_daily_profit_target: float = Field(default=6.0, ge=0.0)
+    live_max_daily_profit_target: float = Field(default=10.0, ge=0.0)
     live_max_daily_loss_percent: float = Field(default=0.25, gt=0)
     live_max_open_positions: int = Field(default=2, ge=1)
     live_max_total_exposure: float = Field(default=2500, gt=0)
@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     ntfy_topic: str = "fno_trades_apurba"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    anthropic_api_key: str = ""
+    claude_model: str = "claude-sonnet-4-5-20250929"
+    claude_scalp_enabled: bool = True
+    claude_min_conviction: int = 75
     scanner: ScannerSettings = ScannerSettings()
     score_weights: ScoreWeights = ScoreWeights()
 

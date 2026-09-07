@@ -40,6 +40,7 @@ services:
       NTFY_TOPIC: ${NTFY_TOPIC:-fno_trades_apurba}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     dns:
       - 8.8.8.8
       - 1.1.1.1

@@ -40,6 +40,9 @@ data class PositionItem(
     @SerializedName("unrealized_pnl") val unrealizedPnl: Double = 0.0,
     @SerializedName("protection_status") val protectionStatus: String? = "protected",
     @SerializedName("status") val status: String? = "open",
+    @SerializedName("bot_managed") val botManaged: Boolean? = false,
+    @SerializedName("origin") val origin: String? = "manual",
+    @SerializedName("breakeven_activated") val breakevenActivated: Boolean? = false,
     @SerializedName("created_at") val createdAt: String? = null
 )
 
@@ -72,8 +75,17 @@ data class OpportunityItem(
     @SerializedName("eligible") val eligible: Boolean = true
 )
 
+data class GainerItem(
+    @SerializedName("symbol") val symbol: String = "",
+    @SerializedName("last_price") val lastPrice: Double = 0.0,
+    @SerializedName("change_24h_pct") val change24hPct: Double = 0.0,
+    @SerializedName("volume_24h") val volume24h: Double = 0.0,
+    @SerializedName("gain_rank") val gainRank: Int = 1
+)
+
 data class ResearchFeedResponse(
     @SerializedName("evaluations") val evaluations: List<EvaluationItem>? = emptyList(),
+    @SerializedName("top_gainers") val topGainers: List<GainerItem>? = emptyList(),
     @SerializedName("evaluated_at_ist") val evaluatedAtIst: String? = null,
     @SerializedName("last_scan_at") val lastScanAt: String? = null
 )
@@ -101,6 +113,15 @@ data class EvaluationItem(
     @SerializedName("action_guidance") val actionGuidance: String? = null,
     @SerializedName("long_score") val longScore: Double? = 50.0,
     @SerializedName("short_score") val shortScore: Double? = 50.0,
+    @SerializedName("claude_score") val claudeScore: Int? = null,
+    @SerializedName("claude_sentiment") val claudeSentiment: String? = null,
+    @SerializedName("claude_rationale") val claudeRationale: String? = null,
+    @SerializedName("claude_approved") val claudeApproved: Boolean? = null,
+    @SerializedName("ai_provider") val aiProvider: String? = null,
+    @SerializedName("is_top_gainer") val isTopGainer: Boolean? = false,
+    @SerializedName("change_24h_pct") val change24hPct: Double? = null,
+    @SerializedName("volume_24h_usdt") val volume24hUsdt: Double? = null,
+    @SerializedName("gain_rank") val gainRank: Int? = null,
     @SerializedName("evaluated_at_ist") val evaluatedAtIst: String? = null
 )
 

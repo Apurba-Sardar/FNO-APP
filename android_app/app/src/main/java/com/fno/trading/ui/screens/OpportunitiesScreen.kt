@@ -172,19 +172,48 @@ fun SignalEvaluationCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = item.symbol,
-                        color = TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        text = String.format("$%,.4g", item.currentPrice),
-                        color = TextSecondary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = item.symbol,
+                            color = TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        if (item.isTopGainer == true) {
+                            val chg = item.change24hPct ?: 0.0
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(EmeraldPrimary.copy(alpha = 0.2f))
+                                    .border(1.dp, EmeraldPrimary.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "🔥 +${String.format("%.1f", chg)}%",
+                                    color = EmeraldPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = String.format("$%,.4g", item.currentPrice),
+                            color = TextSecondary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        item.volume24hUsdt?.let { vol ->
+                            Text(
+                                text = "Vol: $${String.format("%.1f", vol / 1_000_000)}M",
+                                color = TextSecondary.copy(alpha = 0.7f),
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -235,12 +264,26 @@ fun SignalEvaluationCard(
                     .padding(12.dp)
             ) {
                 Column {
-                    Text(
-                        text = "💡 SIGNAL REASON & SETUP CONVICTION:",
-                        color = AmberWarning,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "💡 PRO TRADER CONVICTION & REASON",
+                            color = AmberWarning,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (item.claudeScore != null) {
+                            Text(
+                                text = "🧠 Claude AI: ${item.claudeScore}/100",
+                                color = Color(0xFFC084FC),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = item.reason ?: if (isBuySignal) {

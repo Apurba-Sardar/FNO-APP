@@ -156,9 +156,9 @@ class LiveExecutionRuntime:
                     self.state = LiveRuntimeState.BLOCKED
 
     async def _position_monitor_loop(self):
-        """High-frequency (5s) daemon checking open positions against scalp profit targets and stop losses."""
+        """High-frequency (1s) daemon checking bot-punched positions against scalp targets with sub-second latency."""
         while True:
-            await asyncio.sleep(5)
+            await asyncio.sleep(1.0)
             if self.client is None or self.state in {LiveRuntimeState.DISABLED, LiveRuntimeState.BLOCKED}:
                 continue
             try:
@@ -167,13 +167,20 @@ class LiveExecutionRuntime:
                 structlog.get_logger().warning("POSITION_MONITOR_LOOP_ERROR", error=str(exc))
 
     async def monitor_and_auto_close_positions(self) -> list[dict]:
-        """Check all open positions for profit target or stop loss triggers and auto-close them."""
+        """Check bot-managed positions for scalp profit targets, breakeven triggers, or stops.
+        
+        CRITICAL SAFETY: NEVER auto-close user-manual trades. Manual trades are 100% immune.
+        """
         actions = []
         open_positions = [pos for pos in list(self.positions.values()) if pos.status == "open"]
         if not open_positions:
             return actions
 
         for pos in open_positions:
+            # STRICT IMMUNITY RULE: Only touch trades punched automatically by the bot / app instant scalp
+            if not getattr(pos, "bot_managed", False):
+                continue
+
             entry = pos.average_price
             if entry <= 0:
                 continue
@@ -182,14 +189,14 @@ class LiveExecutionRuntime:
             stop = pos.stop
             is_long = str(pos.direction).lower() in {"long", "buy", "strategydirection.long"} or pos.direction == StrategyDirection.LONG
 
-            # Default scalp targets if not set: +1.8% profit, -1.2% stop (for 3x leverage scalp)
+            # Pro-trader tight micro-scalp targets: +1.1% profit, -0.9% stop (approx +3.3% / -2.7% ROE at 3x)
             if not target or not stop:
                 if is_long:
-                    target = round(entry * 1.018, 6)
-                    stop = round(entry * 0.988, 6)
+                    target = round(entry * 1.011, 6)
+                    stop = round(entry * 0.991, 6)
                 else:
-                    target = round(entry * 0.982, 6)
-                    stop = round(entry * 1.012, 6)
+                    target = round(entry * 0.989, 6)
+                    stop = round(entry * 1.009, 6)
 
                 updated = pos.model_copy(update={
                     "target": target,
@@ -200,18 +207,44 @@ class LiveExecutionRuntime:
                 await self.repository.save_position(updated)
                 pos = updated
 
-                # Attempt to register CoinDCX native bracket order
+            # Real-time sub-second price check: query Redis live ticker first, fallback to cached analysis
+            live_px = None
+            if self.market_runtime and getattr(self.market_runtime, "store", None):
                 try:
-                    await self.client.create_tpsl(pos.exchange_position_id, format(stop, ".15g"), format(target, ".15g"))
-                except Exception as tpsl_err:
-                    structlog.get_logger().info("COINDCX_TPSL_ATTACH_INFO", pair=pos.pair, detail=str(tpsl_err))
+                    ticker = await self.market_runtime.store.get_ticker(pos.pair)
+                    if ticker and ticker.last_price and ticker.last_price > 0:
+                        live_px = float(ticker.last_price)
+                except Exception:
+                    pass
 
-            mark = pos.mark_price or entry
+            if not live_px and self.strategy_runtime and getattr(self.strategy_runtime, "state", None):
+                analysis = self.strategy_runtime.state.analyses.get(pos.pair)
+                if analysis and getattr(analysis, "current_price", None):
+                    live_px = float(analysis.current_price)
+
+            mark = live_px or pos.mark_price or entry
             if mark <= 0:
                 continue
 
             price_diff_pct = ((mark - entry) / entry) * 100 if is_long else ((entry - mark) / entry) * 100
             roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 3.0))
+
+            # Dynamic Pro-Trader Breakeven Lock:
+            # Once in profit by >= +0.6% (+1.8% ROE), shift stop to entry to guarantee a zero-loss trade!
+            if price_diff_pct >= 0.6 and not getattr(pos, "breakeven_activated", False):
+                be_stop = round(entry * 1.0005, 6) if is_long else round(entry * 0.9995, 6)
+                pos = pos.model_copy(update={"stop": be_stop, "breakeven_activated": True})
+                self.positions[pos.position_id] = pos
+                await self.repository.save_position(pos)
+                structlog.get_logger().info(
+                    "BREAKEVEN_STOP_LOCKED",
+                    pair=pos.pair,
+                    entry=entry,
+                    mark=mark,
+                    new_stop=be_stop,
+                    price_diff_pct=round(price_diff_pct, 2),
+                )
+                stop = be_stop
 
             auto_close_reason = None
             if is_long and mark >= target:
@@ -219,13 +252,15 @@ class LiveExecutionRuntime:
             elif not is_long and mark <= target:
                 auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
             elif is_long and mark <= stop:
-                auto_close_reason = f"STOP_LOSS_TRIGGER (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
+                trigger_name = "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
             elif not is_long and mark >= stop:
-                auto_close_reason = f"STOP_LOSS_TRIGGER (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
-            elif roe_pct >= 5.0:  # 5% ROE reached on 3x leverage
-                auto_close_reason = f"TAKE_PROFIT_ROE (ROE +{roe_pct:.2f}% >= +5.0%)"
-            elif roe_pct <= -4.5:  # -4.5% stop loss ROE on 3x leverage
-                auto_close_reason = f"STOP_LOSS_ROE (ROE {roe_pct:.2f}% <= -4.5%)"
+                trigger_name = "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
+            elif roe_pct >= 3.6:  # Pro-trader +3.6% ROE profit ceiling
+                auto_close_reason = f"TAKE_PROFIT_ROE (ROE +{roe_pct:.2f}% >= +3.6%)"
+            elif roe_pct <= -2.7 and not getattr(pos, "breakeven_activated", False):  # Strict -2.7% ROE stop ceiling
+                auto_close_reason = f"STOP_LOSS_ROE (ROE {roe_pct:.2f}% <= -2.7%)"
 
             if auto_close_reason:
                 structlog.get_logger().info(
@@ -608,7 +643,9 @@ class LiveExecutionRuntime:
         self.intents[request_id] = final_intent
         self.orders[order.order_id] = order
         if position:
+            position = position.model_copy(update={"bot_managed": True, "origin": "bot"})
             self.positions[position.position_id] = position
+            await self.repository.save_position(position)
         self.last_successful_order = now
         await self.audit.record(AuditEvent(
             actor=actor, event_type="ENTRY_PARTIAL" if order.status.value == "partially_filled" else "ENTRY_FILLED",

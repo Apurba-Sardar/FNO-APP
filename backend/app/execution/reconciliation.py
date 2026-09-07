@@ -73,27 +73,36 @@ class PositionReconciliationService:
             local = known_positions.get(exchange_id)
             if local:
                 normalized = normalize_exchange_position(row, execution_request_id=local.execution_request_id)
-                # Preserve local TP/SL bounds set by auto-close engine
+                # Preserve local bot management, origin, breakeven status, and bounds
                 is_long = normalized.direction == StrategyDirection.LONG
-                t_px = local.target or (round(normalized.average_price * 1.018, 6) if is_long else round(normalized.average_price * 0.982, 6))
-                s_px = local.stop or (round(normalized.average_price * 0.988, 6) if is_long else round(normalized.average_price * 1.012, 6))
+                bot_mgr = getattr(local, "bot_managed", False)
+                origin = getattr(local, "origin", "manual")
+                t_px = local.target
+                s_px = local.stop
+                if bot_mgr and (not t_px or not s_px):
+                    t_px = t_px or (round(normalized.average_price * 1.012, 6) if is_long else round(normalized.average_price * 0.988, 6))
+                    s_px = s_px or (round(normalized.average_price * 0.990, 6) if is_long else round(normalized.average_price * 1.010, 6))
+                
                 normalized = normalized.model_copy(update={
                     "position_id": local.position_id,
                     "target": t_px,
                     "stop": s_px,
-                    "protection_status": ProtectionStatus.PROTECTED,
+                    "bot_managed": bot_mgr,
+                    "origin": origin,
+                    "breakeven_activated": getattr(local, "breakeven_activated", False),
+                    "trailing_stop": getattr(local, "trailing_stop", None),
+                    "highest_roe": getattr(local, "highest_roe", 0.0),
+                    "protection_status": ProtectionStatus.PROTECTED if (bot_mgr or normalized.average_price > 0) else ProtectionStatus.UNPROTECTED,
                 })
                 local_positions[local.position_id] = normalized
                 await self.repository.save_position(normalized)
             else:
+                # External/manual trade opened outside the bot: strictly flagged as manual
                 normalized = normalize_exchange_position(row)
-                is_long = normalized.direction == StrategyDirection.LONG
-                t_px = round(normalized.average_price * 1.018, 6) if is_long else round(normalized.average_price * 0.982, 6)
-                s_px = round(normalized.average_price * 0.988, 6) if is_long else round(normalized.average_price * 1.012, 6)
                 normalized = normalized.model_copy(update={
-                    "target": t_px,
-                    "stop": s_px,
-                    "protection_status": ProtectionStatus.PROTECTED,
+                    "bot_managed": False,
+                    "origin": "manual",
+                    "protection_status": ProtectionStatus.PROTECTED if normalized.average_price > 0 else ProtectionStatus.UNPROTECTED,
                 })
                 local_positions[normalized.position_id] = normalized
                 await self.repository.save_position(normalized)
