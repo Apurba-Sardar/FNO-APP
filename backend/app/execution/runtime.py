@@ -156,10 +156,10 @@ class LiveExecutionRuntime:
                     self.state = LiveRuntimeState.BLOCKED
 
     async def _position_monitor_loop(self):
-        """High-frequency (1s) daemon checking bot-punched positions against scalp targets with sub-second latency."""
+        """High-frequency (500ms) daemon checking bot-punched positions against scalp targets with sub-second latency."""
         while True:
-            await asyncio.sleep(1.0)
-            if self.client is None or self.state in {LiveRuntimeState.DISABLED, LiveRuntimeState.BLOCKED}:
+            await asyncio.sleep(0.5)
+            if self.client is None or self.state == LiveRuntimeState.DISABLED:
                 continue
             try:
                 await self.monitor_and_auto_close_positions()
@@ -224,6 +224,22 @@ class LiveExecutionRuntime:
                 analysis = self.strategy_runtime.state.analyses.get(pos.pair)
                 if analysis and getattr(analysis, "current_price", None):
                     live_px = float(analysis.current_price)
+
+            # High-speed fallback: query CoinDCX real-time prices snapshot with 600ms cache to guarantee sub-second accuracy
+            if not live_px and self.client:
+                now_ts = asyncio.get_event_loop().time()
+                if not hasattr(self, "_rt_prices_cache") or (now_ts - getattr(self, "_rt_prices_ts", 0) > 0.6):
+                    try:
+                        from app.services.coindcx.constants import CURRENT_PRICES_PATH
+                        snap = await self.client.request_json(f"https://public.coindcx.com{CURRENT_PRICES_PATH}")
+                        self._rt_prices_cache = snap.get("prices", {}) if isinstance(snap, dict) else {}
+                        self._rt_prices_ts = now_ts
+                    except Exception:
+                        pass
+                if hasattr(self, "_rt_prices_cache") and self._rt_prices_cache:
+                    p_data = self._rt_prices_cache.get(pos.pair)
+                    if isinstance(p_data, dict):
+                        live_px = float(p_data.get("ls") or p_data.get("mp") or 0.0)
 
             mark = live_px or pos.mark_price or entry
             if mark <= 0:
@@ -710,9 +726,9 @@ class LiveExecutionRuntime:
         ):
             return
 
-        # Check if daily profit goal ($6.00 USDT) has been reached to secure profits
+        # Check if daily profit goal ($10.00 USDT) has been reached to secure profits
         today_pnl = getattr(self.account, "daily_pnl", 0.0) or 0.0
-        max_target = getattr(self.config, "max_daily_profit_target", 6.0)
+        max_target = getattr(self.config, "max_daily_profit_target", 10.0)
         if max_target > 0 and today_pnl >= max_target:
             if not getattr(self, "_daily_profit_target_notified_today", False):
                 self._daily_profit_target_notified_today = True
