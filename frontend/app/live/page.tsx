@@ -537,20 +537,23 @@ export default function LivePage() {
             <div>
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-300">
-                  Daily Profit Milestone Target
+                  Daily Compounding Goal · $10 USDT Target
                 </span>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                  (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 6.0)
+                  (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 10.0)
                     ? "bg-emerald-400 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
                     : "bg-amber-400/15 text-amber-300 border border-amber-400/30"
                 }`}>
-                  {(account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 6.0)
+                  {(account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 10.0)
                     ? "Goal Unlocked 🏆 (Gains Protected)"
-                    : `Active Target: $${balance(status.daily_profit_target ?? 6.0)} USDT`}
+                    : `Active Target: $${balance(status.daily_profit_target ?? 10.0)} USDT`}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00F5A0]/10 text-[#00F5A0] border border-[#00F5A0]/30">
+                  ⚡ Target: ≥ +$1.00 USDT Net / Trade
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
-                Autonomous capital compounding plan. Position entries automatically pause once today&apos;s net earnings reach ${balance(status.daily_profit_target ?? 10.0)} USDT.
+              <p className="text-xs text-slate-300 mt-1.5 max-w-xl leading-relaxed">
+                Autonomous pro-scalper compounding plan. Allocates $25 margin @ 4x leverage ($100 notional) with a 20s breathing grace period and zero-risk breakeven lock at +$0.50 profit. Entries automatically pause once today&apos;s net earnings reach ${balance(status.daily_profit_target ?? 10.0)} USDT.
               </p>
             </div>
           </div>
@@ -559,7 +562,7 @@ export default function LivePage() {
             <div>
               <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Today&apos;s Target Cap</span>
               <b className="mt-0.5 block text-lg font-black text-white font-mono">
-                ${balance(status.daily_profit_target ?? 6.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
+                ${balance(status.daily_profit_target ?? 10.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
               </b>
             </div>
             <div className="border-l border-white/10 pl-6">
