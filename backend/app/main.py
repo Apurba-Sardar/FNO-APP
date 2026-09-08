@@ -253,6 +253,33 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(300)
                     continue
 
+                # ── Capital Risk Shield: Daily Loss Limit Gate ───────────────
+                daily_loss = getattr(live_runtime, "today_realized_loss", 0.0) or 0.0
+                max_daily_loss = getattr(live_runtime, "max_daily_loss_limit", 3.50)
+                if daily_loss >= max_daily_loss or (today_pnl <= -max_daily_loss):
+                    log.warning(
+                        "AUTO_SCALP_CAPITAL_SHIELD_TRIGGERED",
+                        daily_loss=round(daily_loss, 2),
+                        today_pnl=round(today_pnl, 2),
+                        max_allowed_loss=max_daily_loss,
+                        action="halting_autotrading_to_preserve_capital",
+                    )
+                    live_runtime.auto_trading_enabled = False
+                    await _asyncio.sleep(300)
+                    continue
+
+                # ── Consecutive Loss Circuit Breaker Cooldown ─────────────────
+                circuit_cooldown = getattr(live_runtime, "consecutive_loss_cooldown_until", None)
+                if circuit_cooldown and circuit_cooldown > datetime.now(UTC):
+                    rem_wait = int((circuit_cooldown - datetime.now(UTC)).total_seconds())
+                    log.info(
+                        "AUTO_SCALP_CONSECUTIVE_LOSS_COOLOFF",
+                        remaining_seconds=rem_wait,
+                        consecutive_losses=getattr(live_runtime, "consecutive_losses", 0),
+                    )
+                    await _asyncio.sleep(min(rem_wait, 30))
+                    continue
+
                 # ── Post-Trade Inter-Scalp Global Cooldown (30s) ──────────────
                 last_closed = getattr(live_runtime, "last_trade_closed_at", None)
                 if last_closed:

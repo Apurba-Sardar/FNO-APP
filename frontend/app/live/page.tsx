@@ -540,20 +540,27 @@ export default function LivePage() {
                   Daily Compounding Goal · $10 USDT Target
                 </span>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                  (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 10.0)
+                  (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 10.0) || (status.daily_wins ?? 0) >= 10
                     ? "bg-emerald-400 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
                     : "bg-amber-400/15 text-amber-300 border border-amber-400/30"
                 }`}>
-                  {(account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 10.0)
-                    ? "Goal Unlocked 🏆 (Gains Protected)"
+                  {(account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 10.0) || (status.daily_wins ?? 0) >= 10
+                    ? "Goal Unlocked 🏆 (10 Wins Reached)"
                     : `Active Target: $${balance(status.daily_profit_target ?? 10.0)} USDT`}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00F5A0]/10 text-[#00F5A0] border border-[#00F5A0]/30">
                   ⚡ Target: ≥ +$1.00 USDT Net / Trade
                 </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  status.capital_shield_active
+                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse"
+                    : "bg-blue-500/10 text-blue-300 border border-blue-500/30"
+                }`}>
+                  🛡️ Capital Shield: Max -$3.50 Loss Cap
+                </span>
               </div>
               <p className="text-xs text-slate-300 mt-1.5 max-w-xl leading-relaxed">
-                Autonomous pro-scalper compounding plan. Allocates $25 margin @ 4x leverage ($100 notional) with a 20s breathing grace period and zero-risk breakeven lock at +$0.50 profit. Entries automatically pause once today&apos;s net earnings reach ${balance(status.daily_profit_target ?? 10.0)} USDT.
+                Autonomous capital-shielded compounding plan. Allocates $25 margin @ 4x leverage ($100 notional) with sub-second profit locking (+0.40% breakeven stop, +0.75% trailing lock, 4m stagnation cut). Automatically halts entries if daily losses hit -$3.50 or target reaches $10.00 USDT.
               </p>
             </div>
           </div>
@@ -576,17 +583,109 @@ export default function LivePage() {
           </div>
         </div>
 
+        {/* Capital Risk Shield & Daily PnL Telemetry Grid */}
+        <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08] grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Card 1: Realized Gains */}
+          <div className="rounded-xl bg-black/40 border border-emerald-500/20 p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-emerald-400">
+              <span>Today&apos;s Gains</span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                {status.daily_wins ?? 0} Wins
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1">
+              <b className="text-lg font-black text-emerald-400 font-mono">
+                +${balance(status.daily_profit ?? 0)}
+              </b>
+              <span className="text-[10px] text-slate-400">USDT</span>
+            </div>
+            <span className="text-[10px] text-slate-400 mt-0.5">
+              Goal: {status.daily_wins ?? 0} / 10 Winning Trades
+            </span>
+          </div>
+
+          {/* Card 2: Realized Losses */}
+          <div className="rounded-xl bg-black/40 border border-rose-500/20 p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-rose-400">
+              <span>Today&apos;s Losses</span>
+              <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono font-bold">
+                {status.daily_losses ?? 0} Losses
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1">
+              <b className="text-lg font-black text-rose-400 font-mono">
+                -${balance(status.daily_loss ?? 0)}
+              </b>
+              <span className="text-[10px] text-slate-400">USDT</span>
+            </div>
+            <span className="text-[10px] text-slate-400 mt-0.5">
+              Controlled tight stops
+            </span>
+          </div>
+
+          {/* Card 3: Capital Shield */}
+          <div className="rounded-xl bg-black/40 border border-blue-500/20 p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-blue-400">
+              <span>Capital Risk Shield</span>
+              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
+                status.capital_shield_active
+                  ? "bg-rose-500/30 text-rose-300 animate-pulse"
+                  : "bg-blue-500/20 text-blue-300"
+              }`}>
+                {status.capital_shield_active ? "HALTED" : "PROTECTED"}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1">
+              <b className="text-lg font-black text-white font-mono">
+                ${balance(status.max_daily_loss_limit ?? 3.50)}
+              </b>
+              <span className="text-[10px] text-slate-400">Max Risk Cap</span>
+            </div>
+            <span className="text-[10px] text-slate-400 mt-0.5">
+              Protects equity (~${balance(account.equity ?? 87.28)})
+            </span>
+          </div>
+
+          {/* Card 4: Consecutive Loss Circuit Breaker */}
+          <div className="rounded-xl bg-black/40 border border-amber-500/20 p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-amber-400">
+              <span>Loss Circuit Breaker</span>
+              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
+                (status.consecutive_losses ?? 0) >= 2
+                  ? "bg-amber-500/30 text-amber-300 animate-pulse"
+                  : "bg-white/10 text-slate-300"
+              }`}>
+                {(status.consecutive_losses ?? 0) >= 2 ? "12m Cooldown" : "Active"}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1">
+              <b className={`text-lg font-black font-mono ${
+                (status.consecutive_losses ?? 0) >= 2 ? "text-amber-400" : "text-slate-200"
+              }`}>
+                {status.consecutive_losses ?? 0} / 2
+              </b>
+              <span className="text-[10px] text-slate-400">Loss Streak</span>
+            </div>
+            <span className="text-[10px] text-slate-400 mt-0.5">
+              {(status.consecutive_losses ?? 0) >= 2 ? "Cooling off choppy market" : "Pauses after 2 consecutive losses"}
+            </span>
+          </div>
+        </div>
+
         {/* CRED Shimmer Progress Track */}
-        <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08]">
+        <div className="relative z-10 mt-4 pt-3 border-t border-white/[0.08]">
           <div className="flex items-center justify-between text-xs text-slate-300 mb-2">
             <span className="font-semibold flex items-center gap-2">
               <span>Goal Progress:</span>
               <b className="text-amber-300 font-mono">
                 {Math.min(Math.round(((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 10.0)) * 100), 100)}%
               </b>
+              <span className="text-[11px] text-slate-400">
+                ({status.daily_wins ?? 0}/10 Wins)
+              </span>
             </span>
             <span className="text-slate-400 text-[11px]">
-              Next Scalp Sizing: <b className="text-white">~$25 USDT Margin · 4x Isolated (Target: +$1.20+ USDT)</b>
+              Next Scalp Sizing: <b className="text-white">~$25 USDT Margin · 4x Isolated (Target: +$1.00+ USDT)</b>
             </span>
           </div>
 

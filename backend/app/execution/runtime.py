@@ -83,6 +83,12 @@ class LiveExecutionRuntime:
         self.symbol_cooldowns: dict[str, datetime] = {}
         self.last_trade_closed_at: datetime | None = None
         self.today_winning_trades: int = 0
+        self.today_losing_trades: int = 0
+        self.today_realized_profit: float = 0.0
+        self.today_realized_loss: float = 0.0
+        self.consecutive_losses: int = 0
+        self.max_daily_loss_limit: float = 3.50
+        self.consecutive_loss_cooldown_until: datetime | None = None
 
     def validate_startup(self) -> None:
         if self.config.trading_mode != "live":
@@ -251,23 +257,25 @@ class LiveExecutionRuntime:
             price_diff_pct = ((mark - entry) / entry) * 100 if is_long else ((entry - mark) / entry) * 100
             roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 4.0))
 
-            # Dynamic Pro-Trader Breakeven Lock:
-            # Once in profit by >= +0.45 USDT (or +0.45% move), shift stop to entry + 0.08% to cover all fees and lock in profit!
-            if (pos.unrealized_pnl >= 0.45 or price_diff_pct >= 0.45) and not getattr(pos, "breakeven_activated", False):
+            # Tier 1 Dynamic Breakeven Lock:
+            # Once in profit by >= +0.40 USDT (or +0.40% move), shift stop to entry + 0.08% to cover all fees and guarantee zero loss!
+            if (pos.unrealized_pnl >= 0.40 or price_diff_pct >= 0.40) and not getattr(pos, "breakeven_activated", False):
                 be_stop = round(entry * 1.0008, 6) if is_long else round(entry * 0.9992, 6)
                 pos = pos.model_copy(update={"stop": be_stop, "breakeven_activated": True})
                 self.positions[pos.position_id] = pos
                 await self.repository.save_position(pos)
-                structlog.get_logger().info(
-                    "BREAKEVEN_STOP_LOCKED",
-                    pair=pos.pair,
-                    entry=entry,
-                    mark=mark,
-                    new_stop=be_stop,
-                    pnl=pos.unrealized_pnl,
-                    price_diff_pct=round(price_diff_pct, 2),
-                )
+                structlog.get_logger().info("BREAKEVEN_STOP_LOCKED", pair=pos.pair, new_stop=be_stop)
                 stop = be_stop
+
+            # Tier 2 Trailing Profit Lock:
+            # Once in profit by >= +0.75 USDT (or +0.75% move), shift stop to entry + 0.40% to lock in >= +$0.40 USDT guaranteed profit!
+            if (pos.unrealized_pnl >= 0.75 or price_diff_pct >= 0.75) and not getattr(pos, "trailing_locked", False):
+                trail_stop = round(entry * 1.0040, 6) if is_long else round(entry * 0.9960, 6)
+                pos = pos.model_copy(update={"stop": trail_stop, "trailing_locked": True})
+                self.positions[pos.position_id] = pos
+                await self.repository.save_position(pos)
+                structlog.get_logger().info("TRAILING_PROFIT_LOCKED", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.40 USDT")
+                stop = trail_stop
 
             auto_close_reason = None
             # Condition 1: Primary Target Profit Reached (PnL >= +$1.15 USDT gross, netting >= +$1.03 USDT cash)
@@ -278,27 +286,31 @@ class LiveExecutionRuntime:
             elif not is_long and mark <= target:
                 auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
             else:
-                # Stop Loss Evaluation: Apply 35s grace period to allow order to fill and breathe past entry spread
+                # Stop Loss & Timing Evaluation
                 pos_created = getattr(pos, "created_at", None)
                 if pos_created:
                     if getattr(pos_created, "tzinfo", None) is None:
                         pos_created = pos_created.replace(tzinfo=UTC)
                     age_seconds = (datetime.now(UTC) - pos_created).total_seconds()
                 else:
-                    age_seconds = 0.0  # Brand new, give full grace period
-                
-                # Grace period: first 35s allows momentum to build; only emergency deep loss triggers
-                can_trigger_stop = age_seconds >= 35.0 or price_diff_pct <= -2.5 or pos.unrealized_pnl <= -1.75
+                    age_seconds = 0.0
 
-                if can_trigger_stop:
-                    if is_long and mark <= stop:
-                        trigger_name = "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
-                        auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
-                    elif not is_long and mark >= stop:
-                        trigger_name = "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
-                        auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
-                    elif pos.unrealized_pnl <= -1.65 and not getattr(pos, "breakeven_activated", False):
-                        auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.65 USDT)"
+                # Stagnation Cut: If open > 4 minutes and price is stagnant/negative (<= -0.40%), cut early to prevent slow bleed
+                if age_seconds >= 240.0 and (price_diff_pct <= -0.40 or pos.unrealized_pnl <= -0.40):
+                    auto_close_reason = f"STAGNATION_TIMEOUT_CUT (Open > 4m without forward momentum | PnL ${pos.unrealized_pnl:.2f} USDT)"
+                else:
+                    # Grace period: first 25s allows momentum to build; only emergency deep loss triggers
+                    can_trigger_stop = age_seconds >= 25.0 or price_diff_pct <= -2.5 or pos.unrealized_pnl <= -1.75
+
+                    if can_trigger_stop:
+                        if is_long and mark <= stop:
+                            trigger_name = "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                            auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
+                        elif not is_long and mark >= stop:
+                            trigger_name = "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                            auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
+                        elif pos.unrealized_pnl <= -1.45 and not getattr(pos, "breakeven_activated", False):
+                            auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.45 USDT)"
 
             if auto_close_reason:
                 structlog.get_logger().info(
@@ -339,26 +351,68 @@ class LiveExecutionRuntime:
                     # Lock symbol for 8 minutes after exit so it cannot be re-bought repeatedly at tops
                     self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=8)
                     
-                    # ── Daily Target & Win Counter ──
-                    if pos.unrealized_pnl > 0.0:
-                        if not hasattr(self, "today_winning_trades"):
-                            self.today_winning_trades = 0
+                    # ── Daily Target & Loss/Win Tracking ──
+                    pnl_res = float(pos.unrealized_pnl)
+                    if pnl_res > 0.0:
                         self.today_winning_trades += 1
+                        self.today_realized_profit += pnl_res
+                        self.consecutive_losses = 0
                         structlog.get_logger().info(
                             "SCALP_WIN_RECORDED",
                             pair=pos.pair,
-                            pnl=pos.unrealized_pnl,
+                            pnl=pnl_res,
                             daily_wins=self.today_winning_trades,
+                            total_profit=round(self.today_realized_profit, 3),
+                        )
+                    else:
+                        self.today_losing_trades += 1
+                        self.today_realized_loss += abs(pnl_res)
+                        self.consecutive_losses += 1
+                        structlog.get_logger().warning(
+                            "SCALP_LOSS_RECORDED",
+                            pair=pos.pair,
+                            pnl=pnl_res,
+                            daily_losses=self.today_losing_trades,
+                            total_loss=round(self.today_realized_loss, 3),
+                            streak=self.consecutive_losses,
+                        )
+                        # Consecutive Loss Circuit Breaker: 2 losses in a row pauses for 12 minutes
+                        if self.consecutive_losses >= 2:
+                            self.consecutive_loss_cooldown_until = now_closed + timedelta(minutes=12)
+                            structlog.get_logger().warning(
+                                "CONSECUTIVE_LOSS_CIRCUIT_BREAKER_ACTIVE",
+                                cooldown_minutes=12,
+                                streak=self.consecutive_losses,
+                            )
+
+                    # Update account model with telemetry
+                    if hasattr(self, "account") and self.account:
+                        self.account.daily_profit = round(self.today_realized_profit, 3)
+                        self.account.daily_loss = round(self.today_realized_loss, 3)
+                        self.account.daily_wins = self.today_winning_trades
+                        self.account.daily_losses = self.today_losing_trades
+                        self.account.consecutive_losses = self.consecutive_losses
+                        self.account.daily_pnl = round(self.today_realized_profit - self.today_realized_loss, 3)
+
+                    # Capital Shield: If today's realized losses reach max limit ($3.50), halt auto-trading for the day!
+                    net_pnl_today = self.today_realized_profit - self.today_realized_loss
+                    if self.today_realized_loss >= self.max_daily_loss_limit or net_pnl_today <= -self.max_daily_loss_limit:
+                        self.auto_trading_enabled = False
+                        structlog.get_logger().error(
+                            "CAPITAL_SHIELD_TRIGGERED_AUTO_TRADING_HALTED",
+                            daily_loss=self.today_realized_loss,
+                            net_pnl=net_pnl_today,
+                            limit=self.max_daily_loss_limit,
+                            status="capital_preserved_auto_trading_paused",
                         )
 
-                    # Daily goal achieved check (10 wins or $10 daily profit target)
-                    daily_pnl = getattr(self.account, "daily_pnl", 0.0) or 0.0
-                    if getattr(self, "today_winning_trades", 0) >= 10 or daily_pnl >= 10.0:
+                    # Daily Profit Target Achieved Check (10 wins or $10 daily profit target)
+                    if self.today_winning_trades >= 10 or net_pnl_today >= 10.0:
                         self.auto_trading_enabled = False
                         structlog.get_logger().info(
                             "DAILY_GOAL_ACHIEVED_HALTING_AUTO_TRADING",
-                            daily_wins=getattr(self, "today_winning_trades", 0),
-                            daily_pnl=daily_pnl,
+                            daily_wins=self.today_winning_trades,
+                            daily_pnl=net_pnl_today,
                             status="target_reached_safely_paused",
                         )
 
@@ -906,11 +960,21 @@ class LiveExecutionRuntime:
             "auto_execution": self.config.auto_execution or getattr(self, "auto_trading_enabled", False),
             "auto_close_active": True,
             "enforced_leverage": 3,
-            "daily_profit_target": getattr(self.config, "max_daily_profit_target", 6.0),
+            "daily_profit_target": getattr(self.config, "max_daily_profit_target", 10.0) or 10.0,
             "daily_pnl": getattr(self.account, "daily_pnl", 0.0) or 0.0,
+            "daily_profit": getattr(self, "today_realized_profit", 0.0) or 0.0,
+            "daily_loss": getattr(self, "today_realized_loss", 0.0) or 0.0,
+            "daily_wins": getattr(self, "today_winning_trades", 0),
+            "daily_losses": getattr(self, "today_losing_trades", 0),
+            "consecutive_losses": getattr(self, "consecutive_losses", 0),
+            "max_daily_loss_limit": getattr(self, "max_daily_loss_limit", 3.50),
+            "capital_shield_active": (
+                getattr(self, "today_realized_loss", 0.0) >= getattr(self, "max_daily_loss_limit", 3.50)
+                or (getattr(self, "today_realized_profit", 0.0) - getattr(self, "today_realized_loss", 0.0)) <= -getattr(self, "max_daily_loss_limit", 3.50)
+            ),
             "daily_profit_goal_reached": bool(
-                getattr(self.config, "max_daily_profit_target", 6.0) > 0
-                and (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= getattr(self.config, "max_daily_profit_target", 6.0)
+                (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= 10.0
+                or getattr(self, "today_winning_trades", 0) >= 10
             ),
             "emergency_stop": self.emergency_stop.state,
             "circuit_breaker": self.circuit_breaker.state,

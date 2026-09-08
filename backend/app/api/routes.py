@@ -1530,7 +1530,17 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
             "enforced_leverage": 3,
             "daily_target_cap": daily_target,
             "daily_pnl": daily_pnl,
-            "goal_reached": daily_pnl >= daily_target if daily_target > 0 else False,
+            "daily_profit": getattr(runtime, "today_realized_profit", 0.0) or 0.0,
+            "daily_loss": getattr(runtime, "today_realized_loss", 0.0) or 0.0,
+            "daily_wins": getattr(runtime, "today_winning_trades", 0),
+            "daily_losses": getattr(runtime, "today_losing_trades", 0),
+            "consecutive_losses": getattr(runtime, "consecutive_losses", 0),
+            "max_daily_loss_limit": getattr(runtime, "max_daily_loss_limit", 3.50),
+            "capital_shield_active": (
+                getattr(runtime, "today_realized_loss", 0.0) >= getattr(runtime, "max_daily_loss_limit", 3.50)
+                or (getattr(runtime, "today_realized_profit", 0.0) - getattr(runtime, "today_realized_loss", 0.0)) <= -getattr(runtime, "max_daily_loss_limit", 3.50)
+            ),
+            "goal_reached": (daily_pnl >= daily_target if daily_target > 0 else False) or getattr(runtime, "today_winning_trades", 0) >= 10,
             "eligible_markets_count": len(dynamic_gainers) or scanner_stats.get("eligible_markets", 14),
             "total_markets_scanned": 537,
             "scan_interval_seconds": 60,

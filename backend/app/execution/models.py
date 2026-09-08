@@ -177,6 +177,12 @@ class LiveAccount(ExecutionModel):
     cross_order_margin: float = Field(default=0, ge=0)
     cross_user_margin: float = Field(default=0, ge=0)
     daily_pnl: float = 0
+    daily_profit: float = 0.0
+    daily_loss: float = 0.0
+    daily_wins: int = 0
+    daily_losses: int = 0
+    consecutive_losses: int = 0
+    max_daily_loss: float = 3.50
     timestamp: datetime | None = None
 
 
