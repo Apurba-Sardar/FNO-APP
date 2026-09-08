@@ -187,39 +187,28 @@ class ProTraderScalpAdvisor:
 
 
 class ClaudeScalpAdvisor:
-    """Unified Scalp Advisor with Zero-Cost Pro Trader Algorithmic Engine by default.
+    """Unified Scalp Advisor powered 100% by the Zero-Cost Pro Trader Algorithmic Engine.
     
-    If CLAUDE_SCALP_ENABLED=false (or no API key), uses local ProTraderScalpAdvisor ($0.00 cost, <0.5ms latency).
-    If CLAUDE_SCALP_ENABLED=true and API key is set, optionally routes through Anthropic API.
+    Zero External API calls ($0.00 cost, <0.1ms latency, 100% uptime).
+    Anthropic API calls are completely omitted.
     """
 
     def __init__(
         self,
         api_key: str = "",
-        model: str = "claude-sonnet-4-5-20250929",
+        model: str = "pro-trader-algo",
         min_conviction: int = 70,
-        timeout_seconds: float = 12.0,
-        enabled: bool | None = None,
+        timeout_seconds: float = 0.0,
+        enabled: bool = False,
     ) -> None:
-        self.api_key = api_key.strip()
-        self.model = model
         self.min_conviction = min_conviction
-        self.timeout_seconds = timeout_seconds
-        
-        # Check explicit enabled flag or env var (default: False to eliminate cost)
-        if enabled is not None:
-            self.enabled = enabled
-        else:
-            env_enabled = os.getenv("CLAUDE_SCALP_ENABLED", "false").strip().lower()
-            self.enabled = env_enabled in ("1", "true", "yes")
-
         self.algo_engine = ProTraderScalpAdvisor(min_conviction=min_conviction)
         self._cache: dict[str, tuple[datetime, ClaudeScalpAnalysis]] = {}
         self.log = structlog.get_logger()
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.enabled and self.api_key and len(self.api_key) > 10)
+        return False
 
     async def analyze_scalp(
         self,
@@ -238,88 +227,8 @@ class ClaudeScalpAdvisor:
             if (now - cached_time).total_seconds() < 20:
                 return cached_res
 
-        # If Claude is disabled or omitted -> run Pro Trader Quantitative Engine locally ($0 cost, <0.5ms)
-        if not self.is_configured:
-            result = self.algo_engine.evaluate(symbol, current_price, direction, metrics)
-            self._cache[cache_key] = (now, result)
-            return result
+        # 100% Quantitative Algorithmic Engine ($0 cost, micro-second execution)
+        result = self.algo_engine.evaluate(symbol, current_price, direction, metrics)
+        self._cache[cache_key] = (now, result)
+        return result
 
-        # Optional: Call Anthropic API if explicitly enabled
-        try:
-            result = await self._call_claude_api(symbol, current_price, direction, metrics)
-            self._cache[cache_key] = (now, result)
-            return result
-        except Exception as exc:
-            self.log.warning("CLAUDE_API_FALLBACK_TO_ALGO", symbol=symbol, error=str(exc))
-            result = self.algo_engine.evaluate(symbol, current_price, direction, metrics)
-            self._cache[cache_key] = (now, result)
-            return result
-
-    async def _call_claude_api(
-        self,
-        symbol: str,
-        current_price: float,
-        direction: str,
-        metrics: dict[str, Any],
-    ) -> ClaudeScalpAnalysis:
-        is_buy = direction.lower() in ("buy", "long")
-        dir_label = "BUY / LONG" if is_buy else "SELL / SHORT"
-
-        prompt = f"""You are an elite institutional crypto prop trader specializing in high-frequency 3x leverage scalping on CoinDCX Futures.
-Evaluate this setup for {symbol}:
-- Current Price: ${current_price:,.4g}
-- Proposed Direction: {dir_label}
-- Volatility / Spread: {metrics.get("spread_bps", 5.0)} bps
-- 24h Volume: ${metrics.get("quote_volume", 500000):,.0f}
-- 24h Price Change: {metrics.get("change_24h_pct", 0.0):+.2f}% (High 24h Momentum Gainer)
-- Momentum RSI: {metrics.get("rsi", 52.0)}
-- Trend EMA Align: {metrics.get("trend", "BULLISH" if is_buy else "BEARISH")}
-
-Respond ONLY with a valid JSON object matching this schema:
-{{
-  "conviction_score": <integer 0-100>,
-  "sentiment": <"STRONG_BULLISH" | "BULLISH" | "NEUTRAL" | "BEARISH" | "STRONG_BEARISH">,
-  "pro_trader_rationale": <string: 1-2 punchy sentences describing order flow, liquidity sweep, or key support/resistance rejection>,
-  "optimal_entry_zone": <string: tight price range e.g. "$1.448 – $1.452">,
-  "target_price": <number: +1.1% for long, -1.1% for short>,
-  "stop_price": <number: -0.9% for long, +0.9% for short>,
-  "pre_flight_approved": <boolean: true if conviction >= {self.min_conviction}>
-}}
-Do NOT include markdown backticks or commentary."""
-
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-        body = {
-            "model": self.model,
-            "max_tokens": 300,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            res = await client.post("https://api.anthropic.com/v1/messages", headers=headers, json=body)
-            if res.status_code != 200:
-                raise RuntimeError(f"Claude API HTTP {res.status_code}: {res.text[:120]}")
-            data = res.json()
-            content = data.get("content", [{}])[0].get("text", "").strip()
-
-            # Clean JSON string
-            cleaned = re.sub(r"^```json\s*", "", content, flags=re.MULTILINE)
-            cleaned = re.sub(r"^```\s*", "", cleaned, flags=re.MULTILINE).strip()
-            parsed = json.loads(cleaned)
-
-            conviction = int(parsed.get("conviction_score", 80))
-            return ClaudeScalpAnalysis(
-                symbol=symbol,
-                direction=direction,
-                conviction_score=conviction,
-                sentiment=str(parsed.get("sentiment", "BULLISH" if is_buy else "BEARISH")),
-                pro_trader_rationale=str(parsed.get("pro_trader_rationale", "")),
-                optimal_entry_zone=str(parsed.get("optimal_entry_zone", f"${current_price * 0.998:,.4g} – ${current_price * 1.002:,.4g}")),
-                target_price=float(parsed.get("target_price", current_price * 1.011 if is_buy else current_price * 0.989)),
-                stop_price=float(parsed.get("stop_price", current_price * 0.991 if is_buy else current_price * 1.009)),
-                pre_flight_approved=bool(conviction >= self.min_conviction),
-                ai_provider="Claude 3.5 Sonnet",
-            )
