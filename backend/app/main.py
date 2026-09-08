@@ -260,8 +260,37 @@ async def lifespan(application: FastAPI):
                 best_side = "buy"
                 live_px = 0.0
 
-                # Tier 1: Check Opportunity Runtime
-                if opportunity_runtime and getattr(opportunity_runtime, "state", None):
+                # ── Tier 1 (HIGHEST PRIORITY): Top 24h Heavy-Volume Momentum Gainers ──
+                # Target explosive movers with $10M+ volume continuously surging upward
+                try:
+                    from app.market_data.gainers import DynamicGainerScanner
+                    from app.services.coindcx.public_client import CoinDCXPublicClient
+                    async with CoinDCXPublicClient(
+                        api_base_url=settings.coindcx_api_base_url,
+                        public_base_url=settings.coindcx_public_base_url,
+                        timeout=5.0,
+                    ) as pub_client:
+                        g_scanner = DynamicGainerScanner(min_volume_usdt=10_000_000.0, min_gain_pct=5.0)
+                        top_gainers = await g_scanner.scan_market_gainers(pub_client, limit=12)
+                        for g in top_gainers:
+                            if g.symbol not in open_pairs and g.last_price > 0:
+                                best_symbol = g.symbol
+                                best_score = min(98.0, 80.0 + (g.change_24h_pct / 5.0))
+                                live_px = g.last_price
+                                best_side = "buy"
+                                log.info(
+                                    "AUTO_SCALP_TOP_GAINER_SELECTED",
+                                    symbol=g.symbol,
+                                    gain=f"+{g.change_24h_pct}%",
+                                    volume=f"${g.volume_24h:,.0f}",
+                                    price=g.last_price,
+                                )
+                                break
+                except Exception as scan_err:
+                    log.warning("AUTO_SCALP_DYNAMIC_GAINERS_SCAN_ERROR", error=str(scan_err))
+
+                # Tier 2: Check Opportunity Runtime
+                if not best_symbol and opportunity_runtime and getattr(opportunity_runtime, "state", None):
                     opps = getattr(opportunity_runtime.state, "opportunities", {})
                     sorted_opps = sorted(opps.values(), key=lambda o: -(getattr(o, "opportunity_score", 0.0) or 0.0))
                     for opp in sorted_opps:
