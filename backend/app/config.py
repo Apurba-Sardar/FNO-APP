@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     live_max_notional_per_trade: float = Field(default=75.0, gt=0)
     live_max_daily_profit_target: float = Field(default=10.0, ge=0.0)
     live_max_daily_loss_percent: float = Field(default=0.25, gt=0)
-    live_max_open_positions: int = Field(default=2, ge=1)
+    live_max_open_positions: int = Field(default=3, ge=1)
     live_max_total_exposure: float = Field(default=2500, gt=0)
     live_max_order_retries: int = Field(default=1, ge=0, le=3)
     live_order_timeout_seconds: float = Field(default=10, gt=0)

@@ -220,7 +220,7 @@ async def lifespan(application: FastAPI):
 
         while True:
             try:
-                auto_on = getattr(live_runtime, "auto_trading_enabled", False) or settings.live_auto_execution
+                auto_on = getattr(live_runtime, "auto_trading_enabled", True)
                 if not auto_on:
                     log.info("AUTO_SCALP_CHECK", status="paused", auto_trading_enabled=False)
                     await _asyncio.sleep(45)

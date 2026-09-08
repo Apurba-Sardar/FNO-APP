@@ -12,7 +12,7 @@ class RiskConfig(BaseModel):
     risk_per_trade_percent: float = Field(default=0.5, gt=0, le=100)
     max_daily_loss_percent: float = Field(default=2.0, gt=0, le=100)
     max_consecutive_losses: int = Field(default=3, ge=1)
-    max_open_positions: int = Field(default=1, ge=0)
+    max_open_positions: int = Field(default=3, ge=0)
     max_total_exposure_percent: float = Field(default=100, gt=0)
     minimum_risk_reward: float = Field(default=1.5, gt=0)
     max_leverage: float = Field(default=5, ge=1)

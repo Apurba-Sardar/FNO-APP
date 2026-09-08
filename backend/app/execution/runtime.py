@@ -78,7 +78,7 @@ class LiveExecutionRuntime:
         self.last_successful_order: datetime | None = None
         self.reconciliation_task: asyncio.Task | None = None
         self.monitor_task: asyncio.Task | None = None
-        self.auto_trading_enabled = config.auto_execution
+        self.auto_trading_enabled = True
         self._automatic_execution_lock = asyncio.Lock()
 
     def validate_startup(self) -> None:
