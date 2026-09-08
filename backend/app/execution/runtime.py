@@ -336,8 +336,8 @@ class LiveExecutionRuntime:
                     self.last_trade_closed_at = now_closed
                     if not hasattr(self, "symbol_cooldowns"):
                         self.symbol_cooldowns = {}
-                    # Lock symbol for 25 minutes after exit so it cannot be re-bought repeatedly at tops
-                    self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=25)
+                    # Lock symbol for 8 minutes after exit so it cannot be re-bought repeatedly at tops
+                    self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=8)
                     
                     # ── Daily Target & Win Counter ──
                     if pos.unrealized_pnl > 0.0:

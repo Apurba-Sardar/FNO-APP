@@ -253,12 +253,12 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(300)
                     continue
 
-                # ── Post-Trade Inter-Scalp Global Cooldown (90s) ──────────────
+                # ── Post-Trade Inter-Scalp Global Cooldown (30s) ──────────────
                 last_closed = getattr(live_runtime, "last_trade_closed_at", None)
                 if last_closed:
                     elapsed = (datetime.now(UTC) - last_closed).total_seconds()
-                    if elapsed < 90.0:
-                        rem = int(90.0 - elapsed)
+                    if elapsed < 30.0:
+                        rem = int(30.0 - elapsed)
                         log.info("AUTO_SCALP_POST_TRADE_COOLDOWN", remaining_seconds=rem)
                         await _asyncio.sleep(rem)
                         continue
@@ -276,7 +276,7 @@ async def lifespan(application: FastAPI):
                         entry=cur.average_price,
                         mark=cur.mark_price,
                     )
-                    await _asyncio.sleep(25)
+                    await _asyncio.sleep(15)
                     continue
 
                 # ── Per-Symbol Anti-Churn Cooldown ────────────────────────────
@@ -285,14 +285,14 @@ async def lifespan(application: FastAPI):
                 active_cooldowns = {s: t for s, t in cooldowns.items() if t > now_curr}
                 live_runtime.symbol_cooldowns = active_cooldowns
 
-                # ── Candidate Discovery (Ranked High-Volume Momentum Movers) ──
+                # ── Candidate Discovery (Bidirectional Long & Short Momentum) ──
                 best_symbol = None
                 best_score = 0.0
                 best_side = "buy"
                 live_px = 0.0
 
-                # ── Tier 1 (HIGHEST PRIORITY): High-Volume ($15M+) Momentum Gainers ──
-                # Target liquid coins with $15M–$500M+ volume and clean upward expansion
+                # ── Tier 1 (HIGHEST PRIORITY): Liquid Momentum Movers (Long & Short) ──
+                # Scans explosive movers with $5M+ volume continuously breaking out (Long) or breaking down (Short)
                 try:
                     from app.market_data.gainers import DynamicGainerScanner
                     from app.services.coindcx.public_client import CoinDCXPublicClient
@@ -301,49 +301,30 @@ async def lifespan(application: FastAPI):
                         public_base_url=settings.coindcx_public_base_url,
                         timeout=5.0,
                     ) as pub_client:
-                        g_scanner = DynamicGainerScanner(min_volume_usdt=15_000_000.0, min_gain_pct=4.0)
-                        top_gainers = await g_scanner.scan_market_gainers(pub_client, limit=15)
-                        for g in top_gainers:
+                        g_scanner = DynamicGainerScanner(min_volume_usdt=5_000_000.0, min_gain_pct=2.5)
+                        top_movers = await g_scanner.scan_market_gainers(pub_client, limit=25)
+                        for g in top_movers:
                             if g.symbol in open_pairs or g.symbol in active_cooldowns:
                                 continue
                             if g.last_price <= 0:
                                 continue
-                            # Filter out blow-off tops: avoid buying after >45% parabolic extension
-                            if g.change_24h_pct > 45.0:
-                                continue
-
-                            # 5m RSI Overbought Protection: Avoid buying exhaustion tops (RSI > 70)
-                            rsi_val = None
-                            try:
-                                cand_resp = await pub_client.candlesticks(g.symbol, timeframe="5m", limit=20)
-                                if cand_resp and len(cand_resp) >= 15:
-                                    from app.indicators.rsi import rsi
-                                    closes = [float(c.close) for c in cand_resp if getattr(c, "close", None) is not None]
-                                    if len(closes) >= 15:
-                                        rsi_series = rsi(closes, period=14)
-                                        rsi_val = rsi_series[-1]
-                            except Exception:
-                                pass
-
-                            if rsi_val is not None and rsi_val > 70.0:
-                                log.info("AUTO_SCALP_SKIPPING_OVERBOUGHT_TOP", symbol=g.symbol, rsi=round(rsi_val, 1))
-                                continue
 
                             best_symbol = g.symbol
-                            best_score = min(98.0, 80.0 + (g.change_24h_pct / 5.0))
+                            best_side = getattr(g, "direction", "buy")
+                            best_score = g.momentum_score
                             live_px = g.last_price
-                            best_side = "buy"
                             log.info(
-                                "AUTO_SCALP_TOP_GAINER_SELECTED",
+                                "AUTO_SCALP_MOMENTUM_MOVER_SELECTED",
                                 symbol=g.symbol,
-                                gain=f"+{g.change_24h_pct}%",
+                                side=best_side.upper(),
+                                change=f"{g.change_24h_pct:+}%",
                                 volume=f"${g.volume_24h:,.0f}",
                                 price=g.last_price,
-                                rsi=round(rsi_val, 1) if rsi_val is not None else "n/a",
+                                score=g.momentum_score,
                             )
                             break
                 except Exception as scan_err:
-                    log.warning("AUTO_SCALP_DYNAMIC_GAINERS_SCAN_ERROR", error=str(scan_err))
+                    log.warning("AUTO_SCALP_DYNAMIC_MOVERS_SCAN_ERROR", error=str(scan_err))
 
                 # Tier 2: Check Opportunity Runtime
                 if not best_symbol and opportunity_runtime and getattr(opportunity_runtime, "state", None):
@@ -487,8 +468,8 @@ async def lifespan(application: FastAPI):
                     # Tag position as bot-managed with profit target and stop
                     from datetime import UTC as _UTC, timedelta as _timedelta
                     now_t = datetime.now(_UTC)
-                    # Register 25-minute symbol cooldown so this coin is NEVER churned back-to-back
-                    live_runtime.symbol_cooldowns[best_symbol] = now_t + _timedelta(minutes=25)
+                    # Register 8-minute symbol cooldown so this coin is not churned back-to-back
+                    live_runtime.symbol_cooldowns[best_symbol] = now_t + _timedelta(minutes=8)
 
                     pos = next(
                         (p for p in live_runtime.positions.values() if p.pair == best_symbol and p.status == "open"),
@@ -534,7 +515,7 @@ async def lifespan(application: FastAPI):
             except Exception as daemon_exc:
                 structlog.get_logger().error("AUTO_SCALP_DAEMON_LOOP_ERROR", error=str(daemon_exc))
 
-            await _asyncio.sleep(45)  # evaluate every 45s
+            await _asyncio.sleep(20)  # evaluate every 20s for active, prompt execution
 
     auto_scalp_task = _asyncio.create_task(_auto_scalp_daemon(), name="auto-scalp-daemon")
 

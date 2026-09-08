@@ -15,6 +15,7 @@ class GainerCandidate(BaseModel):
     volume_24h: float
     change_24h_pct: float
     momentum_score: float
+    direction: str = "buy"  # "buy" for long scalp, "sell" for short scalp
     high_24h: float | None = None
     low_24h: float | None = None
     spread_bps: float = 3.5
@@ -23,12 +24,12 @@ class GainerCandidate(BaseModel):
 
 
 class DynamicGainerScanner:
-    """Discovers and ranks high-volume 24h top gainers across all 537+ CoinDCX futures pairs."""
+    """Discovers and ranks high-volume 24h momentum opportunities (both Long gainers and Short breakdowns) across CoinDCX futures."""
 
     def __init__(
         self,
-        min_volume_usdt: float = 15_000_000.0,
-        min_gain_pct: float = 4.0,
+        min_volume_usdt: float = 5_000_000.0,
+        min_gain_pct: float = 2.5,
         max_spread_bps: float = 15.0,
     ) -> None:
         self.min_volume_usdt = min_volume_usdt
@@ -39,11 +40,11 @@ class DynamicGainerScanner:
     async def scan_market_gainers(
         self,
         client: CoinDCXPublicClient,
-        limit: int = 15,
+        limit: int = 20,
     ) -> list[GainerCandidate]:
-        """Fetch all real-time market prices, filter for USDT futures with high volume and positive 24h change,
+        """Fetch all real-time market prices, filter for USDT futures with high volume and explosive movement,
 
-        and rank by institutional momentum.
+        and rank by institutional momentum (Longs and Shorts).
         """
         try:
             snapshot = await client.current_prices()
@@ -67,14 +68,14 @@ class DynamicGainerScanner:
             high_24 = float(data.get("h") or 0.0) if data.get("h") is not None else None
             low_24 = float(data.get("l") or 0.0) if data.get("l") is not None else None
 
-            # Filter for liquidity and positive 24h gain
-            if last_px <= 0 or vol_24 < self.min_volume_usdt or chg_24 < self.min_gain_pct:
+            # Filter for liquidity ($5M+ USDT) and meaningful momentum move (>= 2.5% in either direction)
+            if last_px <= 0 or vol_24 < self.min_volume_usdt or abs(chg_24) < self.min_gain_pct:
                 continue
 
-            # Composite momentum: 24h percentage gain weighted by institutional volume depth
-            # Ensures high volume breakout coins (e.g. +30% with $50M+ vol) rank highest
+            # Composite institutional momentum: percentage move weighted by volume depth
             vol_log = math.log10(max(vol_24, 1_000_000.0))
-            momentum_score = round(chg_24 * vol_log, 2)
+            momentum_score = round(abs(chg_24) * vol_log, 2)
+            trade_direction = "buy" if chg_24 > 0 else "sell"
 
             candidates.append({
                 "symbol": symbol,
@@ -82,6 +83,7 @@ class DynamicGainerScanner:
                 "volume_24h": vol_24,
                 "change_24h_pct": round(chg_24, 2),
                 "momentum_score": momentum_score,
+                "direction": trade_direction,
                 "high_24h": high_24,
                 "low_24h": low_24,
             })
@@ -98,18 +100,19 @@ class DynamicGainerScanner:
                     volume_24h=item["volume_24h"],
                     change_24h_pct=item["change_24h_pct"],
                     momentum_score=item["momentum_score"],
+                    direction=item["direction"],
                     high_24h=item["high_24h"],
                     low_24h=item["low_24h"],
                     spread_bps=3.5,
-                    is_top_gainer=True,
+                    is_top_gainer=(item["direction"] == "buy"),
                     gain_rank=rank,
                 )
             )
 
         self.log.info(
-            "DYNAMIC_GAINERS_DISCOVERED",
+            "DYNAMIC_MOVERS_DISCOVERED",
             total_usdt_pairs=len(prices),
-            eligible_gainers=len(candidates),
+            eligible_movers=len(candidates),
             top_picked=len(results),
         )
         return results

@@ -26,15 +26,21 @@ async def test_dynamic_gainer_scanner_filters_and_ranks():
     scanner = DynamicGainerScanner(min_volume_usdt=2_000_000.0, min_gain_pct=0.5)
     gainers = await scanner.scan_market_gainers(mock_client, limit=10)
 
-    assert len(gainers) == 2
+    assert len(gainers) == 3
     assert gainers[0].symbol == "B-HFT_USDT"
     assert gainers[0].change_24h_pct == 33.16
     assert gainers[0].gain_rank == 1
     assert gainers[0].is_top_gainer is True
+    assert gainers[0].direction == "buy"
 
     assert gainers[1].symbol == "B-CATI_USDT"
     assert gainers[1].change_24h_pct == 28.22
     assert gainers[1].gain_rank == 2
+    assert gainers[1].direction == "buy"
+
+    assert gainers[2].symbol == "B-DUMP_USDT"
+    assert gainers[2].direction == "sell"
+    assert gainers[2].change_24h_pct == -12.5
 
 
 def test_high_volume_majors_fallback():
