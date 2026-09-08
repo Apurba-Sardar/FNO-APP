@@ -87,7 +87,7 @@ class PositionReconciliationService:
                 
                 normalized = normalized.model_copy(update={
                     "position_id": local.position_id,
-                    "created_at": getattr(local, "created_at", None) or normalized.created_at,
+                    "created_at": getattr(local, "created_at", None) or getattr(normalized, "created_at", None) or datetime.now(UTC),
                     "target": t_px,
                     "stop": s_px,
                     "bot_managed": bot_mgr,
