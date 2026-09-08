@@ -230,6 +230,7 @@ async def lifespan(application: FastAPI):
                     LiveRuntimeState.ARMED,
                     LiveRuntimeState.RECONCILED,
                     LiveRuntimeState.READY,
+                    LiveRuntimeState.RECONCILING,
                 }
                 if not state_ok or not live_runtime.client:
                     log.info("AUTO_SCALP_CHECK", status="runtime_not_ready", state=str(live_runtime.state))

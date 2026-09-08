@@ -148,14 +148,14 @@ class LivePosition(ExecutionModel):
     pair: str
     direction: StrategyDirection
     quantity: float
-    average_price: float = Field(gt=0)
-    mark_price: float | None = Field(default=None, gt=0)
+    average_price: float = Field(default=0.0, ge=0)
+    mark_price: float | None = Field(default=None, ge=0)
     liquidation_price: float | None = Field(default=None, ge=0)
-    leverage: float = Field(ge=1)
-    margin_mode: str
+    leverage: float = Field(default=1.0, ge=0)
+    margin_mode: str = "isolated"
     margin: float = Field(default=0, ge=0)
-    stop: float | None = Field(default=None, gt=0)
-    target: float | None = Field(default=None, gt=0)
+    stop: float | None = Field(default=None, ge=0)
+    target: float | None = Field(default=None, ge=0)
     protection_status: ProtectionStatus = ProtectionStatus.UNKNOWN
     unrealized_pnl: float = 0
     realized_pnl: float = 0

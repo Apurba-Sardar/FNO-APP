@@ -427,22 +427,27 @@ class LiveExecutionRuntime:
             raise LiveConfigurationError("authenticated client is unavailable")
         preserve_armed = self.state in {LiveRuntimeState.ARMED, LiveRuntimeState.READY}
         self.state = LiveRuntimeState.RECONCILING
-        report = await self.reconciler.reconcile(self.orders, self.positions)
-        self.last_report = report
-        self.last_reconciliation = report.timestamp
-        if not report.healthy:
-            self.state = LiveRuntimeState.BLOCKED
-        elif preserve_armed or getattr(self, "auto_trading_enabled", False) or self.config.auto_execution:
-            self.state = LiveRuntimeState.ARMED
-        else:
-            self.state = LiveRuntimeState.RECONCILED
-        self.circuit_breaker.success() if report.healthy else self.circuit_breaker.failure()
-        await self._persist_runtime()
-        await self.audit.record(AuditEvent(
-            actor=actor, event_type="RECONCILED", result="healthy" if report.healthy else "mismatch",
-            metadata=report.model_dump(mode="json"),
-        ))
-        return report
+        try:
+            report = await self.reconciler.reconcile(self.orders, self.positions)
+            self.last_report = report
+            self.last_reconciliation = report.timestamp
+            if not report.healthy:
+                self.state = LiveRuntimeState.BLOCKED
+            elif preserve_armed or getattr(self, "auto_trading_enabled", True) or self.config.auto_execution:
+                self.state = LiveRuntimeState.ARMED
+            else:
+                self.state = LiveRuntimeState.RECONCILED
+            self.circuit_breaker.success() if report.healthy else self.circuit_breaker.failure()
+            await self._persist_runtime()
+            await self.audit.record(AuditEvent(
+                actor=actor, event_type="RECONCILED", result="healthy" if report.healthy else "mismatch",
+                metadata=report.model_dump(mode="json"),
+            ))
+            return report
+        except Exception as exc:
+            self.state = LiveRuntimeState.ARMED if getattr(self, "auto_trading_enabled", True) else LiveRuntimeState.RECONCILED
+            structlog.get_logger().error("RECONCILIATION_EXCEPTION", error=str(exc))
+            raise
 
     async def arm(self, safety_confirmation: str) -> None:
         if self.state != LiveRuntimeState.RECONCILED:
