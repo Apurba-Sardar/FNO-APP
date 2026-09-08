@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     live_trading_confirmation: str = "LIVE_CONFIRM_SAFE_2026"
     live_operator_token: str = "LIVE_OPERATOR_TOKEN_2026"
     live_emergency_token: str = "LIVE_EMERGENCY_TOKEN_2026"
-    live_stage: int = Field(default=3, ge=0, le=5)
+    live_stage: int = Field(default=5, ge=0, le=5)
     live_max_orders_per_day: int = Field(default=50, ge=1)
     live_max_trades_per_day: int = Field(default=25, ge=1)
     live_max_notional_per_trade: float = Field(default=75.0, gt=0)
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     live_require_tpsl_confirmation: bool = True
     live_emergency_stop: bool = False
     live_allow_leverage_change: bool = False
-    live_auto_execution: bool = False
+    live_auto_execution: bool = True
     live_margin_mode: Literal["isolated", "crossed"] = "isolated"
     live_confirmation_ttl_seconds: int = Field(default=30, ge=5, le=120)
     live_reconciliation_interval_seconds: int = Field(default=15, ge=5)

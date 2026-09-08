@@ -206,16 +206,222 @@ async def lifespan(application: FastAPI):
     except Exception as exc:
         structlog.get_logger().error("LIFESPAN_STARTUP_WARNING", error=str(exc))
 
+    # ── Self-contained Auto-Scalp Daemon ───────────────────────────────────────
+    # Bypasses the complex Phase 6 pipeline. Reads top signals from research feed
+    # and directly punches instant scalps every 60s when auto-trading is ON.
+    import asyncio as _asyncio
+
+    async def _auto_scalp_daemon():
+        from app.execution.models import LiveRuntimeState
+        log = structlog.get_logger()
+        log.info("AUTO_SCALP_DAEMON_STARTED", interval_seconds=60)
+        await _asyncio.sleep(30)  # wait 30s after startup for data to warm up
+
+        while True:
+            try:
+                auto_on = getattr(live_runtime, "auto_trading_enabled", False) or settings.live_auto_execution
+                if not auto_on:
+                    await _asyncio.sleep(60)
+                    continue
+
+                state_ok = live_runtime.state in {
+                    LiveRuntimeState.ARMED,
+                    LiveRuntimeState.RECONCILED,
+                    LiveRuntimeState.READY,
+                }
+                if not state_ok or not live_runtime.client:
+                    await _asyncio.sleep(60)
+                    continue
+
+                # Daily profit goal check
+                today_pnl = getattr(live_runtime.account, "daily_pnl", 0.0) or 0.0
+                max_target = settings.live_max_daily_profit_target or 10.0
+                if max_target > 0 and today_pnl >= max_target:
+                    log.info("AUTO_SCALP_DAEMON_DAILY_GOAL_REACHED", pnl=today_pnl, target=max_target)
+                    await _asyncio.sleep(300)
+                    continue
+
+                # Max open positions check
+                open_count = sum(1 for p in live_runtime.positions.values() if p.status == "open")
+                max_pos = settings.live_max_open_positions or 2
+                if open_count >= max_pos:
+                    log.info("AUTO_SCALP_DAEMON_MAX_POSITIONS", open=open_count, max=max_pos)
+                    await _asyncio.sleep(30)
+                    continue
+
+                # Pick best signal from strategy runtime (opportunity score ranked)
+                best_symbol = None
+                best_score = 0.0
+                best_side = "buy"
+                if live_runtime.strategy_runtime and live_runtime.strategy_runtime.state:
+                    for sym, analysis in live_runtime.strategy_runtime.state.analyses.items():
+                        if analysis.opportunity_score < 60:
+                            continue
+                        # Check this pair isn't already open
+                        already_open = any(
+                            p.pair == sym and p.status == "open"
+                            for p in live_runtime.positions.values()
+                        )
+                        if already_open:
+                            continue
+                        if analysis.opportunity_score > best_score:
+                            best_score = analysis.opportunity_score
+                            best_symbol = sym
+                            # Determine direction from strategy results
+                            for setup in analysis.results.values():
+                                from app.strategy.models import StrategyDirection
+                                if setup.direction == StrategyDirection.LONG:
+                                    best_side = "buy"
+                                elif setup.direction == StrategyDirection.SHORT:
+                                    best_side = "sell"
+                                break
+
+                # Fallback: use top gainers from scanner if strategy has no signals yet
+                if not best_symbol:
+                    try:
+                        gainers = await live_runtime.market_runtime.store.get_top_gainers(limit=5) if live_runtime.market_runtime else []
+                        for g in gainers:
+                            sym = getattr(g, "symbol", None) or getattr(g, "pair", None)
+                            if not sym:
+                                continue
+                            already_open = any(p.pair == sym and p.status == "open" for p in live_runtime.positions.values())
+                            if not already_open:
+                                best_symbol = sym
+                                best_side = "buy"  # buy top gainer momentum
+                                break
+                    except Exception:
+                        pass
+
+                # Final fallback to XRP if nothing found
+                if not best_symbol:
+                    already_xrp = any(p.pair == "B-XRP_USDT" and p.status == "open" for p in live_runtime.positions.values())
+                    if not already_xrp:
+                        best_symbol = "B-XRP_USDT"
+                        best_side = "buy"
+
+                if not best_symbol:
+                    log.info("AUTO_SCALP_DAEMON_NO_CANDIDATE", open_positions=open_count)
+                    await _asyncio.sleep(60)
+                    continue
+
+                # Resolve live price
+                live_px = None
+                try:
+                    from app.services.coindcx.constants import CURRENT_PRICES_PATH
+                    snap = await live_runtime.client.request_json(
+                        f"{settings.coindcx_public_base_url}{CURRENT_PRICES_PATH}"
+                    )
+                    p_data = (snap.get("prices", {}) if isinstance(snap, dict) else {}).get(best_symbol, {})
+                    live_px = float(p_data.get("ls") or p_data.get("mp") or 0.0) if isinstance(p_data, dict) else 0.0
+                except Exception:
+                    pass
+
+                if not live_px or live_px <= 0:
+                    log.warning("AUTO_SCALP_DAEMON_NO_PRICE", symbol=best_symbol)
+                    await _asyncio.sleep(60)
+                    continue
+
+                # Calculate quantity: $25 margin × 4× leverage = $100 notional
+                margin = 25.0
+                leverage = 4
+                notional = margin * leverage
+                qty_raw = notional / live_px
+                qty = round(qty_raw, 4) if qty_raw < 1 else int(qty_raw)
+                if qty <= 0:
+                    qty = 1
+
+                # Scalp targets: +1.4% TP, -1.0% SL
+                is_sell = best_side == "sell"
+                entry_px = live_px
+                target_px = round(entry_px * 0.986, 6) if is_sell else round(entry_px * 1.014, 6)
+                stop_px   = round(entry_px * 1.010, 6) if is_sell else round(entry_px * 0.990, 6)
+
+                order_payload = {
+                    "side": best_side,
+                    "pair": best_symbol,
+                    "order_type": "market_order",
+                    "total_quantity": qty,
+                    "leverage": leverage,
+                    "margin_type": "isolated",
+                }
+
+                log.info(
+                    "AUTO_SCALP_DAEMON_PUNCHING",
+                    symbol=best_symbol,
+                    side=best_side,
+                    qty=qty,
+                    price=live_px,
+                    target=target_px,
+                    stop=stop_px,
+                    score=round(best_score, 1),
+                )
+
+                res = await live_runtime.client.create_order(order_payload)
+                await _asyncio.sleep(1.5)
+                await live_runtime.reconcile(actor="auto_scalp_daemon")
+                await live_runtime.refresh_account()
+
+                # Tag position as bot-managed with targets
+                from datetime import UTC as _UTC
+                now_t = datetime.now(_UTC)
+                pos = next(
+                    (p for p in live_runtime.positions.values() if p.pair == best_symbol and p.status == "open"),
+                    None
+                )
+                if pos:
+                    ep = float(pos.average_price) if pos.average_price > 0 else entry_px
+                    tp = round(ep * 0.986, 6) if is_sell else round(ep * 1.014, 6)
+                    sl = round(ep * 1.010, 6) if is_sell else round(ep * 0.990, 6)
+                    updated = pos.model_copy(update={
+                        "bot_managed": True,
+                        "origin": "bot",
+                        "target": tp,
+                        "stop": sl,
+                        "created_at": now_t,
+                        "updated_at": now_t,
+                        "breakeven_activated": False,
+                    })
+                    live_runtime.positions[pos.position_id] = updated
+                    await live_runtime.repository.save_position(updated)
+
+                # Send notification
+                try:
+                    from app.services.notifications import notification_service
+                    _asyncio.create_task(notification_service.notify_trade_entry(
+                        symbol=best_symbol,
+                        direction="short" if is_sell else "long",
+                        quantity=qty,
+                        entry_price=entry_px,
+                        leverage=leverage,
+                        target_price=target_px,
+                        stop_price=stop_px,
+                        margin=margin,
+                    ))
+                except Exception:
+                    pass
+
+                log.info("AUTO_SCALP_DAEMON_SUCCESS", symbol=best_symbol, result=res)
+
+            except Exception as daemon_exc:
+                structlog.get_logger().warning("AUTO_SCALP_DAEMON_ERROR", error=str(daemon_exc))
+
+            await _asyncio.sleep(60)  # scan every 60 seconds
+
+    auto_scalp_task = _asyncio.create_task(_auto_scalp_daemon(), name="auto-scalp-daemon")
+
     try:
         yield
     finally:
         try:
+            auto_scalp_task.cancel()
+            await _asyncio.gather(auto_scalp_task, return_exceptions=True)
             await live_runtime.shutdown()
             await paper_runtime.shutdown()
             await scanner_runtime.shutdown()
             await runtime.stop()
         except Exception as exc:
             structlog.get_logger().error("LIFESPAN_SHUTDOWN_ERROR", error=str(exc))
+
 
 
 app = FastAPI(
