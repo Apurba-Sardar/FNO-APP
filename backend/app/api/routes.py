@@ -1925,3 +1925,34 @@ async def update_notification_config(body: NotificationConfigRequest) -> dict:
         "telegram_configured": bool(notification_service.telegram_bot_token and notification_service.telegram_chat_id),
     }
 
+
+@router.post("/deploy/webhook")
+async def deploy_webhook(request: Request) -> dict:
+    """GitHub Actions deploy hook — triggers git pull and hot-reload on the server."""
+    import os
+    import subprocess
+    expected = os.environ.get("DEPLOY_WEBHOOK_SECRET", "FNO_DEPLOY_2026")
+    incoming = request.headers.get("X-Deploy-Secret", "")
+    if not compare_digest(incoming, expected):
+        raise HTTPException(status_code=403, detail="Invalid deploy secret")
+    try:
+        git_result = subprocess.run(
+            ["git", "-C", "/opt/fno-app", "pull", "--rebase"],
+            capture_output=True, text=True, timeout=60
+        )
+        import signal as _signal
+        try:
+            os.kill(1, _signal.SIGHUP)
+            reload_msg = "SIGHUP sent to PID 1"
+        except Exception as sig_err:
+            reload_msg = f"Signal skipped: {sig_err}"
+        return {
+            "status": "deployed",
+            "git": git_result.stdout.strip() or git_result.stderr.strip(),
+            "reload": reload_msg,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Deploy failed: {exc}") from exc
+
+

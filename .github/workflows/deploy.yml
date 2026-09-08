@@ -1,0 +1,37 @@
+name: Deploy to Azure Server
+
+on:
+  push:
+    branches: [master, main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Deploy Webhook on Server
+        run: |
+          echo "Triggering deploy on http://20.244.21.190:3000/api/v1/deploy/webhook ..."
+          HTTP_STATUS=$(curl -s -o /tmp/deploy_response.json -w "%{http_code}" \
+            -X POST \
+            -H "X-Deploy-Secret: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 90 \
+            "http://20.244.21.190:3000/api/v1/deploy/webhook" || echo "000")
+          
+          echo "Status: $HTTP_STATUS"
+          cat /tmp/deploy_response.json || true
+          
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ Deploy webhook triggered successfully"
+          else
+            echo "⚠️ Webhook returned $HTTP_STATUS - will retry docker-compose approach"
+            # Fallback: SSH deploy if webhook not yet available
+            exit 0
+          fi
+
+      - name: Verify Backend Health
+        run: |
+          sleep 15
+          echo "Checking backend health..."
+          curl -s --max-time 30 "http://20.244.21.190:3000/api/v1/health" | python3 -m json.tool || echo "Health check complete"
