@@ -237,31 +237,62 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(45)
                     continue
 
-                # Daily profit goal check
+                # ── Daily Profit Goal & Win Count Gate ──────────────────────
                 today_pnl = getattr(live_runtime.account, "daily_pnl", 0.0) or 0.0
+                today_wins = getattr(live_runtime, "today_winning_trades", 0)
                 max_target = settings.live_max_daily_profit_target or 10.0
-                if max_target > 0 and today_pnl >= max_target:
-                    log.info("AUTO_SCALP_DAILY_GOAL_REACHED", pnl=today_pnl, target=max_target)
+                if (max_target > 0 and today_pnl >= max_target) or today_wins >= 10:
+                    log.info(
+                        "AUTO_SCALP_DAILY_GOAL_ACHIEVED",
+                        pnl=round(today_pnl, 2),
+                        wins=today_wins,
+                        target=max_target,
+                        status="halting_for_the_day",
+                    )
+                    live_runtime.auto_trading_enabled = False
                     await _asyncio.sleep(300)
                     continue
 
-                # Max open positions check
-                open_pairs = {p.pair for p in live_runtime.positions.values() if p.status == "open"}
-                open_count = len(open_pairs)
-                max_pos = max(getattr(settings, "live_max_open_positions", 3) or 3, 3)
-                if open_count >= max_pos:
-                    log.info("AUTO_SCALP_MAX_POSITIONS", open_count=open_count, max_pos=max_pos, pairs=list(open_pairs))
-                    await _asyncio.sleep(30)
+                # ── Post-Trade Inter-Scalp Global Cooldown (90s) ──────────────
+                last_closed = getattr(live_runtime, "last_trade_closed_at", None)
+                if last_closed:
+                    elapsed = (datetime.now(UTC) - last_closed).total_seconds()
+                    if elapsed < 90.0:
+                        rem = int(90.0 - elapsed)
+                        log.info("AUTO_SCALP_POST_TRADE_COOLDOWN", remaining_seconds=rem)
+                        await _asyncio.sleep(rem)
+                        continue
+
+                # ── Strict Single Open Position Gate ─────────────────────────
+                # Always maintain exactly ONE active scalp at a time for 100% focus and zero simultaneous drawdown
+                open_positions = [p for p in live_runtime.positions.values() if p.status == "open"]
+                open_pairs = {p.pair for p in open_positions}
+                if len(open_positions) >= 1:
+                    cur = open_positions[0]
+                    log.info(
+                        "AUTO_SCALP_POSITION_ACTIVE",
+                        pair=cur.pair,
+                        pnl=round(cur.unrealized_pnl, 3),
+                        entry=cur.average_price,
+                        mark=cur.mark_price,
+                    )
+                    await _asyncio.sleep(25)
                     continue
 
-                # ── Candidate Discovery (Ranked Multi-Tier) ───────────────────
+                # ── Per-Symbol Anti-Churn Cooldown ────────────────────────────
+                now_curr = datetime.now(UTC)
+                cooldowns = getattr(live_runtime, "symbol_cooldowns", {})
+                active_cooldowns = {s: t for s, t in cooldowns.items() if t > now_curr}
+                live_runtime.symbol_cooldowns = active_cooldowns
+
+                # ── Candidate Discovery (Ranked High-Volume Momentum Movers) ──
                 best_symbol = None
                 best_score = 0.0
                 best_side = "buy"
                 live_px = 0.0
 
-                # ── Tier 1 (HIGHEST PRIORITY): Top 24h Heavy-Volume Momentum Gainers ──
-                # Target explosive movers with $10M+ volume continuously surging upward
+                # ── Tier 1 (HIGHEST PRIORITY): High-Volume ($15M+) Momentum Gainers ──
+                # Target liquid coins with $15M–$500M+ volume and clean upward expansion
                 try:
                     from app.market_data.gainers import DynamicGainerScanner
                     from app.services.coindcx.public_client import CoinDCXPublicClient
@@ -270,22 +301,47 @@ async def lifespan(application: FastAPI):
                         public_base_url=settings.coindcx_public_base_url,
                         timeout=5.0,
                     ) as pub_client:
-                        g_scanner = DynamicGainerScanner(min_volume_usdt=10_000_000.0, min_gain_pct=5.0)
-                        top_gainers = await g_scanner.scan_market_gainers(pub_client, limit=12)
+                        g_scanner = DynamicGainerScanner(min_volume_usdt=15_000_000.0, min_gain_pct=4.0)
+                        top_gainers = await g_scanner.scan_market_gainers(pub_client, limit=15)
                         for g in top_gainers:
-                            if g.symbol not in open_pairs and g.last_price > 0:
-                                best_symbol = g.symbol
-                                best_score = min(98.0, 80.0 + (g.change_24h_pct / 5.0))
-                                live_px = g.last_price
-                                best_side = "buy"
-                                log.info(
-                                    "AUTO_SCALP_TOP_GAINER_SELECTED",
-                                    symbol=g.symbol,
-                                    gain=f"+{g.change_24h_pct}%",
-                                    volume=f"${g.volume_24h:,.0f}",
-                                    price=g.last_price,
-                                )
-                                break
+                            if g.symbol in open_pairs or g.symbol in active_cooldowns:
+                                continue
+                            if g.last_price <= 0:
+                                continue
+                            # Filter out blow-off tops: avoid buying after >45% parabolic extension
+                            if g.change_24h_pct > 45.0:
+                                continue
+
+                            # 5m RSI Overbought Protection: Avoid buying exhaustion tops (RSI > 70)
+                            rsi_val = None
+                            try:
+                                cand_resp = await pub_client.candlesticks(g.symbol, timeframe="5m", limit=20)
+                                if cand_resp and len(cand_resp) >= 15:
+                                    from app.indicators.rsi import rsi
+                                    closes = [float(c.close) for c in cand_resp if getattr(c, "close", None) is not None]
+                                    if len(closes) >= 15:
+                                        rsi_series = rsi(closes, period=14)
+                                        rsi_val = rsi_series[-1]
+                            except Exception:
+                                pass
+
+                            if rsi_val is not None and rsi_val > 70.0:
+                                log.info("AUTO_SCALP_SKIPPING_OVERBOUGHT_TOP", symbol=g.symbol, rsi=round(rsi_val, 1))
+                                continue
+
+                            best_symbol = g.symbol
+                            best_score = min(98.0, 80.0 + (g.change_24h_pct / 5.0))
+                            live_px = g.last_price
+                            best_side = "buy"
+                            log.info(
+                                "AUTO_SCALP_TOP_GAINER_SELECTED",
+                                symbol=g.symbol,
+                                gain=f"+{g.change_24h_pct}%",
+                                volume=f"${g.volume_24h:,.0f}",
+                                price=g.last_price,
+                                rsi=round(rsi_val, 1) if rsi_val is not None else "n/a",
+                            )
+                            break
                 except Exception as scan_err:
                     log.warning("AUTO_SCALP_DYNAMIC_GAINERS_SCAN_ERROR", error=str(scan_err))
 
@@ -295,7 +351,7 @@ async def lifespan(application: FastAPI):
                     sorted_opps = sorted(opps.values(), key=lambda o: -(getattr(o, "opportunity_score", 0.0) or 0.0))
                     for opp in sorted_opps:
                         sym = getattr(opp, "symbol", "")
-                        if not sym or sym in open_pairs:
+                        if not sym or sym in open_pairs or sym in active_cooldowns:
                             continue
                         px_cand = float(getattr(opp, "current_price", 0.0) or 0.0)
                         sc = float(getattr(opp, "opportunity_score", 0.0) or 0.0)
@@ -307,11 +363,11 @@ async def lifespan(application: FastAPI):
                             best_side = "sell" if "short" in dom or "bear" in dom else "buy"
                             break
 
-                # Tier 2: Check Strategy Runtime Analyses
+                # Tier 3: Check Strategy Runtime Analyses
                 if not best_symbol and live_runtime.strategy_runtime and getattr(live_runtime.strategy_runtime, "state", None):
                     analyses = getattr(live_runtime.strategy_runtime.state, "analyses", {})
                     for sym, analysis in analyses.items():
-                        if sym in open_pairs:
+                        if sym in open_pairs or sym in active_cooldowns:
                             continue
                         sc = float(getattr(analysis, "opportunity_score", 0.0) or 0.0)
                         px_cand = float(getattr(analysis, "current_price", 0.0) or 0.0)
@@ -325,31 +381,17 @@ async def lifespan(application: FastAPI):
                             else:
                                 best_side = "buy"
 
-                # Tier 3: Check Scanner Candidates
-                if not best_symbol and scanner_runtime and getattr(scanner_runtime, "state", None):
-                    cands = getattr(scanner_runtime.state, "candidates", {})
-                    for sym, cand in cands.items():
-                        if sym in open_pairs:
-                            continue
-                        px_cand = float(getattr(cand, "price", 0.0) or getattr(cand, "current_price", 0.0) or 0.0)
-                        if px_cand > 0:
-                            best_symbol = sym
-                            best_score = 65.0
-                            live_px = px_cand
-                            best_side = "buy"
-                            break
-
-                # Tier 4: Fallback to high-liquidity crypto pairs
+                # Tier 4: Fallback to high-liquidity crypto majors
                 if not best_symbol:
                     for fallback in ("B-XRP_USDT", "B-DOGE_USDT", "B-SOL_USDT", "B-ETH_USDT"):
-                        if fallback not in open_pairs:
+                        if fallback not in open_pairs and fallback not in active_cooldowns:
                             best_symbol = fallback
                             best_side = "buy"
                             best_score = 60.0
                             break
 
                 if not best_symbol:
-                    log.info("AUTO_SCALP_NO_CANDIDATE", open_positions=open_count)
+                    log.info("AUTO_SCALP_NO_ELIGIBLE_CANDIDATE", cooldown_count=len(active_cooldowns))
                     await _asyncio.sleep(45)
                     continue
 
@@ -411,8 +453,10 @@ async def lifespan(application: FastAPI):
 
                 is_sell = best_side == "sell"
                 entry_px = live_px
-                target_px = round(entry_px * 0.986, 6) if is_sell else round(entry_px * 1.014, 6)
-                stop_px   = round(entry_px * 1.010, 6) if is_sell else round(entry_px * 0.990, 6)
+                # Target: +1.35% on Long (Yields ~$1.35 gross, nets +$1.23 USDT cash in wallet)
+                target_px = round(entry_px * 0.9865, 6) if is_sell else round(entry_px * 1.0135, 6)
+                # Stop: -1.60% (Gives room to absorb 0.2%-0.4% entry spread noise)
+                stop_px   = round(entry_px * 1.016, 6) if is_sell else round(entry_px * 0.984, 6)
 
                 order_payload = {
                     "side": best_side,
@@ -441,16 +485,19 @@ async def lifespan(application: FastAPI):
                     await live_runtime.refresh_account()
 
                     # Tag position as bot-managed with profit target and stop
-                    from datetime import UTC as _UTC
+                    from datetime import UTC as _UTC, timedelta as _timedelta
                     now_t = datetime.now(_UTC)
+                    # Register 25-minute symbol cooldown so this coin is NEVER churned back-to-back
+                    live_runtime.symbol_cooldowns[best_symbol] = now_t + _timedelta(minutes=25)
+
                     pos = next(
                         (p for p in live_runtime.positions.values() if p.pair == best_symbol and p.status == "open"),
                         None
                     )
                     if pos:
                         ep = float(pos.average_price) if pos.average_price > 0 else entry_px
-                        tp = round(ep * 0.986, 6) if is_sell else round(ep * 1.014, 6)
-                        sl = round(ep * 1.010, 6) if is_sell else round(ep * 0.990, 6)
+                        tp = round(ep * 0.9865, 6) if is_sell else round(ep * 1.0135, 6)
+                        sl = round(ep * 1.016, 6) if is_sell else round(ep * 0.984, 6)
                         updated = pos.model_copy(update={
                             "bot_managed": True,
                             "origin": "bot",

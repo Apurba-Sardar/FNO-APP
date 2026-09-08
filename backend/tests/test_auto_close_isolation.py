@@ -120,3 +120,48 @@ async def test_claude_advisor_algorithmic_fallback():
     assert "Bullish Flow" in analysis.pro_trader_rationale
     assert analysis.target_price > 150.0
     assert analysis.stop_price < 150.0
+
+
+@pytest.mark.asyncio
+async def test_auto_close_anti_churn_and_daily_win_tracking():
+    config = LiveExecutionConfig(trading_mode="live", enabled=True, confirmation="test")
+    repo = InMemoryLiveRepository()
+    mock_client = MagicMock()
+    mock_client.exit_position = AsyncMock(return_value={"status": "success"})
+
+    runtime = LiveExecutionRuntime(config, repo, client=mock_client)
+    runtime.today_winning_trades = 9  # 9 wins already banked today
+    
+    bot_pos = LivePosition(
+        position_id=uuid4(),
+        exchange_position_id="pos_win_10",
+        pair="B-FORM_USDT",
+        direction=StrategyDirection.LONG,
+        quantity=300.0,
+        average_price=0.33,
+        mark_price=0.34,
+        target=0.3345,
+        stop=0.3247,
+        unrealized_pnl=1.20,  # >= +1.15 USDT target!
+        margin=25.0,
+        leverage=4,
+        margin_mode="isolated",
+        bot_managed=True,
+        origin="bot",
+        status="open",
+    )
+    runtime.positions[bot_pos.position_id] = bot_pos
+
+    actions = await runtime.monitor_and_auto_close_positions()
+
+    assert len(actions) == 1
+    assert "PROFIT_TARGET_REACHED" in actions[0]["reason"]
+    # Cooldown verification: B-FORM_USDT must be locked
+    assert "B-FORM_USDT" in runtime.symbol_cooldowns
+    assert runtime.symbol_cooldowns["B-FORM_USDT"] > datetime.now(UTC)
+    assert runtime.last_trade_closed_at is not None
+    # 10th win banked!
+    assert runtime.today_winning_trades == 10
+    # Auto-trading should now be paused to protect daily goal
+    assert runtime.auto_trading_enabled is False
+
