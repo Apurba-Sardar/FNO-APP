@@ -248,7 +248,7 @@ async def lifespan(application: FastAPI):
                 # Max open positions check
                 open_pairs = {p.pair for p in live_runtime.positions.values() if p.status == "open"}
                 open_count = len(open_pairs)
-                max_pos = settings.live_max_open_positions or 2
+                max_pos = max(getattr(settings, "live_max_open_positions", 3) or 3, 3)
                 if open_count >= max_pos:
                     log.info("AUTO_SCALP_MAX_POSITIONS", open_count=open_count, max_pos=max_pos, pairs=list(open_pairs))
                     await _asyncio.sleep(30)
