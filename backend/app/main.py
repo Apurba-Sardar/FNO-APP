@@ -332,27 +332,49 @@ async def lifespan(application: FastAPI):
                         timeout=5.0,
                     ) as pub_client:
                         g_scanner = DynamicGainerScanner(min_volume_usdt=5_000_000.0, min_gain_pct=2.5)
-                        top_movers = await g_scanner.scan_market_gainers(pub_client, limit=25)
-                        for g in top_movers:
-                            if g.symbol in open_pairs or g.symbol in active_cooldowns:
-                                continue
-                            if g.last_price <= 0:
-                                continue
+                        ranked_pool = await g_scanner.scan_market_gainers(pub_client, limit=20)
+                        
+                        # Filter for eligible candidates (not currently open and not in symbol cooldown)
+                        eligible_candidates = [
+                            g for g in ranked_pool
+                            if g.symbol not in open_pairs 
+                            and g.symbol not in active_cooldowns 
+                            and g.last_price > 0
+                        ]
 
-                            best_symbol = g.symbol
-                            best_side = getattr(g, "direction", "buy")
-                            best_score = g.momentum_score
-                            live_px = g.last_price
+                        if eligible_candidates:
+                            # Evaluate opportunity ratings with technical confluence from OpportunityRuntime
+                            scored_pool = []
+                            for cand in eligible_candidates:
+                                final_rating = cand.opportunity_score
+                                # Confluence boost if OpportunityRuntime has a detected opportunity setup
+                                if opportunity_runtime and getattr(opportunity_runtime, "state", None):
+                                    opp = opportunity_runtime.state.opportunities.get(cand.symbol)
+                                    if opp:
+                                        sc = float(getattr(opp, "opportunity_score", 0.0) or 0.0)
+                                        final_rating += sc * 0.4
+                                scored_pool.append((final_rating, cand))
+
+                            # Sort by highest dynamic opportunity score across top 1-10 ranked Longs & Shorts
+                            scored_pool.sort(key=lambda x: x[0], reverse=True)
+                            
+                            best_rating, best_cand = scored_pool[0]
+                            best_symbol = best_cand.symbol
+                            best_side = getattr(best_cand, "direction", "buy")
+                            best_score = best_rating
+                            live_px = best_cand.last_price
+
                             log.info(
-                                "AUTO_SCALP_MOMENTUM_MOVER_SELECTED",
-                                symbol=g.symbol,
+                                "AUTO_SCALP_TOP_OPPORTUNITY_SELECTED",
+                                symbol=best_symbol,
                                 side=best_side.upper(),
-                                change=f"{g.change_24h_pct:+}%",
-                                volume=f"${g.volume_24h:,.0f}",
-                                price=g.last_price,
-                                score=g.momentum_score,
+                                rank_in_direction=best_cand.gain_rank,
+                                change=f"{best_cand.change_24h_pct:+}%",
+                                volume=f"${best_cand.volume_24h:,.0f}",
+                                price=live_px,
+                                opportunity_score=round(best_rating, 1),
+                                evaluated_candidates=len(eligible_candidates),
                             )
-                            break
                 except Exception as scan_err:
                     log.warning("AUTO_SCALP_DYNAMIC_MOVERS_SCAN_ERROR", error=str(scan_err))
 

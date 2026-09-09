@@ -21,6 +21,7 @@ class GainerCandidate(BaseModel):
     spread_bps: float = 3.5
     is_top_gainer: bool = True
     gain_rank: int = 1
+    opportunity_score: float = 0.0
 
 
 class DynamicGainerScanner:
@@ -72,10 +73,46 @@ class DynamicGainerScanner:
             if last_px <= 0 or vol_24 < self.min_volume_usdt or abs(chg_24) < self.min_gain_pct:
                 continue
 
-            # Composite institutional momentum: percentage move weighted by volume depth
+            # Base composite institutional momentum: percentage move weighted by volume depth
             vol_log = math.log10(max(vol_24, 1_000_000.0))
             momentum_score = round(abs(chg_24) * vol_log, 2)
             trade_direction = "buy" if chg_24 > 0 else "sell"
+
+            # Dynamic Opportunity Quality Rating:
+            opp_score = momentum_score
+
+            # 1. Proximity to Day's Extreme (Active Breakout / Breakdown continuation)
+            if trade_direction == "buy" and high_24 and high_24 > 0:
+                high_prox = last_px / high_24
+                if high_prox >= 0.96:
+                    opp_score += 30.0  # Fresh 24h high breakout zone
+                elif high_prox >= 0.92:
+                    opp_score += 18.0  # Continuation near highs
+                elif high_prox < 0.85:
+                    opp_score -= 20.0  # Deep stall / pullback penalty
+            elif trade_direction == "sell" and low_24 and low_24 > 0:
+                low_prox = low_24 / last_px
+                if low_prox >= 0.96:
+                    opp_score += 30.0  # Fresh 24h low breakdown zone
+                elif low_prox >= 0.92:
+                    opp_score += 18.0  # Continuation near lows
+                elif low_prox < 0.85:
+                    opp_score -= 20.0  # Deep bounce / rebound penalty
+
+            # 2. Volume Depth & Liquidity Bonus
+            if vol_24 >= 30_000_000.0:
+                opp_score += 20.0
+            elif vol_24 >= 15_000_000.0:
+                opp_score += 12.0
+            elif vol_24 >= 8_000_000.0:
+                opp_score += 6.0
+
+            # 3. Prime Scalp Velocity Zone (Sweet-spot 6% to 35% movement)
+            abs_chg = abs(chg_24)
+            if 6.0 <= abs_chg <= 35.0:
+                opp_score += 15.0
+            elif abs_chg > 55.0:
+                opp_score -= 10.0  # Exhaustion penalty for overextended pairs
 
             candidates.append({
                 "symbol": symbol,
@@ -83,16 +120,23 @@ class DynamicGainerScanner:
                 "volume_24h": vol_24,
                 "change_24h_pct": round(chg_24, 2),
                 "momentum_score": momentum_score,
+                "opportunity_score": round(opp_score, 2),
                 "direction": trade_direction,
                 "high_24h": high_24,
                 "low_24h": low_24,
             })
 
-        # Rank by composite momentum score descending
-        candidates.sort(key=lambda x: x["momentum_score"], reverse=True)
+        # Separate into Long and Short candidate pools
+        long_candidates = [c for c in candidates if c["direction"] == "buy"]
+        short_candidates = [c for c in candidates if c["direction"] == "sell"]
+
+        # Rank each direction by opportunity score
+        long_candidates.sort(key=lambda x: x["opportunity_score"], reverse=True)
+        short_candidates.sort(key=lambda x: x["opportunity_score"], reverse=True)
 
         results: list[GainerCandidate] = []
-        for rank, item in enumerate(candidates[:limit], start=1):
+        # Include top 10 Longs (ranks 1 to 10)
+        for rank, item in enumerate(long_candidates[:10], start=1):
             results.append(
                 GainerCandidate(
                     symbol=item["symbol"],
@@ -100,20 +144,45 @@ class DynamicGainerScanner:
                     volume_24h=item["volume_24h"],
                     change_24h_pct=item["change_24h_pct"],
                     momentum_score=item["momentum_score"],
+                    opportunity_score=item["opportunity_score"],
                     direction=item["direction"],
                     high_24h=item["high_24h"],
                     low_24h=item["low_24h"],
                     spread_bps=3.5,
-                    is_top_gainer=(item["direction"] == "buy"),
+                    is_top_gainer=True,
                     gain_rank=rank,
                 )
             )
+
+        # Include top 10 Shorts (ranks 1 to 10)
+        for rank, item in enumerate(short_candidates[:10], start=1):
+            results.append(
+                GainerCandidate(
+                    symbol=item["symbol"],
+                    last_price=item["last_price"],
+                    volume_24h=item["volume_24h"],
+                    change_24h_pct=item["change_24h_pct"],
+                    momentum_score=item["momentum_score"],
+                    opportunity_score=item["opportunity_score"],
+                    direction=item["direction"],
+                    high_24h=item["high_24h"],
+                    low_24h=item["low_24h"],
+                    spread_bps=3.5,
+                    is_top_gainer=False,
+                    gain_rank=rank,
+                )
+            )
+
+        # Sort the full 1-10 ranked pool by highest overall opportunity score
+        results.sort(key=lambda x: x.opportunity_score, reverse=True)
 
         self.log.info(
             "DYNAMIC_MOVERS_DISCOVERED",
             total_usdt_pairs=len(prices),
             eligible_movers=len(candidates),
-            top_picked=len(results),
+            top_longs=min(10, len(long_candidates)),
+            top_shorts=min(10, len(short_candidates)),
+            total_ranked_pool=len(results),
         )
         return results
 
