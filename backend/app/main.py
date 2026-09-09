@@ -339,13 +339,27 @@ async def lifespan(application: FastAPI):
                     ) as pub_client:
                         g_scanner = DynamicGainerScanner(min_volume_usdt=5_000_000.0, min_gain_pct=2.5)
                         ranked_pool = await g_scanner.scan_market_gainers(pub_client, limit=20)
-                        
-                        # Filter for eligible candidates (not currently open and not in symbol cooldown)
+                        # Fetch active instruments to guarantee never picking inactive or exit-only pairs
+                        active_set = getattr(live_runtime, "_active_instruments_set", None)
+                        active_time = getattr(live_runtime, "_active_instruments_time", 0.0)
+                        import time as _time
+                        if not active_set or (_time.time() - active_time) > 1800:
+                            try:
+                                inst_resp = await pub_client.client.get(f"{settings.coindcx_api_base_url}/exchange/v1/derivatives/futures/data/active_instruments", timeout=5.0)
+                                if inst_resp.status_code == 200:
+                                    active_set = set(inst_resp.json())
+                                    live_runtime._active_instruments_set = active_set
+                                    live_runtime._active_instruments_time = _time.time()
+                            except Exception:
+                                pass
+
+                        # Filter for eligible candidates (active on exchange, not currently open, and not in cooldown)
                         eligible_candidates = [
                             g for g in ranked_pool
                             if g.symbol not in open_pairs 
                             and g.symbol not in active_cooldowns 
                             and g.last_price > 0
+                            and (not active_set or g.symbol in active_set)
                         ]
 
                         if eligible_candidates:
@@ -524,18 +538,24 @@ async def lifespan(application: FastAPI):
                 # Precision step & min quantity
                 margin = 25.0
                 leverage = 4
-                notional = margin * leverage  # $100 notional
+                notional = 105.0  # Safe $105 notional ensures never falling below exchange $100 minimum requirement
                 step = 1.0
                 min_q = 1.0
                 try:
                     from app.services.coindcx.constants import INSTRUMENT_PATH
                     inst = await live_runtime.client.request_json(
-                        f"{settings.coindcx_public_base_url}{INSTRUMENT_PATH}",
+                        f"{settings.coindcx_api_base_url}{INSTRUMENT_PATH}",
                         params={"pair": best_symbol},
                     )
-                    if isinstance(inst, dict):
-                        step = float(inst.get("quantity_increment") or 1.0)
-                        min_q = float(inst.get("min_quantity") or 1.0)
+                    inst_data = inst.get("instrument", inst) if isinstance(inst, dict) else {}
+                    if isinstance(inst_data, dict):
+                        if inst_data.get("status") == "inactive" or inst_data.get("exit_only") is True:
+                            log.warning("AUTO_SCALP_SKIP_INACTIVE_OR_EXIT_ONLY", symbol=best_symbol)
+                            from datetime import timedelta as _timedelta
+                            live_runtime.symbol_cooldowns[best_symbol] = datetime.now(UTC) + _timedelta(hours=24)
+                            continue
+                        step = float(inst_data.get("quantity_increment") or 1.0)
+                        min_q = float(inst_data.get("min_quantity") or 1.0)
                 except Exception:
                     if live_px >= 10.0:
                         step = 0.01
@@ -547,7 +567,8 @@ async def lifespan(application: FastAPI):
                         step = 1.0
                         min_q = 1.0
 
-                steps = int(notional / (live_px * step))
+                import math
+                steps = math.ceil(notional / (live_px * step))
                 qty = round(steps * step, 4)
                 if qty < min_q:
                     qty = min_q
@@ -653,6 +674,8 @@ async def lifespan(application: FastAPI):
                     log.info("AUTO_SCALP_ORDER_FILLED_SUCCESS", symbol=best_symbol, order=res)
 
                 except Exception as order_err:
+                    from datetime import timedelta as _timedelta
+                    live_runtime.symbol_cooldowns[best_symbol] = datetime.now(UTC) + _timedelta(minutes=30)
                     log.error("AUTO_SCALP_ORDER_SUBMISSION_FAILED", symbol=best_symbol, error=str(order_err))
 
             except Exception as daemon_exc:
