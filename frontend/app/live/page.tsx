@@ -53,6 +53,44 @@ export default function LivePage() {
     }
   };
 
+  const [isResettingPnl, setIsResettingPnl] = useState(false);
+
+  const resetDailyPnl = async () => {
+    if (!window.confirm("Are you sure you want to reset today's PnL & win/loss counters to clean 0.00 USDT?")) return;
+    try {
+      setIsResettingPnl(true);
+      const apiBase = getApiUrl();
+      const res = await fetch(`${apiBase}/live/reset-daily-pnl`, {
+        method: "POST",
+        headers: headers(),
+      });
+      if (res.ok) {
+        setStatus((prev: any) => ({
+          ...prev,
+          daily_pnl: 0.0,
+          daily_profit: 0.0,
+          daily_loss: 0.0,
+          daily_wins: 0,
+          daily_losses: 0,
+          capital_shield_active: false,
+          daily_profit_goal_reached: false,
+        }));
+        setAccount((prev: any) => ({
+          ...prev,
+          daily_pnl: 0.0,
+          daily_profit: 0.0,
+          daily_loss: 0.0,
+          daily_wins: 0,
+          daily_losses: 0,
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to reset daily PnL", e);
+    } finally {
+      setIsResettingPnl(false);
+    }
+  };
+
   const testPushNotification = async () => {
     setIsTestingAlert(true);
     setAlertStatusMessage(null);
@@ -595,12 +633,21 @@ export default function LivePage() {
             <div>
               <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Today&apos;s Target Cap</span>
               <b className="mt-0.5 block text-lg font-black text-white font-mono">
-                ${balance(status.daily_profit_target ?? 20.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
+                ${balance(status.daily_profit_target && status.daily_profit_target > 0 ? status.daily_profit_target : 20.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
               </b>
             </div>
             <div className="border-l border-white/10 pl-6">
               <div className="flex items-center justify-end gap-2">
                 <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Realized Net P&L</span>
+                <button
+                  type="button"
+                  onClick={resetDailyPnl}
+                  disabled={isResettingPnl}
+                  title="Reset today's PnL & counters to $0.00"
+                  className="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 text-[9px] font-bold transition flex items-center gap-1 cursor-pointer"
+                >
+                  <span>{isResettingPnl ? "..." : "Reset ⟲"}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => { setShowLedgerModal(true); fetchLedgerLogs(); }}

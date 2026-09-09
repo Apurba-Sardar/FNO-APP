@@ -1167,10 +1167,10 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
     from collections import defaultdict
     daily_groups = defaultdict(list)
     for t in trades_list:
-        dt_str = (t.get("closed_at") or "")[:10]
-        if not dt_str:
-            dt_str = datetime.now(UTC).strftime("%Y-%m-%d")
-        daily_groups[dt_str].append(t)
+        raw_dt = t.get("closed_at") or t.get("created_at")
+        dt_str = raw_dt[:10] if raw_dt else None
+        if dt_str:
+            daily_groups[dt_str].append(t)
 
     today_str = datetime.now(UTC).strftime("%Y-%m-%d")
     if today_str not in daily_groups:
@@ -1202,7 +1202,7 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
     # ── Weekly Performance Aggregation ──
     weekly_groups = defaultdict(list)
     for t in trades_list:
-        raw_dt = t.get("closed_at")
+        raw_dt = t.get("closed_at") or t.get("created_at")
         if raw_dt:
             try:
                 parsed_dt = datetime.fromisoformat(raw_dt.replace("Z", "+00:00"))
@@ -1253,19 +1253,19 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
     tot_winrate = round((tot_wins / tot_trades) * 100.0, 1) if tot_trades > 0 else 0.0
     profit_factor = round(tot_profit / tot_loss, 2) if tot_loss > 0 else (99.0 if tot_profit > 0 else 1.0)
 
-    # Today's metrics (synced with runtime telemetry)
+    # Today's metrics (synced directly with runtime live telemetry)
     today_live_pnl = round(getattr(runtime, "today_realized_profit", 0.0) - getattr(runtime, "today_realized_loss", 0.0), 3)
     today_live_wins = getattr(runtime, "today_winning_trades", 0)
     today_live_losses = getattr(runtime, "today_losing_trades", 0)
 
-    today_item = next((d for d in daily_breakdown if d["date"] == today_str), None)
-    today_pnl = today_live_pnl if (today_live_wins > 0 or today_live_losses > 0) else (today_item["realized_pnl"] if today_item else 0.0)
-    today_wins = max(today_live_wins, today_item["wins"] if today_item else 0)
-    today_losses = max(today_live_losses, today_item["losses"] if today_item else 0)
+    today_pnl = today_live_pnl
+    today_wins = today_live_wins
+    today_losses = today_live_losses
 
     this_week_item = next((w for w in weekly_breakdown if w["week_id"] == current_week_key), None)
     this_week_pnl = this_week_item["realized_pnl"] if this_week_item else today_pnl
 
+    target_cap = getattr(runtime.config, "max_daily_profit_target", 20.0) or 20.0
     summary = {
         "total_realized_pnl": round(tot_pnl, 3),
         "total_trades": tot_trades,
@@ -1278,8 +1278,8 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
         "today_losses": today_losses,
         "today_profit": round(getattr(runtime, "today_realized_profit", 0.0), 3),
         "today_loss": round(getattr(runtime, "today_realized_loss", 0.0), 3),
-        "daily_target_cap": getattr(runtime.config, "max_daily_profit_target", 20.0),
-        "daily_target_progress_pct": min(100.0, max(0.0, round((today_pnl / 20.0) * 100.0, 1))) if today_pnl > 0 else 0.0,
+        "daily_target_cap": target_cap,
+        "daily_target_progress_pct": min(100.0, max(0.0, round((today_pnl / target_cap) * 100.0, 1))) if today_pnl > 0 else 0.0,
         "this_week_pnl": round(this_week_pnl, 3),
         "this_week_wins": this_week_item["wins"] if this_week_item else today_wins,
         "this_week_losses": this_week_item["losses"] if this_week_item else today_losses,
@@ -1293,6 +1293,36 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
         "weekly_breakdown": weekly_breakdown,
         "trades": trades_list[:limit],
         "items": trades_list[:limit],
+    }
+
+
+@router.post("/live/reset-daily-pnl")
+async def live_reset_daily_pnl(request: Request, settings: SettingsDependency) -> dict:
+    """Manually or remotely reset today's PnL, wins, and losses back to clean 0.00 baseline."""
+    authorize_live(request, settings)
+    runtime = live_runtime_from(request)
+    runtime.today_realized_profit = 0.0
+    runtime.today_realized_loss = 0.0
+    runtime.today_winning_trades = 0
+    runtime.today_losing_trades = 0
+    runtime.consecutive_losses = 0
+    runtime.consecutive_loss_cooldown_until = None
+    if hasattr(runtime, "account") and runtime.account:
+        runtime.account.daily_profit = 0.0
+        runtime.account.daily_loss = 0.0
+        runtime.account.daily_wins = 0
+        runtime.account.daily_losses = 0
+        runtime.account.consecutive_losses = 0
+        runtime.account.daily_pnl = 0.0
+    runtime.auto_trading_enabled = True
+    return {
+        "status": "success",
+        "message": "Today's PnL, gains, and losses successfully reset to 0.00 USDT.",
+        "daily_pnl": 0.0,
+        "daily_profit": 0.0,
+        "daily_loss": 0.0,
+        "daily_wins": 0,
+        "daily_losses": 0,
     }
 
 

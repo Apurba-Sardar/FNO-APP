@@ -82,7 +82,7 @@ def test_all_live_gates_pass_only_with_full_explicit_configuration():
     ({"trades_today": 1}, "trade"),
 ])
 def test_critical_gate_failures_block(mutation, reason):
-    config = LiveExecutionConfig(trading_mode="live", enabled=True, confirmation="confirm", stage=3)
+    config = LiveExecutionConfig(trading_mode="live", enabled=True, confirmation="confirm", stage=3, max_orders_per_day=2, max_trades_per_day=1)
     values = gate_kwargs() | mutation
     result = LiveSafetyGate(config).evaluate(**values)
     assert not result.passed

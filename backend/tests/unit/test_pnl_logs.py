@@ -112,3 +112,39 @@ async def test_refresh_account_preserves_daily_pnl():
     assert account.daily_wins == 3
     assert account.daily_losses == 1
     assert account.available_balance == 95.50
+
+
+def test_max_daily_profit_target_default_is_20():
+    config = LiveExecutionConfig(trading_mode="live", enabled=True, confirmation="test")
+    assert config.max_daily_profit_target == 20.0
+
+
+@pytest.mark.asyncio
+async def test_stale_position_without_closed_at_not_counted_today():
+    repo = InMemoryLiveRepository()
+    # A position closed in the past without closed_at timestamp
+    stale_pos = LivePosition(
+        position_id=uuid4(),
+        exchange_position_id="P-STALE",
+        pair="B-BTC_USDT",
+        direction=StrategyDirection.LONG,
+        quantity=1.0,
+        average_price=50000.0,
+        realized_pnl=-0.223,
+        status="closed",
+        closed_at=None,
+        created_at=datetime(2026, 9, 7, 10, 0, 0, tzinfo=UTC),
+        updated_at=datetime.now(UTC),  # Updated today due to container restart
+    )
+    repo.positions = {stale_pos.position_id: stale_pos}
+
+    config = LiveExecutionConfig(trading_mode="live", enabled=True, confirmation="test")
+    runtime = LiveExecutionRuntime(config, repo)
+    await runtime.load()
+
+    # The stale trade with no closed_at must NOT be counted as today's loss!
+    assert runtime.today_realized_loss == 0.0
+    assert runtime.today_realized_profit == 0.0
+    assert runtime.today_losing_trades == 0
+    assert runtime.today_winning_trades == 0
+

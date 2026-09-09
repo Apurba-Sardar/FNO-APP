@@ -153,7 +153,8 @@ class LiveExecutionRuntime:
         today_losses = 0
         for pos in self.positions.values():
             if getattr(pos, "status", None) == "closed":
-                t = getattr(pos, "closed_at", None) or getattr(pos, "updated_at", None)
+                # STRICT REQUIREMENT: Only count if explicitly closed today; NEVER fall back to updated_at
+                t = getattr(pos, "closed_at", None)
                 if t:
                     if getattr(t, "tzinfo", None) is None:
                         t = t.replace(tzinfo=UTC)
@@ -921,9 +922,9 @@ class LiveExecutionRuntime:
         ):
             return
 
-        # Check if daily profit goal ($10.00 USDT) has been reached to secure profits
+        # Check if daily profit goal ($20.00 USDT) has been reached to secure profits
         today_pnl = getattr(self.account, "daily_pnl", 0.0) or 0.0
-        max_target = getattr(self.config, "max_daily_profit_target", 10.0)
+        max_target = getattr(self.config, "max_daily_profit_target", 20.0) or 20.0
         if max_target > 0 and today_pnl >= max_target:
             if not getattr(self, "_daily_profit_target_notified_today", False):
                 self._daily_profit_target_notified_today = True
