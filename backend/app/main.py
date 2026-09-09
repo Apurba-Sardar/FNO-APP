@@ -263,11 +263,12 @@ async def lifespan(application: FastAPI):
                 # ── Capital Risk Shield: Daily Loss Limit Gate ───────────────
                 daily_loss = getattr(live_runtime, "today_realized_loss", 0.0) or 0.0
                 max_daily_loss = getattr(live_runtime, "max_daily_loss_limit", 3.50)
-                if daily_loss >= max_daily_loss or (today_pnl <= -max_daily_loss):
+                today_pnl = today_net_pnl
+                if daily_loss >= max_daily_loss or (today_net_pnl <= -max_daily_loss):
                     log.warning(
                         "AUTO_SCALP_CAPITAL_SHIELD_TRIGGERED",
                         daily_loss=round(daily_loss, 2),
-                        today_pnl=round(today_pnl, 2),
+                        today_pnl=round(today_net_pnl, 2),
                         max_allowed_loss=max_daily_loss,
                         action="halting_autotrading_to_preserve_capital",
                     )
