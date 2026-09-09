@@ -797,45 +797,45 @@ export default function LivePage() {
 
       {/* Safety & Token Panel (Collapsible) */}
       {showTokens && (
-        <section className="cred-surface grid gap-4 md:grid-cols-3 p-5 rounded-2xl border border-white/10">
-          <Card className="bg-black/60 border-white/10 p-4 rounded-xl">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Operator Key</label>
+        <section className="cred-surface grid gap-4 md:grid-cols-3 p-5 rounded-2xl border border-white/[0.08]">
+          <Card className="bg-[#08080b] border-white/[0.08] p-4 rounded-xl">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 font-mono">Operator Key</label>
             <input
               type="password"
               value={operatorToken}
               onChange={e => setOperatorToken(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-white/10 bg-slate-900/90 px-3 py-2 text-xs text-slate-200"
+              className="mt-2 w-full rounded-xl border border-white/[0.08] bg-[#0c0c10] px-3 py-2 text-xs text-zinc-200 font-mono"
             />
-            <p className="mt-1.5 text-[11px] text-slate-500">Authorizes live trading and position management.</p>
+            <p className="mt-1.5 text-[11px] text-zinc-500">Authorizes live trading and position management.</p>
           </Card>
-          <Card className="bg-black/60 border-amber-500/30 p-4 rounded-xl">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Engine Arming Passphrase</label>
+          <Card className="bg-[#08080b] border-[#FFB800]/25 p-4 rounded-xl">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FFB800] font-mono">Engine Arming Passphrase</label>
             <input
               type="password"
               value={safetyConfirmation}
               onChange={e => setSafetyConfirmation(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-amber-700/50 bg-slate-900/90 px-3 py-2 text-xs text-amber-100"
+              className="mt-2 w-full rounded-xl border border-[#FFB800]/30 bg-[#0c0c10] px-3 py-2 text-xs text-amber-100 font-mono"
             />
             <button
               onClick={arm}
               disabled={!operatorToken || !safetyConfirmation}
-              className="mt-2.5 w-full rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-2 text-xs font-bold text-slate-950 transition disabled:opacity-40"
+              className="mt-2.5 w-full rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 px-3 py-2 text-xs font-black text-black transition disabled:opacity-40 shadow-[0_0_15px_rgba(245,158,11,0.3)] cursor-pointer"
             >
               ARM LIVE ENGINE
             </button>
           </Card>
-          <Card className="bg-black/60 border-rose-500/30 p-4 rounded-xl">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-300">Safety Cut-Off (Emergency)</label>
+          <Card className="bg-[#08080b] border-[#FF3366]/25 p-4 rounded-xl">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF3366] font-mono">Safety Cut-Off (Emergency)</label>
             <input
               type="password"
               value={emergencyToken}
               onChange={e => setEmergencyToken(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-rose-700/50 bg-slate-900/90 px-3 py-2 text-xs text-rose-100"
+              className="mt-2 w-full rounded-xl border border-[#FF3366]/30 bg-[#0c0c10] px-3 py-2 text-xs text-rose-100 font-mono"
             />
             <button
               onClick={stop}
               disabled={!emergencyToken}
-              className="mt-2.5 w-full rounded-lg bg-rose-600 hover:bg-rose-500 px-3 py-2 text-xs font-bold text-white transition disabled:opacity-40"
+              className="mt-2.5 w-full rounded-xl bg-gradient-to-r from-[#FF3366] to-[#E11D48] hover:from-[#ff4d79] hover:to-[#f43f5e] px-3 py-2 text-xs font-black text-white transition disabled:opacity-40 shadow-[0_0_15px_rgba(255,51,102,0.3)] cursor-pointer"
             >
               HALT ALL NEW TRADES
             </button>
@@ -916,11 +916,11 @@ export default function LivePage() {
 
       {/* Quick Trade Setup Approval */}
       <section>
-        <Card className="p-5 bg-slate-900/70 border-slate-800">
+        <Card className="p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h2 className="text-base font-bold text-white">Execute a Scanned Opportunity</h2>
-              <p className="mt-0.5 text-xs text-slate-400">
+              <h2 className="text-base font-bold text-white tracking-tight">Execute a Scanned Opportunity</h2>
+              <p className="mt-0.5 text-xs text-zinc-400">
                 Paste any Setup ID from the Scanner. The engine automatically recalculates safe leverage and stop-losses.
               </p>
             </div>
@@ -930,53 +930,53 @@ export default function LivePage() {
               value={setupId}
               onChange={e => setSetupId(e.target.value)}
               placeholder="e.g. setup_B-DOGE_USDT_15m or opportunity ID"
-              className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-[#08080a] px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00F5A0]/60 font-mono"
             />
             <button
               onClick={prepare}
-              className="rounded-lg bg-emerald-500 hover:bg-emerald-400 px-5 py-2 text-sm font-bold text-slate-950 transition shadow"
+              className="cred-btn-primary px-5 py-2.5 text-sm font-black transition shadow"
             >
               Verify Setup
             </button>
           </div>
 
           {intent && (
-            <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">Review Trade Order Parameters</h3>
+            <div className="mt-4 rounded-xl border border-[#00F5A0]/30 bg-[#00F5A0]/[0.04] p-4">
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#00F5A0] font-mono">Review Trade Order Parameters</h3>
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
-                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Pair:</span>
-                  <p className="mt-0.5 font-bold text-white text-sm">{intent.symbol}</p>
+                <div className="bg-[#08080b] p-3 rounded-xl border border-white/[0.06]">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">Pair:</span>
+                  <p className="mt-0.5 font-black text-white text-sm font-mono">{intent.symbol}</p>
                 </div>
-                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Direction:</span>
-                  <p className={`mt-0.5 font-bold text-sm ${intent.direction === "long" ? "text-emerald-400" : "text-rose-400"}`}>
+                <div className="bg-[#08080b] p-3 rounded-xl border border-white/[0.06]">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">Direction:</span>
+                  <p className={`mt-0.5 font-black text-sm font-mono ${intent.direction === "long" ? "text-[#00F5A0]" : "text-[#FF3366]"}`}>
                     {String(intent.direction).toUpperCase()}
                   </p>
                 </div>
-                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Trade Quantity:</span>
-                  <p className="mt-0.5 font-bold text-white text-sm">{balance(intent.quantity)}</p>
+                <div className="bg-[#08080b] p-3 rounded-xl border border-white/[0.06]">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">Trade Quantity:</span>
+                  <p className="mt-0.5 font-bold text-white text-sm font-mono">{balance(intent.quantity)}</p>
                 </div>
-                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Total Notional:</span>
-                  <p className="mt-0.5 font-bold text-white text-sm">${balance(intent.notional)} USDT</p>
+                <div className="bg-[#08080b] p-3 rounded-xl border border-white/[0.06]">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">Total Notional:</span>
+                  <p className="mt-0.5 font-bold text-white text-sm font-mono">${balance(intent.notional)} USDT</p>
                 </div>
-                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Expected Entry:</span>
-                  <p className="mt-0.5 font-bold text-white text-sm">${balance(intent.expected_entry)}</p>
+                <div className="bg-[#08080b] p-3 rounded-xl border border-white/[0.06]">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">Expected Entry:</span>
+                  <p className="mt-0.5 font-bold text-white text-sm font-mono">${balance(intent.expected_entry)}</p>
                 </div>
-                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Profit Target:</span>
-                  <p className="mt-0.5 font-bold text-emerald-400 text-sm">${balance(intent.target)}</p>
+                <div className="bg-[#08080b] p-3 rounded-xl border border-white/[0.06]">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">Profit Target:</span>
+                  <p className="mt-0.5 font-bold text-[#00F5A0] text-sm font-mono">${balance(intent.target)}</p>
                 </div>
-                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Stop Loss:</span>
-                  <p className="mt-0.5 font-bold text-rose-400 text-sm">${balance(intent.stop)}</p>
+                <div className="bg-[#08080b] p-3 rounded-xl border border-white/[0.06]">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">Stop Loss:</span>
+                  <p className="mt-0.5 font-bold text-[#FF3366] text-sm font-mono">${balance(intent.stop)}</p>
                 </div>
-                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Risk Amount:</span>
-                  <p className="mt-0.5 font-bold text-amber-300 text-sm">${balance(intent.risk_amount)} USDT</p>
+                <div className="bg-[#08080b] p-3 rounded-xl border border-white/[0.06]">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">Risk Amount:</span>
+                  <p className="mt-0.5 font-bold text-[#FFB800] text-sm font-mono">${balance(intent.risk_amount)} USDT</p>
                 </div>
               </div>
 

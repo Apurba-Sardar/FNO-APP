@@ -100,23 +100,32 @@ export default function OpportunitiesPage() {
   const topOpportunity = items[0];
 
   return (
-    <main className="mx-auto max-w-[1500px] p-4 sm:p-6 space-y-6">
-      {/* Header Banner */}
-      <header className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-6 shadow-2xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <main className="mx-auto max-w-[1600px] p-4 sm:p-8 space-y-7">
+      {/* Header Banner - CRED Velvet Matte Obsidian */}
+      <header className="cred-surface relative overflow-hidden rounded-3xl p-6 sm:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.9)]">
+        {/* Subtle Ambient Radial Glows */}
+        <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#FFB800]/10 blur-3xl"></div>
+        <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-[#00D9F5]/10 blur-3xl"></div>
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-300 border border-amber-500/30">
-                <span>🏆</span> PROBABILITY RANKING MODEL
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFB800]/10 px-3 py-1 text-[11px] font-black tracking-wider uppercase text-[#FFB800] border border-[#FFB800]/30 shadow-[0_0_15px_rgba(255,184,0,0.2)]">
+                <span>🏆</span> Probability Ranking Engine
               </span>
-              <span className="text-xs text-slate-400 font-medium">
-                Indian Standard Time (IST)
+              <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-3 py-1 text-[11px] text-slate-300 font-mono">
+                Indian Standard Time (IST) Active
+              </span>
+              <span className="rounded-full bg-[#00F5A0]/10 border border-[#00F5A0]/25 px-3 py-1 text-[11px] font-bold text-[#00F5A0]">
+                ⚡ 15s Continuous Scan Sync
               </span>
             </div>
-            <h1 className="mt-2 text-2xl sm:text-3xl font-black text-white">
-              Top Scored Market Opportunities
+            <h1 className="mt-3 text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-2">
+              <span className="bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+                Top Scored Market Opportunities
+              </span>
             </h1>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1.5 text-xs sm:text-sm text-slate-400 font-normal max-w-2xl leading-relaxed">
               Multi-factor scoring algorithm evaluating breakout momentum, volume pressure, orderbook depth, and structural risk-reward.
             </p>
           </div>
@@ -125,11 +134,11 @@ export default function OpportunitiesPage() {
             <button
               onClick={recalculate}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 px-5 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20 transition disabled:opacity-50"
+              className="cred-btn-primary rounded-xl px-5 py-2.5 text-xs font-black flex items-center gap-2"
             >
               {busy ? (
                 <>
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-950 border-t-transparent"></span>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black border-t-transparent"></span>
                   Recalculating Scores...
                 </>
               ) : (
@@ -142,85 +151,101 @@ export default function OpportunitiesPage() {
         </div>
 
         {stats?.calculated_at && (
-          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <div className="relative z-10 mt-6 pt-4 border-t border-white/[0.07] flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
             <div>
-              Scored <b className="text-white">{stats.markets_analyzed}</b> pairs · Computation time:{" "}
-              <b className="text-emerald-400">{(stats.calculation_time_ms / 1000).toFixed(2)}s</b>
+              Scored <b className="text-white font-mono">{stats.markets_analyzed}</b> pairs · Computation time:{" "}
+              <b className="text-[#00F5A0] font-mono">{(stats.calculation_time_ms / 1000).toFixed(2)}s</b>
             </div>
             <div>
-              Last updated: <b className="text-slate-200">{formatIST(stats.calculated_at)}</b>
+              Last synchronized: <b className="text-slate-200 font-mono">{formatIST(stats.calculated_at)}</b>
             </div>
           </div>
         )}
       </header>
 
       {error && (
-        <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-xs font-semibold text-rose-300">
+        <div className="rounded-2xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs font-semibold text-rose-300 shadow-lg">
           ⚠️ {error}
         </div>
       )}
 
-      {/* Summary Metrics */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Top Ranked Setup</span>
-          <b className="mt-1 block text-lg font-bold text-amber-300">
+      {/* Summary Metrics - CRED Obsidian Cards */}
+      <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Top Ranked Setup</span>
+          <b className="mt-2 block text-xl font-black text-[#FFB800] tracking-tight">
             {topOpportunity?.symbol ?? "Scanning..."}
           </b>
-          <span className="text-[11px] text-slate-500">
+          <span className="mt-1 block text-[11px] text-slate-400 font-mono">
             Score: {topOpportunity?.opportunity_score?.toFixed(1) ?? "—"} / 100
           </span>
         </Card>
 
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Eligible Opportunities</span>
-          <b className="mt-1 block text-lg font-bold text-white">
+        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Eligible Opportunities</span>
+          <b className="mt-2 block text-xl font-black text-white tracking-tight">
             {items.length} <span className="text-xs font-normal text-slate-400">High Conviction</span>
           </b>
-          <span className="text-[11px] text-slate-500">Passed safety hard-gates</span>
+          <span className="mt-1 block text-[11px] text-[#00F5A0] font-mono">Passed safety hard-gates</span>
         </Card>
 
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Dominant Bias</span>
-          <b className="mt-1 block text-lg font-bold text-emerald-400">
-            {items.filter(i => i.dominant_direction === "long").length} Longs / {items.filter(i => i.dominant_direction === "short").length} Shorts
+        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Dominant Market Bias</span>
+          <b className="mt-2 block text-xl font-black text-[#00F5A0] tracking-tight font-mono">
+            {items.filter(i => i.dominant_direction === "long").length}L / {items.filter(i => i.dominant_direction === "short").length}S
           </b>
-          <span className="text-[11px] text-slate-500">Across top candidates</span>
+          <span className="mt-1 block text-[11px] text-slate-400">Across top candidates</span>
         </Card>
 
-        <Card className="p-4 bg-slate-900/60 border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Risk/Reward Profile</span>
-          <b className="mt-1 block text-lg font-bold text-cyan-300">
+        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Risk/Reward Profile</span>
+          <b className="mt-2 block text-xl font-black text-[#00D9F5] tracking-tight font-mono">
             Avg {(items.reduce((acc, i) => acc + (i.estimated_structural_rr ?? 2), 0) / (items.length || 1)).toFixed(2)} R:R
           </b>
-          <span className="text-[11px] text-slate-500">Structural targets vs stops</span>
+          <span className="mt-1 block text-[11px] text-slate-400">Structural targets vs stops</span>
         </Card>
       </section>
 
       {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="flex rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs font-semibold">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+        <div className="flex flex-wrap rounded-2xl border border-white/[0.07] bg-[#0a0a0d] p-1.5 text-xs font-semibold shadow-inner">
           <button
             onClick={() => setActiveTab("all")}
-            className={`rounded-lg px-3.5 py-1.5 transition ${activeTab === "all" ? "bg-slate-800 text-white shadow" : "text-slate-400 hover:text-white"}`}
+            className={`rounded-xl px-4 py-2 transition-all duration-200 ${
+              activeTab === "all"
+                ? "bg-white/[0.1] text-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-white/[0.1]"
+                : "text-slate-400 hover:text-white"
+            }`}
           >
             All Candidates ({items.length})
           </button>
           <button
             onClick={() => setActiveTab("tierA")}
-            className={`rounded-lg px-3.5 py-1.5 transition ${activeTab === "tierA" ? "bg-amber-500 text-slate-950 font-bold" : "text-slate-400 hover:text-white"}`}
+            className={`rounded-xl px-4 py-2 transition-all duration-200 ${
+              activeTab === "tierA"
+                ? "bg-[#FFB800] text-black font-black shadow-[0_0_15px_rgba(255,184,0,0.4)]"
+                : "text-slate-400 hover:text-white"
+            }`}
           >
             Tier A (High Confidence)
           </button>
           <button
             onClick={() => setActiveTab("long")}
-            className={`rounded-lg px-3.5 py-1.5 transition ${activeTab === "long" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "text-slate-400 hover:text-white"}`}
+            className={`rounded-xl px-4 py-2 transition-all duration-200 ${
+              activeTab === "long"
+                ? "bg-[#00F5A0]/20 text-[#00F5A0] border border-[#00F5A0]/40 font-bold"
+                : "text-slate-400 hover:text-white"
+            }`}
           >
             Bullish Longs
           </button>
           <button
             onClick={() => setActiveTab("short")}
-            className={`rounded-lg px-3.5 py-1.5 transition ${activeTab === "short" ? "bg-rose-500/20 text-rose-300 border border-rose-500/40" : "text-slate-400 hover:text-white"}`}
+            className={`rounded-xl px-4 py-2 transition-all duration-200 ${
+              activeTab === "short"
+                ? "bg-[#FF3366]/20 text-[#FF3366] border border-[#FF3366]/40 font-bold"
+                : "text-slate-400 hover:text-white"
+            }`}
           >
             Bearish Shorts
           </button>
@@ -232,13 +257,13 @@ export default function OpportunitiesPage() {
             placeholder="Search coin (e.g. DOGE, XRP, LTC)..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full sm:w-64 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+            className="w-full sm:w-72 rounded-xl border border-white/[0.08] bg-[#07070a] px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#FFB800] focus:ring-1 focus:ring-[#FFB800]/30 transition"
           />
         </div>
       </div>
 
       {/* Opportunities Card Grid */}
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         {filteredItems.map((item, idx) => {
           const isLong = item.dominant_direction === "long";
           const scoreStyle = scoreBadgeClass(item.opportunity_score);
@@ -246,25 +271,25 @@ export default function OpportunitiesPage() {
           return (
             <Card
               key={item.symbol}
-              className="p-5 bg-slate-900/60 border-slate-800 hover:border-slate-700 transition flex flex-col justify-between group"
+              className="p-6 bg-[#0a0a0d] border border-white/[0.07] hover:border-white/20 transition-all duration-300 rounded-2xl flex flex-col justify-between group shadow-xl hover:shadow-[0_20px_40px_rgba(0,0,0,0.8)]"
             >
               <div>
                 {/* Header: Rank, Symbol, Score */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="grid h-6 w-6 place-items-center rounded-lg bg-slate-800 text-xs font-black text-slate-300">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-7 w-7 place-items-center rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-black text-slate-300">
                       #{idx + 1}
                     </span>
                     <div>
-                      <b className="text-base font-bold text-white group-hover:text-amber-300 transition">
+                      <b className="text-lg font-black text-white group-hover:text-[#FFB800] transition-colors">
                         {item.symbol}
                       </b>
-                      <span className="block text-[10px] text-slate-400">{item.tier}</span>
+                      <span className="block text-[10px] uppercase tracking-wider text-slate-500 font-bold">{item.tier}</span>
                     </div>
                   </div>
 
-                  <div className={`text-right rounded-lg px-2.5 py-1 ${scoreStyle.bg} border ${scoreStyle.border}`}>
-                    <span className={`text-base font-black ${scoreStyle.text}`}>
+                  <div className={`text-right rounded-xl px-3 py-1.5 ${scoreStyle.bg} border ${scoreStyle.border} shadow-sm`}>
+                    <span className={`text-base font-black ${scoreStyle.text} font-mono`}>
                       {item.opportunity_score.toFixed(1)}
                     </span>
                     <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">
@@ -274,47 +299,47 @@ export default function OpportunitiesPage() {
                 </div>
 
                 {/* Direction & Key Factors */}
-                <div className="mt-3 flex items-center gap-2">
+                <div className="mt-4 flex items-center gap-2">
                   <span
-                    className={`rounded px-2 py-0.5 text-[11px] font-extrabold uppercase ${
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
                       isLong
-                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                        : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                        ? "bg-[#00F5A0]/15 text-[#00F5A0] border border-[#00F5A0]/30"
+                        : "bg-[#FF3366]/15 text-[#FF3366] border border-[#FF3366]/30"
                     }`}
                   >
                     {isLong ? "BUY · BULLISH" : "SELL · BEARISH"}
                   </span>
-                  <span className="text-xs text-slate-400">
-                    R:R <b>{item.estimated_structural_rr?.toFixed(2) ?? "2.10"}</b>
+                  <span className="text-xs text-slate-400 font-mono">
+                    R:R <b className="text-white">{item.estimated_structural_rr?.toFixed(2) ?? "2.10"}</b>
                   </span>
                   {item.relative_volume && (
-                    <span className="text-[11px] font-semibold text-cyan-400">
+                    <span className="text-[11px] font-bold text-[#00D9F5] font-mono">
                       RVOL {item.relative_volume.toFixed(1)}x
                     </span>
                   )}
                 </div>
 
                 {/* Mini Metrics Box */}
-                <div className="mt-3.5 grid grid-cols-3 gap-2 rounded-lg bg-slate-950/70 p-2.5 text-[11px] text-slate-400 border border-slate-800/80">
+                <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-[#060608] p-3 text-[11px] text-slate-400 border border-white/[0.05]">
                   <div>
-                    <span>Liquidity</span>
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Liquidity</span>
                     <p className="mt-0.5 font-bold text-slate-200 capitalize">{item.liquidity || "Deep"}</p>
                   </div>
                   <div>
-                    <span>Volatility</span>
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Volatility</span>
                     <p className="mt-0.5 font-bold text-slate-200 capitalize">{item.volatility || "Normal"}</p>
                   </div>
                   <div>
-                    <span>Activity</span>
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Activity</span>
                     <p className="mt-0.5 font-bold text-slate-200 capitalize">{item.market_activity || "High"}</p>
                   </div>
                 </div>
 
                 {/* Factors Pill list */}
                 {item.strongest_factors?.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1">
+                  <div className="mt-3.5 flex flex-wrap gap-1.5">
                     {item.strongest_factors.slice(0, 3).map((f, i) => (
-                      <span key={i} className="rounded bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-300">
+                      <span key={i} className="rounded-md bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 text-[10px] text-slate-300 font-mono">
                         {f.replace(/_/g, " ")}
                       </span>
                     ))}
@@ -323,17 +348,17 @@ export default function OpportunitiesPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-center justify-between gap-3">
                 <Link
                   href={`/setups`}
-                  className="text-xs font-bold text-cyan-400 hover:text-cyan-300 transition flex items-center gap-1"
+                  className="text-xs font-bold text-[#00D9F5] hover:text-white transition-colors flex items-center gap-1"
                 >
                   Inspect Setup →
                 </Link>
 
                 <button
                   onClick={() => copySymbol(item.symbol)}
-                  className="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 transition"
+                  className="cred-btn-secondary px-3 py-1.5 rounded-lg text-xs font-semibold"
                 >
                   {copiedSymbol === item.symbol ? "✓ Copied" : "Copy Symbol"}
                 </button>

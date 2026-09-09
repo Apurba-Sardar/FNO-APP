@@ -9,11 +9,11 @@ export const metadata = {
 
 export default function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className="bg-slate-950 text-slate-100 antialiased min-h-screen">
+    <html lang="en" className="dark">
+      <body className="bg-[#050507] text-[#EDEDED] antialiased min-h-screen selection:bg-[#00F5A0]/25 selection:text-[#00F5A0]">
         <AuthGuard>
           <Header />
-          {children}
+          <main className="relative z-10">{children}</main>
         </AuthGuard>
       </body>
     </html>

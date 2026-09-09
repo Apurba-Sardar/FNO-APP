@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import { Card } from "@/components/ui/card";
 import { getApiUrl } from "@/lib/api";
 
@@ -120,56 +119,87 @@ export default function MarketDataPage() {
   const indicators = selectedAnalysis?.indicators;
 
   return (
-    <main className="mx-auto max-w-7xl p-4 sm:p-6">
-      <header className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[.2em] text-cyan-400">
-          Phase 3 developer view
-        </p>
-        <h1 className="text-2xl font-semibold">Futures market analysis</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Read-only quantitative analysis. No recommendations or trading controls.
-        </p>
+    <main className="mx-auto max-w-[1600px] p-4 sm:p-8 space-y-7">
+      {/* Header Banner - CRED Velvet Matte Obsidian */}
+      <header className="cred-surface relative overflow-hidden rounded-3xl p-6 sm:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.9)]">
+        {/* Subtle Ambient Radial Glows */}
+        <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#00D9F5]/10 blur-3xl"></div>
+        <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-[#00F5A0]/10 blur-3xl"></div>
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00D9F5]/10 px-3 py-1 text-[11px] font-black tracking-wider uppercase text-[#00D9F5] border border-[#00D9F5]/30 shadow-[0_0_15px_rgba(0,217,245,0.2)]">
+                <span>📊</span> Real-Time Quantitative Streams
+              </span>
+              <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-3 py-1 text-[11px] text-slate-300 font-mono">
+                CoinDCX Futures Depth & Telemetry
+              </span>
+            </div>
+            <h1 className="mt-3 text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-2">
+              <span className="bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+                Futures Market Analysis & Depth
+              </span>
+            </h1>
+            <p className="mt-1.5 text-xs sm:text-sm text-slate-400 font-normal max-w-2xl leading-relaxed">
+              Real-time multi-timeframe candle streams, algorithmic trend alignment, EMAs, RSI, and technical market structure.
+            </p>
+          </div>
+        </div>
       </header>
 
-      {error && <p className="mb-4 rounded-lg bg-red-950 p-3 text-sm text-red-300">{error}</p>}
+      {error && (
+        <div className="rounded-2xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs font-semibold text-rose-300 shadow-lg">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* Health Metric Cards */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <p className="text-sm text-slate-400">USDT futures</p>
-          <p className="mt-2 text-2xl font-semibold">{markets.length}</p>
+        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">USDT Futures Pairs</p>
+          <p className="mt-2 text-2xl font-black text-white font-mono">{markets.length}</p>
+          <span className="mt-1 block text-[11px] text-slate-400">Available trade contracts</span>
         </Card>
-        <Card>
-          <p className="text-sm text-slate-400">REST</p>
-          <p className="mt-2 text-xl font-semibold">{health?.rest ?? "loading"}</p>
+
+        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">REST API Gateway</p>
+          <p className="mt-2 text-2xl font-black text-[#00F5A0] font-mono capitalize">{health?.rest ?? "Syncing..."}</p>
+          <span className="mt-1 block text-[11px] text-slate-400">CoinDCX exchange connector</span>
         </Card>
-        <Card>
-          <p className="text-sm text-slate-400">WebSocket</p>
-          <p className="mt-2 text-xl font-semibold">{health?.websocket ?? "loading"}</p>
+
+        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">WebSocket Stream</p>
+          <p className="mt-2 text-2xl font-black text-[#00D9F5] font-mono capitalize">{health?.websocket ?? "Syncing..."}</p>
+          <span className="mt-1 block text-[11px] text-slate-400">Low-latency live prices</span>
         </Card>
-        <Card>
-          <p className="text-sm text-slate-400">Last update</p>
-          <p className="mt-2 text-sm font-medium">
-            {health?.last_market_update
-              ? new Date(health.last_market_update).toLocaleString()
-              : "—"}
+
+        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Last Telemetry Sync</p>
+          <p className="mt-2 text-base font-bold text-white font-mono truncate">
+            {health?.last_market_update ? new Date(health.last_market_update).toLocaleTimeString() : "—"}
           </p>
+          <span className="mt-1 block text-[11px] text-slate-400">Automatic tick pulse</span>
         </Card>
       </section>
 
-      <section className="mt-4 grid gap-4 lg:grid-cols-[300px_1fr]">
-        <Card className="max-h-[760px] overflow-hidden">
+      {/* Main Content Layout */}
+      <section className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        {/* Left Market Selector List */}
+        <Card className="max-h-[820px] p-5 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl flex flex-col">
           <input
-            className="mb-3 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-            placeholder="Search markets"
+            className="mb-4 w-full rounded-xl border border-white/[0.08] bg-[#07070a] px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#00D9F5] focus:ring-1 focus:ring-[#00D9F5]/30 transition"
+            placeholder="Search markets (e.g. BTC, ETH)..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <div className="max-h-[680px] space-y-1 overflow-y-auto">
+          <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
             {filtered.map((market) => (
               <button
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${
+                className={`w-full rounded-xl px-3.5 py-2.5 text-left text-xs font-mono font-bold transition-all duration-200 ${
                   selected === market.symbol
-                    ? "bg-cyan-500 text-slate-950"
-                    : "hover:bg-slate-800"
+                    ? "bg-[#00D9F5] text-black shadow-[0_0_15px_rgba(0,217,245,0.3)]"
+                    : "text-slate-300 hover:bg-white/[0.04] border border-transparent hover:border-white/[0.05]"
                 }`}
                 key={market.symbol}
                 onClick={() => setSelected(market.symbol)}
@@ -180,56 +210,64 @@ export default function MarketDataPage() {
           </div>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        {/* Right Detail Pane */}
+        <div className="space-y-6">
+          {/* Market Overview Card */}
+          <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-sm text-slate-400">Market</p>
-                <p className="mt-1 text-2xl font-semibold">{selected || "—"}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Selected Market</p>
+                <p className="mt-1 text-3xl font-black text-white font-mono">{selected || "—"}</p>
               </div>
-              <div className="text-right text-sm">
-                <p className="text-slate-400">Analysis alignment</p>
-                <p className="font-medium uppercase text-cyan-300">
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Analysis Alignment</p>
+                <p className="mt-1 text-base font-black uppercase text-[#00D9F5] font-mono">
                   {loadingAnalysis
-                    ? "calculating"
+                    ? "Calculating..."
                     : analysis?.alignment.alignment_state.replaceAll("_", " ") ?? "—"}
                 </p>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-4">
+
+            <div className="mt-5 grid grid-cols-2 gap-4 pt-5 border-t border-white/[0.06]">
               <div>
-                <p className="text-xs text-slate-500">Latest price</p>
-                <p className="text-lg">{show(latestPrice)}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Latest Mark / Last Price</p>
+                <p className="mt-1 text-2xl font-black text-white font-mono">${show(latestPrice)}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Latest candle close</p>
-                <p className="text-lg">{show(latestCandle?.close)}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Latest Candle Close</p>
+                <p className="mt-1 text-2xl font-black text-[#00F5A0] font-mono">${show(latestCandle?.close)}</p>
               </div>
             </div>
           </Card>
 
-          <Card>
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-medium">Timeframe analysis</h2>
-              <span className="text-xs text-slate-500">Select a frame for details</span>
+          {/* Timeframe Analysis Tabs */}
+          <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h2 className="text-base font-black text-white tracking-tight">Timeframe Analysis</h2>
+              <span className="text-xs text-slate-500 font-mono">Select frame for deep indicator inspection</span>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {TIMEFRAMES.map((frame) => {
                 const item = analysis?.timeframes[frame];
+                const isSelected = analysisFrame === frame;
                 return (
                   <button
-                    className={`rounded-lg border p-3 text-left ${
-                      analysisFrame === frame
-                        ? "border-cyan-500 bg-cyan-950/40"
-                        : "border-slate-800 bg-slate-950"
+                    className={`rounded-2xl border p-3.5 text-left transition-all duration-200 ${
+                      isSelected
+                        ? "border-[#00D9F5] bg-[#00D9F5]/10 shadow-[0_0_15px_rgba(0,217,245,0.2)]"
+                        : "border-white/[0.06] bg-[#060608] hover:border-white/[0.15]"
                     }`}
                     key={frame}
                     onClick={() => setAnalysisFrame(frame)}
                   >
-                    <p className="text-xs uppercase text-slate-500">{frame}</p>
-                    <p className="mt-1 capitalize">{item?.trend ?? "unavailable"}</p>
-                    <p className="text-xs text-slate-400">
-                      Strength {item ? show(item.trend_strength, 1) : "—"}/100
+                    <p className={`text-[10px] font-black uppercase tracking-wider ${isSelected ? "text-[#00D9F5]" : "text-slate-500"}`}>
+                      {frame}
+                    </p>
+                    <p className="mt-1 font-bold text-white capitalize text-xs">{item?.trend ?? "Syncing"}</p>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                      Str: {item ? show(item.trend_strength, 1) : "—"}
                     </p>
                   </button>
                 );
@@ -237,81 +275,112 @@ export default function MarketDataPage() {
             </div>
           </Card>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card>
-              <h2 className="font-medium">Indicators · {analysisFrame}</h2>
-              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          {/* Indicators & Structure Grid */}
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl">
+              <h2 className="text-base font-black text-white tracking-tight mb-4">
+                Indicators · <span className="text-[#00D9F5] font-mono">{analysisFrame}</span>
+              </h2>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs">
                 {[
                   ["EMA20", indicators?.ema20],
                   ["EMA50", indicators?.ema50],
                   ["EMA200", indicators?.ema200],
-                  ["RSI14", indicators?.rsi],
+                  ["RSI 14", indicators?.rsi],
                   ["MACD", indicators?.macd],
-                  ["MACD signal", indicators?.macd_signal],
+                  ["MACD Signal", indicators?.macd_signal],
                   ["ATR", indicators?.atr],
                   ["ATR %", indicators?.atr_percent],
                   ["UTC VWAP", indicators?.vwap],
-                  ["Relative volume", indicators?.relative_volume],
+                  ["Relative Volume", indicators?.relative_volume],
                 ].map(([label, value]) => (
-                  <div className="flex justify-between gap-3" key={String(label)}>
-                    <dt className="text-slate-500">{label}</dt>
-                    <dd>{show(value as number | null)}</dd>
+                  <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/[0.04]" key={String(label)}>
+                    <dt className="text-slate-400 font-medium">{label}</dt>
+                    <dd className="font-mono font-bold text-white">{show(value as number | null)}</dd>
                   </div>
                 ))}
               </dl>
             </Card>
 
-            <Card>
-              <h2 className="font-medium">Structure · {analysisFrame}</h2>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                <p>Higher high: {selectedAnalysis?.structure.higher_high ? "yes" : "no"}</p>
-                <p>Higher low: {selectedAnalysis?.structure.higher_low ? "yes" : "no"}</p>
-                <p>Lower high: {selectedAnalysis?.structure.lower_high ? "yes" : "no"}</p>
-                <p>Lower low: {selectedAnalysis?.structure.lower_low ? "yes" : "no"}</p>
+            <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl">
+              <h2 className="text-base font-black text-white tracking-tight mb-4">
+                Structure · <span className="text-[#00F5A0] font-mono">{analysisFrame}</span>
+              </h2>
+              <div className="grid grid-cols-2 gap-3 text-xs mb-4">
+                <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] flex justify-between">
+                  <span className="text-slate-400">Higher High</span>
+                  <b className={selectedAnalysis?.structure.higher_high ? "text-[#00F5A0]" : "text-slate-500"}>
+                    {selectedAnalysis?.structure.higher_high ? "YES" : "NO"}
+                  </b>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] flex justify-between">
+                  <span className="text-slate-400">Higher Low</span>
+                  <b className={selectedAnalysis?.structure.higher_low ? "text-[#00F5A0]" : "text-slate-500"}>
+                    {selectedAnalysis?.structure.higher_low ? "YES" : "NO"}
+                  </b>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] flex justify-between">
+                  <span className="text-slate-400">Lower High</span>
+                  <b className={selectedAnalysis?.structure.lower_high ? "text-[#FF3366]" : "text-slate-500"}>
+                    {selectedAnalysis?.structure.lower_high ? "YES" : "NO"}
+                  </b>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] flex justify-between">
+                  <span className="text-slate-400">Lower Low</span>
+                  <b className={selectedAnalysis?.structure.lower_low ? "text-[#FF3366]" : "text-slate-500"}>
+                    {selectedAnalysis?.structure.lower_low ? "YES" : "NO"}
+                  </b>
+                </div>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+
+              <div className="grid grid-cols-2 gap-4 text-xs pt-4 border-t border-white/[0.06]">
                 <div>
-                  <p className="text-slate-500">Potential support</p>
-                  {selectedAnalysis?.structure.support_levels.length
-                    ? selectedAnalysis.structure.support_levels.map((level) => (
-                        <p key={`${level.price}-${level.strength}`}>
-                          {show(level.price)} · strength {level.strength}
-                        </p>
-                      ))
-                    : "—"}
+                  <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#00F5A0] mb-2">Key Support</p>
+                  {selectedAnalysis?.structure.support_levels.length ? (
+                    selectedAnalysis.structure.support_levels.map((level) => (
+                      <p className="font-mono text-slate-300 text-xs py-0.5" key={`${level.price}-${level.strength}`}>
+                        ${show(level.price)} <span className="text-slate-500 font-normal">· str {level.strength}</span>
+                      </p>
+                    ))
+                  ) : (
+                    <span className="text-slate-500">—</span>
+                  )}
                 </div>
                 <div>
-                  <p className="text-slate-500">Potential resistance</p>
-                  {selectedAnalysis?.structure.resistance_levels.length
-                    ? selectedAnalysis.structure.resistance_levels.map((level) => (
-                        <p key={`${level.price}-${level.strength}`}>
-                          {show(level.price)} · strength {level.strength}
-                        </p>
-                      ))
-                    : "—"}
+                  <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#FF3366] mb-2">Key Resistance</p>
+                  {selectedAnalysis?.structure.resistance_levels.length ? (
+                    selectedAnalysis.structure.resistance_levels.map((level) => (
+                      <p className="font-mono text-slate-300 text-xs py-0.5" key={`${level.price}-${level.strength}`}>
+                        ${show(level.price)} <span className="text-slate-500 font-normal">· str {level.strength}</span>
+                      </p>
+                    ))
+                  ) : (
+                    <span className="text-slate-500">—</span>
+                  )}
                 </div>
               </div>
             </Card>
           </div>
 
-          <Card>
+          {/* Data Quality Card */}
+          <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-medium">Data quality</h2>
+              <h2 className="text-base font-black text-white tracking-tight">Data Quality & Completeness</h2>
               <span
-                className={`rounded-full px-3 py-1 text-xs ${
+                className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-wider ${
                   analysis?.data_quality.sufficient_data
-                    ? "bg-emerald-950 text-emerald-300"
-                    : "bg-amber-950 text-amber-300"
+                    ? "bg-[#00F5A0]/10 text-[#00F5A0] border border-[#00F5A0]/30"
+                    : "bg-[#FFB800]/10 text-[#FFB800] border border-[#FFB800]/30"
                 }`}
               >
-                {analysis?.data_quality.sufficient_data ? "Healthy" : "Warning"}
+                {analysis?.data_quality.sufficient_data ? "Healthy Data Feed" : "Feed Degradation"}
               </span>
             </div>
-            <p className="mt-2 text-sm text-slate-400">
-              Analysis completeness: {show(analysis?.data_quality.analysis_completeness, 1)}%
+            <p className="mt-2 text-xs text-slate-400 font-mono">
+              Analysis Completeness: <b className="text-white">{show(analysis?.data_quality.analysis_completeness, 1)}%</b>
             </p>
             {selectedAnalysis?.data_quality.warnings.length ? (
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-300">
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-amber-300">
                 {selectedAnalysis.data_quality.warnings.slice(0, 4).map((warning) => (
                   <li key={warning}>{warning}</li>
                 ))}

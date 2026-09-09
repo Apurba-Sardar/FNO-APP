@@ -70,39 +70,42 @@ export default function Home() {
   const isLive = health?.trading_mode === "live";
 
   return (
-    <main className="mx-auto max-w-[1500px] p-4 sm:p-6 space-y-6">
+    <main className="mx-auto max-w-[1600px] p-4 sm:p-6 space-y-6">
       {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-6 sm:p-8 shadow-2xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
+      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#121217] via-[#09090c] to-[#070709] p-6 sm:p-8 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95),inset_0_1px_0_0_rgba(255,255,255,0.08)]">
+        {/* Subtle radial sheen */}
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#00F5A0]/[0.03] blur-[100px] pointer-events-none rounded-full" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2.5">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-bold text-cyan-300 border border-cyan-500/30">
-                <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00D9F5]/10 px-3 py-1 text-[11px] font-bold text-[#00D9F5] border border-[#00D9F5]/30 font-mono shadow-[0_0_15px_rgba(0,217,245,0.15)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#00D9F5] animate-pulse"></span>
                 COINDCX FUTURES TRADING DESK
               </span>
-              <span className="text-xs text-slate-400 font-medium">
-                Indian Standard Time (IST) Active
+              <span className="text-xs text-zinc-400 font-mono">
+                IST (UTC+5:30) Active
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
               Trading Command Center
             </h1>
-            <p className="text-sm sm:text-base text-slate-300 max-w-2xl leading-relaxed">
+            <p className="text-sm sm:text-base text-zinc-400 max-w-2xl leading-relaxed">
               Real-time multi-timeframe algorithmic scanner, breakout probability scoring, and automated risk-managed execution on CoinDCX.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <Link
               href="/live"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 px-5 py-3 text-sm font-bold text-white shadow-xl shadow-rose-600/30 transition transform hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FF3366] to-[#E11D48] hover:from-[#ff4d79] hover:to-[#f43f5e] px-5 py-3 text-sm font-bold text-white shadow-[0_0_25px_rgba(255,51,102,0.4)] transition transform hover:-translate-y-0.5 active:scale-[0.98]"
             >
-              <span className="h-2.5 w-2.5 rounded-full bg-white animate-pulse"></span>
+              <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
               Live Portfolio ({activePositionsCount} Active)
             </Link>
             <Link
               href="/scanner"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 px-5 py-3 text-sm font-bold text-slate-200 transition"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.09] bg-[#121217] hover:bg-white/[0.08] hover:border-white/[0.18] px-5 py-3 text-sm font-bold text-zinc-200 transition shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] active:scale-[0.98]"
             >
               Run Market Scanner
             </Link>
@@ -111,12 +114,12 @@ export default function Home() {
 
         {/* Real-time Subtitle Ticker */}
         {lastChecked && (
-          <div className="mt-6 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+          <div className="relative z-10 mt-6 pt-4 border-t border-white/[0.07] flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400 font-mono">
             <div>
-              Platform Mode: <b className="text-emerald-400 font-bold uppercase">{health?.trading_mode ?? "Live"}</b> · All 499 CoinDCX perpetual contracts monitored
+              Platform Mode: <b className="text-[#00F5A0] font-bold uppercase">{health?.trading_mode ?? "Live"}</b> · All 499 CoinDCX perpetual contracts monitored
             </div>
             <div>
-              System Clock: <b className="text-slate-300">{formatIST(lastChecked.getTime())}</b>
+              System Clock: <b className="text-zinc-200">{formatIST(lastChecked.getTime())}</b>
             </div>
           </div>
         )}
@@ -125,86 +128,89 @@ export default function Home() {
       {/* Primary Key Metrics */}
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {/* Total Equity */}
-        <Card className="p-5 bg-slate-900/60 border-slate-800 hover:border-slate-700 transition">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+        <Card className="p-5">
+          <div className="flex items-center justify-between text-[11px] text-zinc-400 font-bold uppercase tracking-[0.14em] font-mono">
             <span>Total Account Value</span>
-            <span className="text-emerald-400">Live</span>
+            <span className="text-[#00F5A0] flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-pulse"></span>
+              Live
+            </span>
           </div>
-          <b className="mt-2 text-2xl sm:text-3xl font-bold text-white">
-            ${balance(liveAccount?.equity ?? 1059.07)} <span className="text-xs font-normal text-slate-400">USDT</span>
+          <b className="mt-2 text-2xl sm:text-3xl font-black font-mono text-white block">
+            ${balance(liveAccount?.equity ?? 1059.07)} <span className="text-xs font-normal text-zinc-500">USDT</span>
           </b>
-          <div className="mt-2 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
+          <div className="mt-2 flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-white/[0.06]">
             <span>Free Cash:</span>
-            <b className="text-emerald-300">${balance(liveAccount?.available_balance ?? 0.28)} USDT</b>
+            <b className="text-[#00F5A0] font-mono">${balance(liveAccount?.available_balance ?? 0.28)} USDT</b>
           </div>
         </Card>
 
         {/* Active Positions */}
-        <Card className="p-5 bg-slate-900/60 border-slate-800 hover:border-slate-700 transition">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+        <Card className="p-5">
+          <div className="flex items-center justify-between text-[11px] text-zinc-400 font-bold uppercase tracking-[0.14em] font-mono">
             <span>Active Live Trades</span>
-            <span className="text-cyan-400">CoinDCX</span>
+            <span className="text-[#00D9F5]">CoinDCX</span>
           </div>
-          <p className="mt-2 text-2xl sm:text-3xl font-black text-white">
+          <p className="mt-2 text-2xl sm:text-3xl font-black font-mono text-white">
             {activePositionsCount}{" "}
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 align-middle">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#00F5A0]/15 text-[#00F5A0] border border-[#00F5A0]/30 align-middle">
               Reconciled
             </span>
           </p>
-          <div className="mt-2 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
+          <div className="mt-2 flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-white/[0.06]">
             <span>Margin Working:</span>
-            <b className="text-slate-200">${balance(liveAccount?.locked_margin ?? 1058.78)} USDT</b>
+            <b className="text-zinc-200 font-mono">${balance(liveAccount?.locked_margin ?? 1058.78)} USDT</b>
           </div>
         </Card>
 
         {/* High Potential Opportunities */}
-        <Card className="p-5 bg-slate-900/60 border-slate-800 hover:border-slate-700 transition">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+        <Card className="p-5">
+          <div className="flex items-center justify-between text-[11px] text-zinc-400 font-bold uppercase tracking-[0.14em] font-mono">
             <span>Top Opportunities</span>
-            <span className="text-amber-400">Scored</span>
+            <span className="text-[#FFB800]">Scored</span>
           </div>
-          <p className="mt-2 text-2xl sm:text-3xl font-black text-amber-300">
+          <p className="mt-2 text-2xl sm:text-3xl font-black font-mono text-[#FFB800]">
             {oppCount || 20}{" "}
-            <span className="text-xs font-normal text-slate-400">Candidates</span>
+            <span className="text-xs font-normal text-zinc-500">Candidates</span>
           </p>
-          <div className="mt-2 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
+          <div className="mt-2 flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-white/[0.06]">
             <span>Strategy Setups:</span>
-            <b className="text-slate-200">{setupCount || 5} Ready</b>
+            <b className="text-zinc-200 font-mono">{setupCount || 5} Ready</b>
           </div>
         </Card>
 
         {/* Markets Monitored */}
-        <Card className="p-5 bg-slate-900/60 border-slate-800 hover:border-slate-700 transition">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+        <Card className="p-5">
+          <div className="flex items-center justify-between text-[11px] text-zinc-400 font-bold uppercase tracking-[0.14em] font-mono">
             <span>Markets Monitored</span>
-            <span className="text-indigo-400">24/7 Scan</span>
+            <span className="text-purple-400">24/7 Scan</span>
           </div>
-          <p className="mt-2 text-2xl sm:text-3xl font-black text-white">
+          <p className="mt-2 text-2xl sm:text-3xl font-black font-mono text-white">
             {scannerStats?.total_markets ?? 499}{" "}
-            <span className="text-xs font-normal text-slate-400">Pairs</span>
+            <span className="text-xs font-normal text-zinc-500">Pairs</span>
           </p>
-          <div className="mt-2 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
+          <div className="mt-2 flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-white/[0.06]">
             <span>Eligible for Scalps:</span>
-            <b className="text-emerald-300">{scannerStats?.eligible_markets ?? 488} Pairs</b>
+            <b className="text-[#00F5A0] font-mono">{scannerStats?.eligible_markets ?? 488} Pairs</b>
           </div>
         </Card>
       </section>
 
       {/* Quick Launchpad Navigation */}
       <section className="space-y-3">
-        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+        <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-zinc-400 font-mono flex items-center gap-2">
           <span>🚀</span> Quick Trading Launchpad
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Link href="/scanner" className="group">
-            <Card className="p-5 bg-slate-900/50 border-slate-800 group-hover:border-cyan-500/50 group-hover:bg-slate-900/80 transition h-full flex flex-col justify-between">
+            <Card className="p-5 group-hover:border-[#00D9F5]/40 group-hover:shadow-[0_20px_45px_-10px_rgba(0,217,245,0.15)] transition h-full flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-2xl">📡</span>
-                  <span className="text-xs font-bold text-cyan-400 group-hover:translate-x-1 transition">Open Scanner →</span>
+                  <span className="text-xs font-bold text-[#00D9F5] group-hover:translate-x-1 transition font-mono">Open Scanner →</span>
                 </div>
                 <h3 className="mt-3 text-base font-bold text-white">Market Scanner</h3>
-                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
                   Real-time multi-timeframe analysis across 499 crypto futures markets with volume breakout filters.
                 </p>
               </div>
@@ -212,14 +218,14 @@ export default function Home() {
           </Link>
 
           <Link href="/opportunities" className="group">
-            <Card className="p-5 bg-slate-900/50 border-slate-800 group-hover:border-amber-500/50 group-hover:bg-slate-900/80 transition h-full flex flex-col justify-between">
+            <Card className="p-5 group-hover:border-[#FFB800]/40 group-hover:shadow-[0_20px_45px_-10px_rgba(255,184,0,0.15)] transition h-full flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-2xl">🏆</span>
-                  <span className="text-xs font-bold text-amber-400 group-hover:translate-x-1 transition">View Ranked →</span>
+                  <span className="text-xs font-bold text-[#FFB800] group-hover:translate-x-1 transition font-mono">View Ranked →</span>
                 </div>
                 <h3 className="mt-3 text-base font-bold text-white">Top Opportunities</h3>
-                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
                   Automated scoring model ranking the highest probability breakout setups with structural risk-reward.
                 </p>
               </div>
@@ -227,14 +233,14 @@ export default function Home() {
           </Link>
 
           <Link href="/setups" className="group">
-            <Card className="p-5 bg-slate-900/50 border-slate-800 group-hover:border-emerald-500/50 group-hover:bg-slate-900/80 transition h-full flex flex-col justify-between">
+            <Card className="p-5 group-hover:border-[#00F5A0]/40 group-hover:shadow-[0_20px_45px_-10px_rgba(0,245,160,0.15)] transition h-full flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-2xl">🎯</span>
-                  <span className="text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition">Actionable Trades →</span>
+                  <span className="text-xs font-bold text-[#00F5A0] group-hover:translate-x-1 transition font-mono">Actionable Trades →</span>
                 </div>
                 <h3 className="mt-3 text-base font-bold text-white">Strategy Setups</h3>
-                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
                   Clear entry zone, trigger candle breakout, take-profit targets, and stop-loss levels ready to trade.
                 </p>
               </div>
@@ -242,14 +248,14 @@ export default function Home() {
           </Link>
 
           <Link href="/live" className="group">
-            <Card className="p-5 bg-slate-900/50 border-rose-500/30 group-hover:border-rose-500 group-hover:bg-rose-950/20 transition h-full flex flex-col justify-between">
+            <Card className="p-5 border-[#FF3366]/25 group-hover:border-[#FF3366]/60 group-hover:shadow-[0_20px_45px_-10px_rgba(255,51,102,0.2)] transition h-full flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-2xl">⚡</span>
-                  <span className="text-xs font-bold text-rose-400 group-hover:translate-x-1 transition">Live Portfolio →</span>
+                  <span className="text-xs font-bold text-[#FF3366] group-hover:translate-x-1 transition font-mono">Live Portfolio →</span>
                 </div>
                 <h3 className="mt-3 text-base font-bold text-white">Live Execution</h3>
-                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
                   Connected directly to CoinDCX Futures. Manage positions, view IST trade logs, and review risk guardrails.
                 </p>
               </div>
@@ -259,41 +265,41 @@ export default function Home() {
       </section>
 
       {/* System Integrity & Engine Status */}
-      <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">
+      <section className="rounded-2xl border border-white/[0.07] bg-[#0c0c10]/95 p-5 shadow-[0_20px_45px_-15px_rgba(0,0,0,0.9)]">
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400 font-mono mb-4">
           Automated System Architecture & Health
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 text-xs">
-          <div className="rounded-lg bg-slate-950/60 p-3.5 border border-slate-800/80">
+          <div className="rounded-xl bg-[#08080b] p-3.5 border border-white/[0.06]">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-              <span className="font-bold text-white">CoinDCX REST & WebSocket</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-pulse"></span>
+              <span className="font-bold text-white font-mono">CoinDCX REST & WS</span>
             </div>
-            <p className="mt-1.5 text-slate-400">Sub-second public and authenticated feed connection.</p>
+            <p className="mt-1.5 text-zinc-400 leading-relaxed">Sub-second public and authenticated feed connection.</p>
           </div>
 
-          <div className="rounded-lg bg-slate-950/60 p-3.5 border border-slate-800/80">
+          <div className="rounded-xl bg-[#08080b] p-3.5 border border-white/[0.06]">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-              <span className="font-bold text-white">Multi-Timeframe Engine</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-pulse"></span>
+              <span className="font-bold text-white font-mono">Multi-Timeframe Engine</span>
             </div>
-            <p className="mt-1.5 text-slate-400">Scanning 15m, 1h, 4h, and 1D alignment simultaneously.</p>
+            <p className="mt-1.5 text-zinc-400 leading-relaxed">Scanning 15m, 1h, 4h, and 1D alignment simultaneously.</p>
           </div>
 
-          <div className="rounded-lg bg-slate-950/60 p-3.5 border border-slate-800/80">
+          <div className="rounded-xl bg-[#08080b] p-3.5 border border-white/[0.06]">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-              <span className="font-bold text-white">Risk & Position Sizing</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-pulse"></span>
+              <span className="font-bold text-white font-mono">Risk & Position Sizing</span>
             </div>
-            <p className="mt-1.5 text-slate-400">Dynamic leverage control with exposure caps per trade.</p>
+            <p className="mt-1.5 text-zinc-400 leading-relaxed">Dynamic leverage control with exposure caps per trade.</p>
           </div>
 
-          <div className="rounded-lg bg-slate-950/60 p-3.5 border border-slate-800/80">
+          <div className="rounded-xl bg-[#08080b] p-3.5 border border-white/[0.06]">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-              <span className="font-bold text-white">Exchange Reconciliation</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-pulse"></span>
+              <span className="font-bold text-white font-mono">Exchange Reconciliation</span>
             </div>
-            <p className="mt-1.5 text-slate-400">Automatic audit and position synchronization every cycle.</p>
+            <p className="mt-1.5 text-zinc-400 leading-relaxed">Automatic audit and position synchronization every cycle.</p>
           </div>
         </div>
       </section>

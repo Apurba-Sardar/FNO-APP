@@ -2,79 +2,165 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  --cred-bg: #050507;
+  --cred-surface: #0a0a0d;
+  --cred-surface-elevated: #111115;
+  --cred-surface-inner: #15151b;
+  --cred-border: rgba(255, 255, 255, 0.07);
+  --cred-border-hover: rgba(255, 255, 255, 0.14);
+  --cred-emerald: #00F5A0;
+  --cred-cyan: #00D9F5;
+  --cred-rose: #FF3366;
+  --cred-amber: #FFB800;
+}
 
 html {
-  background: #040508;
+  background-color: #050507;
+  color: #EDEDED;
 }
 
 body {
-  @apply min-h-screen text-slate-100 antialiased;
-  background-color: #040508;
+  @apply min-h-screen antialiased text-[#EDEDED];
+  background-color: #050507;
   background-image:
-    radial-gradient(circle at 50% -15%, rgba(0, 245, 160, 0.05), transparent 45rem),
-    radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.04), transparent 35rem),
-    radial-gradient(circle at 15% 45%, rgba(6, 182, 212, 0.03), transparent 30rem),
-    radial-gradient(circle at 50% 100%, rgba(15, 23, 42, 0.8), transparent 50rem);
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(0, 245, 160, 0.035), transparent 70%),
+    radial-gradient(ellipse 60% 30% at 85% 15%, rgba(0, 217, 245, 0.02), transparent 60%),
+    radial-gradient(ellipse 70% 40% at 15% 40%, rgba(255, 51, 102, 0.015), transparent 50%),
+    radial-gradient(ellipse 80% 50% at 50% 110%, rgba(255, 184, 0, 0.02), transparent 70%);
   font-feature-settings: "tnum" 1, "cv11" 1;
 }
 
-/* CRED Club Luxury Glassmorphic Surfaces */
+/* ── CRED Master Matte Black Surfaces ── */
+.cred-card,
 .cred-surface {
-  background: linear-gradient(180deg, rgba(16, 20, 30, 0.75) 0%, rgba(8, 10, 16, 0.9) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: linear-gradient(180deg, #111115 0%, #09090c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.9), inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 1rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.cred-surface-glow {
-  background: linear-gradient(180deg, rgba(16, 28, 26, 0.8) 0%, rgba(6, 14, 13, 0.95) 100%);
-  border: 1px solid rgba(0, 245, 160, 0.25);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 245, 160, 0.08), inset 0 1px 0 rgba(0, 245, 160, 0.3);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+.cred-card:hover,
+.cred-surface:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 25px 50px -15px rgba(0, 0, 0, 0.95), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
 }
 
-.cred-surface-gold {
-  background: linear-gradient(180deg, rgba(28, 24, 14, 0.8) 0%, rgba(14, 12, 6, 0.95) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(245, 158, 11, 0.08), inset 0 1px 0 rgba(245, 158, 11, 0.3);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+/* CRED Emerald Glow Surface (Live / Profit / Active) */
+.cred-surface-glow,
+.cred-card-active {
+  background: linear-gradient(180deg, rgba(14, 24, 20, 0.85) 0%, rgba(7, 12, 10, 0.95) 100%);
+  border: 1px solid rgba(0, 245, 160, 0.3);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.9), 0 0 35px rgba(0, 245, 160, 0.08), inset 0 1px 0 0 rgba(0, 245, 160, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-/* CRED Luxury Buttons */
+/* CRED Rose Danger Surface (Stop / Short / Hazard) */
+.cred-surface-rose,
+.cred-card-danger {
+  background: linear-gradient(180deg, rgba(28, 12, 16, 0.85) 0%, rgba(14, 6, 8, 0.95) 100%);
+  border: 1px solid rgba(255, 51, 102, 0.3);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.9), 0 0 35px rgba(255, 51, 102, 0.08), inset 0 1px 0 0 rgba(255, 51, 102, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* CRED Amber VIP Surface (Targets / Caps / Milestones) */
+.cred-surface-gold,
+.cred-card-gold {
+  background: linear-gradient(180deg, rgba(26, 20, 10, 0.85) 0%, rgba(13, 10, 5, 0.95) 100%);
+  border: 1px solid rgba(255, 184, 0, 0.3);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.9), 0 0 35px rgba(255, 184, 0, 0.08), inset 0 1px 0 0 rgba(255, 184, 0, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ── CRED Tactile Buttons ── */
 .cred-btn-primary {
   background: linear-gradient(135deg, #00F5A0 0%, #00D9F5 100%);
-  color: #030712;
+  color: #020408;
   font-weight: 800;
   letter-spacing: -0.01em;
   box-shadow: 0 0 25px rgba(0, 245, 160, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border-radius: 0.75rem;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .cred-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 0 35px rgba(0, 245, 160, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 35px rgba(0, 245, 160, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 .cred-btn-primary:active {
   transform: translateY(0px) scale(0.98);
 }
 
 .cred-btn-secondary {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #f1f5f9;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #F1F5F9;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .cred-btn-secondary:hover {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #FFFFFF;
   transform: translateY(-1px);
 }
 .cred-btn-secondary:active {
   transform: translateY(0px) scale(0.98);
+}
+
+/* ── CRED Luxury Pill Badges ── */
+.cred-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #A1A1AA;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+}
+
+.cred-pill-emerald {
+  background: rgba(0, 245, 160, 0.08);
+  border: 1px solid rgba(0, 245, 160, 0.25);
+  color: #00F5A0;
+}
+
+.cred-pill-rose {
+  background: rgba(255, 51, 102, 0.08);
+  border: 1px solid rgba(255, 51, 102, 0.25);
+  color: #FF3366;
+}
+
+.cred-pill-gold {
+  background: rgba(255, 184, 0, 0.08);
+  border: 1px solid rgba(255, 184, 0, 0.25);
+  color: #FFB800;
+}
+
+/* ── CRED Inputs & Selects ── */
+input, select, textarea {
+  background: #08080a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #FFFFFF !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6) !important;
+  border-radius: 0.65rem !important;
+  transition: all 0.15s ease !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: rgba(0, 245, 160, 0.5) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(0, 245, 160, 0.2), inset 0 2px 4px rgba(0,0,0,0.6) !important;
 }
 
 /* Shimmer Progress Effect */
@@ -84,24 +170,61 @@ body {
 }
 
 .animate-shimmer {
-  animation: cred-shimmer 2.5s infinite;
+  animation: cred-shimmer 2.2s infinite;
 }
 
-button, a, input, select { @apply transition-all duration-150; }
-button { @apply outline-none; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
-  @apply ring-2 ring-emerald-400/70 ring-offset-2 ring-offset-slate-950;
+button, a {
+  transition: all 0.15s ease;
+  outline: none;
 }
-input, select {
-  @apply border-white/10 bg-black/60 placeholder:text-slate-600;
-}
-table { font-variant-numeric: tabular-nums; }
-thead { @apply uppercase tracking-wider; }
-tbody tr { @apply transition-colors; }
-::selection { @apply bg-emerald-400/25 text-emerald-200; }
 
-* { scrollbar-color: #1e293b #040508; scrollbar-width: thin; }
-*::-webkit-scrollbar { width: 6px; height: 6px; }
-*::-webkit-scrollbar-track { background: #040508; }
-*::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 999px; }
+button:focus-visible, a:focus-visible {
+  ring: 2px solid rgba(0, 245, 160, 0.6);
+  ring-offset: 2px solid #050507;
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+thead {
+  @apply uppercase tracking-wider text-zinc-500;
+}
+
+tbody tr {
+  @apply transition-colors border-b border-white/[0.03];
+}
+
+tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+::selection {
+  background-color: rgba(0, 245, 160, 0.22);
+  color: #00F5A0;
+}
+
+/* Sleek Matte Scrollbar */
+* {
+  scrollbar-color: #27272a #050507;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #050507;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
 
