@@ -133,6 +133,7 @@ async def test_auto_close_anti_churn_and_daily_win_tracking():
 
     runtime = LiveExecutionRuntime(config, repo, client=mock_client)
     runtime.today_winning_trades = 19  # 19 wins already banked today
+    runtime.today_realized_profit = 19.0  # $19.00 USDT profit already banked toward $20 net cap
     
     bot_pos = LivePosition(
         position_id=uuid4(),

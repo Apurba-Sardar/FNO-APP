@@ -240,17 +240,21 @@ async def lifespan(application: FastAPI):
                 # ── Daily Rollover & Day Boundary Check ─────────────────────
                 live_runtime.check_and_apply_daily_rollover()
 
-                # ── Daily Profit Goal & Win Count Gate ──────────────────────
-                today_pnl = getattr(live_runtime.account, "daily_pnl", 0.0) or 0.0
-                today_wins = getattr(live_runtime, "today_winning_trades", 0)
+                # ── Daily Profit Goal Gate (Strictly When Net $20 USDT Earned After Losses) ──
+                today_profit = getattr(live_runtime, "today_realized_profit", 0.0) or 0.0
+                today_loss = getattr(live_runtime, "today_realized_loss", 0.0) or 0.0
+                today_net_pnl = round(today_profit - today_loss, 3)
                 max_target = settings.live_max_daily_profit_target or 20.0
-                if (max_target > 0 and today_pnl >= max_target) or today_wins >= 20:
+                if max_target > 0 and today_net_pnl >= max_target:
                     log.info(
-                        "AUTO_SCALP_DAILY_GOAL_ACHIEVED",
-                        pnl=round(today_pnl, 2),
-                        wins=today_wins,
+                        "AUTO_SCALP_DAILY_PROFIT_GOAL_ACHIEVED",
+                        net_pnl=round(today_net_pnl, 2),
+                        gross_profit=round(today_profit, 2),
+                        gross_loss=round(today_loss, 2),
+                        wins=getattr(live_runtime, "today_winning_trades", 0),
+                        losses=getattr(live_runtime, "today_losing_trades", 0),
                         target=max_target,
-                        status="halting_for_the_day",
+                        status="net_profit_target_achieved_halting_for_the_day",
                     )
                     live_runtime.auto_trading_enabled = False
                     await _asyncio.sleep(300)

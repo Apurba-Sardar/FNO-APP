@@ -489,16 +489,17 @@ class LiveExecutionRuntime:
                             status="capital_preserved_auto_trading_paused",
                         )
 
-                    # Daily Profit Target Achieved Check (20 wins or $20 daily profit target)
+                    # Daily Profit Target Achieved Check (Strictly when Net Profit >= $20 USDT after all losses)
                     target_cap = getattr(self.config, "max_daily_profit_target", 20.0) or 20.0
-                    if self.today_winning_trades >= 20 or net_pnl_today >= target_cap:
+                    if target_cap > 0 and net_pnl_today >= target_cap:
                         self.auto_trading_enabled = False
                         structlog.get_logger().info(
                             "DAILY_GOAL_ACHIEVED_HALTING_AUTO_TRADING",
                             daily_wins=self.today_winning_trades,
+                            daily_losses=self.today_losing_trades,
                             daily_pnl=net_pnl_today,
                             target_cap=target_cap,
-                            status="target_reached_safely_paused",
+                            status="net_profit_target_achieved_safely_paused",
                         )
 
                     asyncio.create_task(self.reconcile(actor="auto_close_daemon"))
@@ -1074,8 +1075,10 @@ class LiveExecutionRuntime:
                 or (getattr(self, "today_realized_profit", 0.0) - getattr(self, "today_realized_loss", 0.0)) <= -getattr(self, "max_daily_loss_limit", 3.50)
             ),
             "daily_profit_goal_reached": bool(
-                (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= target_cap
-                or getattr(self, "today_winning_trades", 0) >= 20
+                target_cap > 0 and (
+                    (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= target_cap
+                    or (getattr(self, "today_realized_profit", 0.0) - getattr(self, "today_realized_loss", 0.0)) >= target_cap
+                )
             ),
             "emergency_stop": self.emergency_stop.state,
             "circuit_breaker": self.circuit_breaker.state,
