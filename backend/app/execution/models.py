@@ -168,6 +168,7 @@ class LivePosition(ExecutionModel):
     highest_roe: float = 0.0
     exit_price: float | None = None
     exit_reason: str | None = None
+    is_lower_circuit: bool = False
     closed_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

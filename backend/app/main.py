@@ -324,6 +324,7 @@ async def lifespan(application: FastAPI):
                 best_symbol = None
                 best_score = 0.0
                 best_side = "buy"
+                best_is_lc = False
                 live_px = 0.0
 
                 # ── Tier 1 (HIGHEST PRIORITY): Liquid Momentum Movers (Long & Short) ──
@@ -365,6 +366,38 @@ async def lifespan(application: FastAPI):
                             
                             # Pro-trader spread & liquidity filtering across candidate pool
                             for cand_rating, cand in scored_pool:
+                                # ── Lower Circuit & Daily Trade Cap Protections ──
+                                is_lc = getattr(cand, "is_lower_circuit", False) or cand.change_24h_pct <= -18.0
+                                trades_today = live_runtime.daily_symbol_trade_count.get(cand.symbol, 0)
+
+                                # 1. Stop trading multiple times on pairs hitting lower circuit / extreme 24h dump
+                                if is_lc and trades_today >= 1:
+                                    log.info(
+                                        "AUTO_SCALP_SKIP_LOWER_CIRCUIT_ALREADY_TRADED",
+                                        symbol=cand.symbol,
+                                        change_24h_pct=cand.change_24h_pct,
+                                        trades_today=trades_today,
+                                    )
+                                    continue
+
+                                # 2. Exhaustion rule: never short coins down > 25% (avoids dead-cat short squeeze)
+                                if getattr(cand, "direction", "buy") == "sell" and cand.change_24h_pct <= -25.0:
+                                    log.info(
+                                        "AUTO_SCALP_SKIP_EXTREME_DUMP_EXHAUSTION",
+                                        symbol=cand.symbol,
+                                        change_24h_pct=cand.change_24h_pct,
+                                    )
+                                    continue
+
+                                # 3. Daily symbol trade cap: max 2 trades per day for any pair
+                                if trades_today >= 2:
+                                    log.info(
+                                        "AUTO_SCALP_SKIP_DAILY_SYMBOL_LIMIT_REACHED",
+                                        symbol=cand.symbol,
+                                        trades_today=trades_today,
+                                    )
+                                    continue
+
                                 spread_ok = True
                                 spread_pct = 0.0
                                 try:
@@ -384,7 +417,8 @@ async def lifespan(application: FastAPI):
                                                     spread_pct=round(spread_pct, 3),
                                                     score=round(cand_rating, 1),
                                                 )
-                                except Exception:
+                                catch_err = None
+                                except Exception as _e:
                                     spread_ok = True
 
                                 if not spread_ok:
@@ -393,6 +427,7 @@ async def lifespan(application: FastAPI):
                                 best_symbol = cand.symbol
                                 best_side = getattr(cand, "direction", "buy")
                                 best_score = cand_rating
+                                best_is_lc = is_lc
                                 live_px = cand.last_price
 
                                 log.info(
@@ -405,6 +440,7 @@ async def lifespan(application: FastAPI):
                                     price=live_px,
                                     spread_pct=round(spread_pct, 3),
                                     opportunity_score=round(cand_rating, 1),
+                                    is_lower_circuit=is_lc,
                                     evaluated_candidates=len(eligible_candidates),
                                 )
                                 break
@@ -418,6 +454,8 @@ async def lifespan(application: FastAPI):
                     for opp in sorted_opps:
                         sym = getattr(opp, "symbol", "")
                         if not sym or sym in open_pairs or sym in active_cooldowns:
+                            continue
+                        if live_runtime.daily_symbol_trade_count.get(sym, 0) >= 2:
                             continue
                         px_cand = float(getattr(opp, "current_price", 0.0) or 0.0)
                         sc = float(getattr(opp, "opportunity_score", 0.0) or 0.0)
@@ -553,8 +591,26 @@ async def lifespan(application: FastAPI):
                     # Tag position as bot-managed with profit target and stop
                     from datetime import UTC as _UTC, timedelta as _timedelta
                     now_t = datetime.now(_UTC)
-                    # Register 2-minute symbol cooldown so this coin is not churned back-to-back
-                    live_runtime.symbol_cooldowns[best_symbol] = now_t + _timedelta(minutes=2)
+                    
+                    # Update daily trade counter for this symbol
+                    if not hasattr(live_runtime, "daily_symbol_trade_count"):
+                        live_runtime.daily_symbol_trade_count = {}
+                    live_runtime.daily_symbol_trade_count[best_symbol] = (
+                        live_runtime.daily_symbol_trade_count.get(best_symbol, 0) + 1
+                    )
+                    daily_count = live_runtime.daily_symbol_trade_count[best_symbol]
+
+                    # 24h Lockout for lower-circuit coins or coins reaching daily cap (max 2)
+                    if best_is_lc or daily_count >= 2:
+                        live_runtime.symbol_cooldowns[best_symbol] = now_t + _timedelta(hours=24)
+                        log.info(
+                            "AUTO_SCALP_SYMBOL_24H_LOCKOUT_APPLIED",
+                            symbol=best_symbol,
+                            is_lower_circuit=best_is_lc,
+                            daily_count=daily_count,
+                        )
+                    else:
+                        live_runtime.symbol_cooldowns[best_symbol] = now_t + _timedelta(minutes=30)
 
                     pos = next(
                         (p for p in live_runtime.positions.values() if p.pair == best_symbol and p.status == "open"),
@@ -572,6 +628,7 @@ async def lifespan(application: FastAPI):
                             "created_at": now_t,
                             "updated_at": now_t,
                             "breakeven_activated": False,
+                            "is_lower_circuit": best_is_lc,
                         })
                         live_runtime.positions[pos.position_id] = updated
                         await live_runtime.repository.save_position(updated)

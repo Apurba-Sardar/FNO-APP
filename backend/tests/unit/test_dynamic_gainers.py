@@ -52,3 +52,30 @@ def test_high_volume_majors_fallback():
     assert len(majors) == 2
     assert majors[0].symbol == "B-BTC_USDT"
     assert majors[0].last_price == 68000.0
+
+
+@pytest.mark.asyncio
+async def test_lower_circuit_detection_and_penalties():
+    mock_client = AsyncMock()
+    mock_snapshot = MagicMock()
+    mock_snapshot.prices = {
+        # Moderate breakdown candidate
+        "B-MODERATE_USDT": {"ls": 1.0, "v": 20_000_000.0, "pc": -10.0, "h": 1.1, "l": 0.95},
+        # Lower circuit pair (-20%)
+        "B-LC_USDT": {"ls": 0.5, "v": 20_000_000.0, "pc": -20.0, "h": 0.7, "l": 0.45},
+        # Extreme waterfall dump (-42%)
+        "B-CRASH_USDT": {"ls": 0.1, "v": 20_000_000.0, "pc": -42.0, "h": 0.2, "l": 0.08},
+    }
+    mock_client.current_prices.return_value = mock_snapshot
+
+    scanner = DynamicGainerScanner(min_volume_usdt=5_000_000.0, min_gain_pct=0.5)
+    candidates = await scanner.scan_market_gainers(mock_client, limit=10)
+
+    by_sym = {c.symbol: c for c in candidates}
+    assert by_sym["B-LC_USDT"].is_lower_circuit is True
+    assert by_sym["B-CRASH_USDT"].is_lower_circuit is True
+    assert by_sym["B-MODERATE_USDT"].is_lower_circuit is False
+
+    # Moderate breakdown should have higher opportunity score than extreme waterfall crash
+    assert by_sym["B-MODERATE_USDT"].opportunity_score > by_sym["B-CRASH_USDT"].opportunity_score
+

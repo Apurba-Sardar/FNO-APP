@@ -22,6 +22,7 @@ class GainerCandidate(BaseModel):
     is_top_gainer: bool = True
     gain_rank: int = 1
     opportunity_score: float = 0.0
+    is_lower_circuit: bool = False
 
 
 class DynamicGainerScanner:
@@ -75,8 +76,10 @@ class DynamicGainerScanner:
 
             # Base composite institutional momentum: percentage move weighted by volume depth
             vol_log = math.log10(max(vol_24, 1_000_000.0))
-            momentum_score = round(abs(chg_24) * vol_log, 2)
             trade_direction = "buy" if chg_24 > 0 else "sell"
+            # Cap effective percentage move to avoid hyper-inflating exhausted crashes (>20% dump)
+            effective_chg = min(abs(chg_24), 20.0) if trade_direction == "sell" else min(abs(chg_24), 45.0)
+            momentum_score = round(effective_chg * vol_log, 2)
 
             # Dynamic Opportunity Quality Rating:
             opp_score = momentum_score
@@ -107,12 +110,26 @@ class DynamicGainerScanner:
             elif vol_24 >= 8_000_000.0:
                 opp_score += 6.0
 
-            # 3. Prime Scalp Velocity Zone (Sweet-spot 6% to 35% movement)
+            # 3. Prime Scalp Velocity Zone vs Lower Circuit Exhaustion
             abs_chg = abs(chg_24)
-            if 6.0 <= abs_chg <= 35.0:
-                opp_score += 15.0
-            elif abs_chg > 55.0:
-                opp_score -= 10.0  # Exhaustion penalty for overextended pairs
+            is_lc = False
+            if trade_direction == "sell":
+                if chg_24 <= -18.0:
+                    is_lc = True
+                if chg_24 <= -25.0:
+                    # Extreme crash exhaustion: heavy penalty to avoid shorting the bottom of crash waterfall
+                    opp_score -= 80.0
+                elif chg_24 <= -18.0:
+                    # Lower circuit zone: penalize priority
+                    opp_score -= 40.0
+                elif -18.0 <= chg_24 <= -3.5:
+                    # Prime Short breakdown velocity
+                    opp_score += 25.0
+            else:
+                if 5.0 <= chg_24 <= 35.0:
+                    opp_score += 15.0
+                elif chg_24 > 50.0:
+                    opp_score -= 25.0
 
             candidates.append({
                 "symbol": symbol,
@@ -124,6 +141,7 @@ class DynamicGainerScanner:
                 "direction": trade_direction,
                 "high_24h": high_24,
                 "low_24h": low_24,
+                "is_lower_circuit": is_lc,
             })
 
         # Separate into Long and Short candidate pools
@@ -151,6 +169,7 @@ class DynamicGainerScanner:
                     spread_bps=3.5,
                     is_top_gainer=True,
                     gain_rank=rank,
+                    is_lower_circuit=item.get("is_lower_circuit", False),
                 )
             )
 
@@ -170,6 +189,7 @@ class DynamicGainerScanner:
                     spread_bps=3.5,
                     is_top_gainer=False,
                     gain_rank=rank,
+                    is_lower_circuit=item.get("is_lower_circuit", False),
                 )
             )
 

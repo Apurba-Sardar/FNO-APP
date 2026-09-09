@@ -89,6 +89,7 @@ class LiveExecutionRuntime:
         self.consecutive_losses: int = 0
         self.max_daily_loss_limit: float = 3.50
         self.consecutive_loss_cooldown_until: datetime | None = None
+        self.daily_symbol_trade_count: dict[str, int] = {}
         self.current_tracking_date = datetime.now(UTC).date()
 
     def check_and_apply_daily_rollover(self) -> bool:
@@ -111,6 +112,7 @@ class LiveExecutionRuntime:
             self.today_realized_loss = 0.0
             self.consecutive_losses = 0
             self.consecutive_loss_cooldown_until = None
+            self.daily_symbol_trade_count = {}
             if hasattr(self, "account") and self.account:
                 self.account.daily_profit = 0.0
                 self.account.daily_loss = 0.0
@@ -171,6 +173,19 @@ class LiveExecutionRuntime:
         self.today_realized_loss = round(today_loss, 3)
         self.today_winning_trades = today_wins
         self.today_losing_trades = today_losses
+
+        # Re-hydrate daily trade count per symbol to prevent multiple entries across restarts
+        today_counts: dict[str, int] = {}
+        for pos in self.positions.values():
+            t_ref = getattr(pos, "closed_at", None) or getattr(pos, "created_at", None)
+            if t_ref:
+                if getattr(t_ref, "tzinfo", None) is None:
+                    t_ref = t_ref.replace(tzinfo=UTC)
+                if t_ref.date() == today_date:
+                    p_sym = getattr(pos, "pair", None)
+                    if p_sym:
+                        today_counts[p_sym] = today_counts.get(p_sym, 0) + 1
+        self.daily_symbol_trade_count = today_counts
 
         # Restart is deliberately fail-closed; persisted READY/ARMED is ignored.
         self.state = LiveRuntimeState.DISABLED
@@ -432,8 +447,16 @@ class LiveExecutionRuntime:
                     self.last_trade_closed_at = now_closed
                     if not hasattr(self, "symbol_cooldowns"):
                         self.symbol_cooldowns = {}
-                    # Lock symbol for 2 minutes after exit so it cannot be re-bought immediately at tops
-                    self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=2)
+                    if not hasattr(self, "daily_symbol_trade_count"):
+                        self.daily_symbol_trade_count = {}
+                    self.daily_symbol_trade_count[pos.pair] = self.daily_symbol_trade_count.get(pos.pair, 0) + 1
+
+                    # LOWER CIRCUIT RULE: If pair had extreme breakdown / lower circuit or already traded: lock for 24h
+                    is_lc = getattr(pos, "is_lower_circuit", False) or (getattr(pos, "direction", None) == StrategyDirection.SHORT and float(getattr(pos, "realized_pnl", 0)) < 0)
+                    if is_lc or self.daily_symbol_trade_count[pos.pair] >= 2:
+                        self.symbol_cooldowns[pos.pair] = now_closed + timedelta(hours=24)
+                    else:
+                        self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=30)
                     
                     # ── Daily Target & Loss/Win Tracking ──
                     pnl_res = float(pos.unrealized_pnl)
