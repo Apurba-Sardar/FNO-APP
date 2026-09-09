@@ -27,6 +27,32 @@ export default function LivePage() {
   const [alertStatusMessage, setAlertStatusMessage] = useState<string | null>(null);
   const [isTestingAlert, setIsTestingAlert] = useState(false);
 
+  // ── Dedicated PnL & Trade Ledger Modal ──
+  const [showLedgerModal, setShowLedgerModal] = useState(false);
+  const [ledgerLogsData, setLedgerLogsData] = useState<any>(null);
+  const [ledgerLogsTab, setLedgerLogsTab] = useState<"daily" | "weekly" | "all">("daily");
+  const [expandedLedgerDays, setExpandedLedgerDays] = useState<Record<string, boolean>>({});
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  const fetchLedgerLogs = async () => {
+    try {
+      setLedgerLoading(true);
+      const apiBase = getApiUrl();
+      const res = await fetch(`${apiBase}/live/pnl-logs?limit=200`, { headers: headers() });
+      if (res.ok) {
+        const d = await res.json();
+        setLedgerLogsData(d);
+        if (d.daily_breakdown?.length > 0) {
+          setExpandedLedgerDays({ [d.daily_breakdown[0].date]: true });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch ledger logs", e);
+    } finally {
+      setLedgerLoading(false);
+    }
+  };
+
   const testPushNotification = async () => {
     setIsTestingAlert(true);
     setAlertStatusMessage(null);
@@ -575,12 +601,13 @@ export default function LivePage() {
             <div className="border-l border-white/10 pl-6">
               <div className="flex items-center justify-end gap-2">
                 <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Realized Net P&L</span>
-                <a
-                  href="/pnl"
-                  className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold hover:bg-emerald-500/30 transition flex items-center gap-1"
+                <button
+                  type="button"
+                  onClick={() => { setShowLedgerModal(true); fetchLedgerLogs(); }}
+                  className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold hover:bg-emerald-500/30 transition flex items-center gap-1 cursor-pointer"
                 >
-                  <span>Ledger ↗</span>
-                </a>
+                  <span>📊 Ledger ↗</span>
+                </button>
               </div>
               <b className={`mt-0.5 block text-2xl font-black font-mono tracking-tight ${
                 (status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) >= 0 ? "text-[#00F5A0]" : "text-rose-400"
@@ -1803,6 +1830,375 @@ export default function LivePage() {
                 className="cred-btn-secondary px-5 py-2 text-xs font-bold text-white"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dedicated PnL & Trade Performance Ledger Modal ── */}
+      {showLedgerModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-fade-in">
+          <div className="bg-[#0b101b] border border-white/10 rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-lg">
+                  📊
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
+                    PnL & Trade Performance Ledger
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      LIVE AUDIT
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">Daily & Weekly Realized Returns from SQLite Ledger</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href="/pnl"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition flex items-center gap-1"
+                >
+                  <span>Open Standalone Page</span>
+                  <span>↗</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => fetchLedgerLogs()}
+                  disabled={ledgerLoading}
+                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white transition text-xs"
+                  title="Refresh data"
+                >
+                  🔄
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLedgerModal(false)}
+                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition flex items-center justify-center font-bold text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Quick KPI Ribbon */}
+            <div className="px-6 py-3 bg-white/[0.01] border-b border-white/[0.06] grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Net PnL</span>
+                <span className={`text-base font-black font-mono tracking-tight ${
+                  (ledgerLogsData?.summary?.total_realized_pnl ?? 0) >= 0 ? "text-[#00F5A0]" : "text-rose-400"
+                }`}>
+                  {(ledgerLogsData?.summary?.total_realized_pnl ?? 0) >= 0 ? "+" : ""}
+                  {(ledgerLogsData?.summary?.total_realized_pnl ?? 0).toFixed(2)} USDT
+                </span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Today Net PnL</span>
+                <span className={`text-base font-black font-mono tracking-tight ${
+                  (ledgerLogsData?.summary?.today_pnl ?? 0) >= 0 ? "text-[#00F5A0]" : "text-rose-400"
+                }`}>
+                  {(ledgerLogsData?.summary?.today_pnl ?? 0) >= 0 ? "+" : ""}
+                  {(ledgerLogsData?.summary?.today_pnl ?? 0).toFixed(2)} USDT
+                </span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Win Rate</span>
+                <span className="text-base font-black font-mono text-cyan-400">
+                  {ledgerLogsData?.summary?.win_rate ?? 0}%
+                  <span className="text-[10px] text-slate-400 font-normal ml-1">
+                    ({ledgerLogsData?.summary?.winning_trades ?? 0}W / {ledgerLogsData?.summary?.losing_trades ?? 0}L)
+                  </span>
+                </span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Closed Trades</span>
+                <span className="text-base font-black font-mono text-white">
+                  {ledgerLogsData?.summary?.total_closed_trades ?? 0}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5 col-span-2 sm:col-span-1">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Profit Factor</span>
+                <span className="text-base font-black font-mono text-amber-400">
+                  {ledgerLogsData?.summary?.profit_factor ?? "1.00"}
+                </span>
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="px-6 pt-3 border-b border-white/[0.06] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLedgerLogsTab("daily")}
+                className={`px-4 py-2 text-xs font-bold rounded-t-lg transition border-b-2 flex items-center gap-1.5 ${
+                  ledgerLogsTab === "daily"
+                    ? "border-emerald-400 text-white bg-white/5"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>📅 Daily Breakdown</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10">
+                  {ledgerLogsData?.daily_breakdown?.length ?? 0}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLedgerLogsTab("weekly")}
+                className={`px-4 py-2 text-xs font-bold rounded-t-lg transition border-b-2 flex items-center gap-1.5 ${
+                  ledgerLogsTab === "weekly"
+                    ? "border-emerald-400 text-white bg-white/5"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>📊 Weekly Breakdown</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10">
+                  {ledgerLogsData?.weekly_breakdown?.length ?? 0}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLedgerLogsTab("all")}
+                className={`px-4 py-2 text-xs font-bold rounded-t-lg transition border-b-2 flex items-center gap-1.5 ${
+                  ledgerLogsTab === "all"
+                    ? "border-emerald-400 text-white bg-white/5"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>📜 All Trades Log</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10">
+                  {ledgerLogsData?.trades?.length ?? 0}
+                </span>
+              </button>
+            </div>
+
+            {/* Tab Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 font-sans">
+              {ledgerLoading && !ledgerLogsData && (
+                <div className="py-12 text-center text-slate-500 font-mono text-xs animate-pulse">
+                  Fetching ledger audit from backend SQLite...
+                </div>
+              )}
+
+              {/* DAILY TAB */}
+              {ledgerLogsTab === "daily" && (
+                <div className="space-y-3">
+                  {!ledgerLogsData?.daily_breakdown || ledgerLogsData.daily_breakdown.length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 text-xs border border-dashed border-white/10 rounded-xl">
+                      No closed trades logged yet. Live trades will automatically populate here upon exit.
+                    </div>
+                  ) : (
+                    ledgerLogsData.daily_breakdown.map((day: any) => {
+                      const isExpanded = expandedLedgerDays[day.date];
+                      return (
+                        <div key={day.date} className="rounded-xl bg-black/30 border border-white/10 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedLedgerDays(prev => ({ ...prev, [day.date]: !prev[day.date] }))}
+                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.02] transition text-left"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-slate-500 text-xs">{isExpanded ? "▼" : "▶"}</span>
+                              <div>
+                                <span className="font-mono font-bold text-white text-sm">{day.date}</span>
+                                <span className="ml-2 text-xs text-slate-400">({day.trades_count} trades)</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 text-xs font-mono">
+                              <span className="text-cyan-400 hidden sm:inline">
+                                Win Rate: <b className="text-white">{day.win_rate}%</b> ({day.wins}W / {day.losses}L)
+                              </span>
+                              <span className="text-slate-400 hidden md:inline">
+                                Gr. Win: <b className="text-emerald-400">+${day.gross_profit.toFixed(2)}</b>
+                              </span>
+                              <span className="text-slate-400 hidden md:inline">
+                                Gr. Loss: <b className="text-rose-400">-${day.gross_loss.toFixed(2)}</b>
+                              </span>
+                              <span className={`text-sm font-black px-2.5 py-1 rounded-lg ${
+                                day.net_pnl >= 0 ? "bg-emerald-500/15 text-[#00F5A0] border border-emerald-500/30" : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                              }`}>
+                                {day.net_pnl >= 0 ? "+" : ""}{day.net_pnl.toFixed(2)} USDT
+                              </span>
+                            </div>
+                          </button>
+
+                          {isExpanded && day.trades && day.trades.length > 0 && (
+                            <div className="border-t border-white/[0.06] bg-black/50 overflow-x-auto">
+                              <table className="w-full text-left text-xs text-slate-300">
+                                <thead className="bg-white/[0.02] text-[10px] uppercase font-mono text-slate-500 border-b border-white/5">
+                                  <tr>
+                                    <th className="py-2 px-3">Time</th>
+                                    <th className="py-2 px-3">Symbol</th>
+                                    <th className="py-2 px-3">Side</th>
+                                    <th className="py-2 px-3 text-right">Entry</th>
+                                    <th className="py-2 px-3 text-right">Exit</th>
+                                    <th className="py-2 px-3 text-right">Margin</th>
+                                    <th className="py-2 px-3 text-right">Realized PnL</th>
+                                    <th className="py-2 px-3 text-right">ROE %</th>
+                                    <th className="py-2 px-3">Exit Reason</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5 font-mono">
+                                  {day.trades.map((t: any) => (
+                                    <tr key={t.id} className="hover:bg-white/[0.02]">
+                                      <td className="py-2 px-3 text-slate-400 text-[11px]">
+                                        {t.closed_at ? new Date(t.closed_at).toLocaleTimeString() : "—"}
+                                      </td>
+                                      <td className="py-2 px-3 font-bold text-white">{t.symbol}</td>
+                                      <td className="py-2 px-3">
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                          t.side === "BUY" ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                                        }`}>
+                                          {t.side === "BUY" ? "LONG" : "SHORT"}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-3 text-right">${t.entry_price?.toFixed(4)}</td>
+                                      <td className="py-2 px-3 text-right">${t.exit_price?.toFixed(4) ?? "—"}</td>
+                                      <td className="py-2 px-3 text-right text-slate-400">${t.margin?.toFixed(2)}</td>
+                                      <td className={`py-2 px-3 text-right font-bold ${
+                                        (t.realized_pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
+                                      }`}>
+                                        {(t.realized_pnl ?? 0) >= 0 ? "+" : ""}{(t.realized_pnl ?? 0).toFixed(3)} USDT
+                                      </td>
+                                      <td className={`py-2 px-3 text-right font-bold ${
+                                        (t.realized_pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
+                                      }`}>
+                                        {t.margin ? (((t.realized_pnl ?? 0) / t.margin) * 100).toFixed(2) : "0.00"}%
+                                      </td>
+                                      <td className="py-2 px-3 text-[10px] text-slate-400">
+                                        <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                                          {t.exit_reason || "CLOSE"}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* WEEKLY TAB */}
+              {ledgerLogsTab === "weekly" && (
+                <div className="space-y-3">
+                  {!ledgerLogsData?.weekly_breakdown || ledgerLogsData.weekly_breakdown.length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 text-xs border border-dashed border-white/10 rounded-xl">
+                      No weekly logs recorded yet.
+                    </div>
+                  ) : (
+                    ledgerLogsData.weekly_breakdown.map((w: any) => (
+                      <div key={w.week} className="p-4 rounded-xl bg-black/30 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="font-mono font-bold text-white text-base">Calendar Week: {w.week}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            {w.trades_count} total trades ({w.wins} Wins · {w.losses} Losses)
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 font-mono text-xs">
+                          <span className="text-cyan-400">
+                            Win Rate: <b className="text-white">{w.win_rate}%</b>
+                          </span>
+                          <span className="text-slate-400 hidden sm:inline">
+                            Gross: <b className="text-emerald-400">+${w.gross_profit.toFixed(2)}</b> / <b className="text-rose-400">-${w.gross_loss.toFixed(2)}</b>
+                          </span>
+                          <span className={`text-base font-black px-3 py-1 rounded-lg ${
+                            w.net_pnl >= 0 ? "bg-emerald-500/15 text-[#00F5A0] border border-emerald-500/30" : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                          }`}>
+                            {w.net_pnl >= 0 ? "+" : ""}{w.net_pnl.toFixed(2)} USDT
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* ALL TRADES LOG */}
+              {ledgerLogsTab === "all" && (
+                <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/40">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-white/[0.04] text-[10px] uppercase font-mono text-slate-500 border-b border-white/5">
+                      <tr>
+                        <th className="py-2.5 px-3">Date / Time (IST)</th>
+                        <th className="py-2.5 px-3">Symbol</th>
+                        <th className="py-2.5 px-3">Side</th>
+                        <th className="py-2.5 px-3 text-right">Entry Price</th>
+                        <th className="py-2.5 px-3 text-right">Exit Price</th>
+                        <th className="py-2.5 px-3 text-right">Margin</th>
+                        <th className="py-2.5 px-3 text-right">Realized PnL</th>
+                        <th className="py-2.5 px-3 text-right">ROE %</th>
+                        <th className="py-2.5 px-3">Exit Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 font-mono">
+                      {!ledgerLogsData?.trades || ledgerLogsData.trades.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="py-8 text-center text-slate-500 text-xs font-sans">
+                            No closed trade entries found.
+                          </td>
+                        </tr>
+                      ) : (
+                        ledgerLogsData.trades.map((t: any) => (
+                          <tr key={t.id} className="hover:bg-white/[0.02]">
+                            <td className="py-2 px-3 text-slate-400 text-[11px]">
+                              {t.closed_at ? new Date(t.closed_at).toLocaleString() : "—"}
+                            </td>
+                            <td className="py-2 px-3 font-bold text-white">{t.symbol}</td>
+                            <td className="py-2 px-3">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                t.side === "BUY" ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                              }`}>
+                                {t.side === "BUY" ? "LONG" : "SHORT"}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right">${t.entry_price?.toFixed(4)}</td>
+                            <td className="py-2 px-3 text-right">${t.exit_price?.toFixed(4) ?? "—"}</td>
+                            <td className="py-2 px-3 text-right text-slate-400">${t.margin?.toFixed(2)}</td>
+                            <td className={`py-2 px-3 text-right font-bold ${
+                              (t.realized_pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
+                            }`}>
+                              {(t.realized_pnl ?? 0) >= 0 ? "+" : ""}{(t.realized_pnl ?? 0).toFixed(3)} USDT
+                            </td>
+                            <td className={`py-2 px-3 text-right font-bold ${
+                              (t.realized_pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
+                            }`}>
+                              {t.margin ? (((t.realized_pnl ?? 0) / t.margin) * 100).toFixed(2) : "0.00"}%
+                            </td>
+                            <td className="py-2 px-3 text-[10px] text-slate-400">
+                              <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                                {t.exit_reason || "MANUAL_CLOSE"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-white/10 bg-white/[0.01] flex items-center justify-between text-xs">
+              <span className="text-slate-500 text-[11px]">
+                Audited data saved in server SQLite database • Synced on every trade close
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowLedgerModal(false)}
+                className="cred-btn-secondary px-4 py-1.5 text-xs font-bold text-white cursor-pointer"
+              >
+                Close Ledger
               </button>
             </div>
           </div>
