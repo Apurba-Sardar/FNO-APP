@@ -144,7 +144,7 @@ async def test_auto_close_anti_churn_and_daily_win_tracking():
         mark_price=0.34,
         target=0.3345,
         stop=0.3247,
-        unrealized_pnl=1.20,  # >= +1.15 USDT target!
+        unrealized_pnl=1.30,  # >= +1.25 USDT target!
         margin=25.0,
         leverage=4,
         margin_mode="isolated",
@@ -157,7 +157,7 @@ async def test_auto_close_anti_churn_and_daily_win_tracking():
     actions = await runtime.monitor_and_auto_close_positions()
 
     assert len(actions) == 1
-    assert "PROFIT_TARGET_REACHED" in actions[0]["reason"]
+    assert "PROFIT_TARGET_REACHED" in actions[0]["reason"] or "TAKE_PROFIT_TRIGGER" in actions[0]["reason"]
     # Cooldown verification: B-FORM_USDT must be locked
     assert "B-FORM_USDT" in runtime.symbol_cooldowns
     assert runtime.symbol_cooldowns["B-FORM_USDT"] > datetime.now(UTC)

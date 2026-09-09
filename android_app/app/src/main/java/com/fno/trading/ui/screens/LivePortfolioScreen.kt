@@ -1,6 +1,7 @@
 package com.fno.trading.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,13 +12,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fno.trading.data.model.PositionItem
@@ -39,178 +46,119 @@ fun LivePortfolioScreen(
         modifier = modifier
             .fillMaxSize()
             .background(AmoledBackground)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(top = 14.dp, bottom = 80.dp)
     ) {
-        // 1. Header Balance & Daily Goal Card
+        // ── 1. Balance Hero Card ──────────────────────────────────────
         item {
             AccountBalanceCard(
-                state = state,
-                onRefresh = { viewModel.loadData() },
+                state         = state,
+                onRefresh     = { viewModel.loadData() },
                 onSendTestAlert = { viewModel.sendTestAlert() }
             )
         }
 
-        // Safety Circuit Alert if blocked
-        if (state.status?.runtimeState == "blocked" || state.status?.circuitBreaker == "open" || state.errorMessage != null) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, AmberWarning, RoundedCornerShape(14.dp)),
-                    colors = CardDefaults.cardColors(containerColor = AmberWarning.copy(alpha = 0.12f)),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = AmberWarning, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Safety Alert: ${state.status?.lastApiError ?: state.errorMessage ?: "Engine Blocked"}",
-                                color = AmberWarning,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { viewModel.resetCircuit() },
-                            colors = ButtonDefaults.buttonColors(containerColor = AmberWarning),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(text = "Unblock & Reconcile Engine", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
+        // ── 2. Alerts ─────────────────────────────────────────────────
+        val blocked = state.status?.runtimeState == "blocked" ||
+                state.status?.circuitBreaker == "open" ||
+                state.errorMessage != null
+        if (blocked) {
+            item { SafetyAlertCard(state = state, onReset = { viewModel.resetCircuit() }) }
         }
 
-        // Margin Notice Banner if cash < $5
         val freeCash = state.account?.availableBalance ?: 100.0
         if (freeCash < 5.0 && openPositions.isNotEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, CyanAccent.copy(alpha = 0.4f), RoundedCornerShape(14.dp)),
-                    colors = CardDefaults.cardColors(containerColor = DarkElevatedSurface),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "Margin Locked ($${String.format("%,.2f", state.account?.marginUsed ?: 0.0)})",
-                                color = CyanAccent,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Cash available is $${String.format("%,.2f", freeCash)}. Close any open position below to release margin immediately for new 3x scalps.",
-                                color = TextSecondary,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
+            item { MarginNoticeCard(state = state, freeCash = freeCash) }
         }
 
-        // 2. Scalp Controls & Status Strip
+        // ── 3. Engine Controls ────────────────────────────────────────
         item {
             EngineStatusStrip(
-                state = state,
+                state              = state,
                 onToggleAutoTrading = { viewModel.toggleAutoTrading() },
-                onPunchScalp = { symbol, side, qty -> viewModel.punch3xScalp(symbol, side, qty) }
+                onPunchScalp       = { sym, side, qty -> viewModel.punch3xScalp(sym, side, qty) }
             )
         }
 
-        // 3. Open Positions Header
+        // ── 4. Loading indicator ──────────────────────────────────────
+        if (state.isLoading) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(
+                        color       = EmeraldPrimary,
+                        strokeWidth = 2.dp,
+                        modifier    = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text      = state.statusMessage,
+                        color     = TextSecondary,
+                        fontSize  = 12.sp,
+                        maxLines  = 1,
+                        overflow  = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // ── 5. Open Positions ─────────────────────────────────────────
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier  = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Open Positions",
-                        color = TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                        text       = "Open Positions",
+                        color      = TextPrimary,
+                        fontSize   = 17.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(EmeraldPrimary.copy(alpha = 0.2f))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "${openPositions.size} Active",
-                            color = EmeraldPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                    AnimatedContent(targetState = openPositions.size, label = "cnt") { cnt ->
+                        Surface(
+                            shape   = RoundedCornerShape(20.dp),
+                            color   = if (cnt > 0) EmeraldPrimary.copy(alpha = 0.18f) else DarkElevatedSurface
+                        ) {
+                            Text(
+                                text       = "$cnt Active",
+                                color      = if (cnt > 0) EmeraldPrimary else TextMuted,
+                                fontSize   = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier   = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
                     }
+                }
+                TextButton(onClick = { viewModel.loadData() }) {
+                    Icon(Icons.Default.Sync, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("Sync", color = CyanAccent, fontSize = 11.sp)
                 }
             }
         }
 
-        // 4. Position Cards
         if (openPositions.isEmpty()) {
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = DarkCardSurface),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(40.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "No open positions currently",
-                            color = TextSecondary,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = "Auto-Engine is scanning high-probability 3x scalps",
-                            color = TextMuted,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
+                EmptyPositionsCard()
             }
         } else {
-            items(openPositions) { pos ->
+            items(openPositions, key = { it.positionId ?: it.pair }) { pos ->
                 PositionCard(
                     position = pos,
-                    onExit = { id, pair -> viewModel.exitPosition(id, pair) }
+                    onExit   = { id, pair -> viewModel.exitPosition(id, pair) }
                 )
             }
         }
-
-        // Bottom Padding for navigation bar
-        item {
-            Spacer(modifier = Modifier.height(60.dp))
-        }
     }
 }
+
+// ─── Account Balance Hero ─────────────────────────────────────────────────────
 
 @Composable
 fun AccountBalanceCard(
@@ -218,157 +166,246 @@ fun AccountBalanceCard(
     onRefresh: () -> Unit,
     onSendTestAlert: () -> Unit
 ) {
-    val account = state.account
+    val account  = state.account
     val dailyPnl = account?.dailyPnl ?: 0.0
-    val target = state.status?.dailyProfitTarget ?: 6.0
+    val target   = state.status?.dailyProfitTarget ?: 6.0
     val progress = (dailyPnl / target).coerceIn(0.0, 1.0).toFloat()
     val isProfit = dailyPnl >= 0
+    val goalHit  = dailyPnl >= target
+
+    val animProgress by animateFloatAsState(
+        targetValue    = progress,
+        animationSpec  = tween(800, easing = EaseOutQuart),
+        label          = "progress"
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, BorderColor, RoundedCornerShape(20.dp)),
+            .border(
+                1.dp,
+                Brush.linearGradient(listOf(EmeraldPrimary.copy(0.4f), CyanAccent.copy(0.2f), BorderColor.copy(0.3f))),
+                RoundedCornerShape(22.dp)
+            ),
         colors = CardDefaults.cardColors(containerColor = DarkCardSurface),
-        shape = RoundedCornerShape(20.dp)
+        shape  = RoundedCornerShape(22.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
+
+            // Header row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(EmeraldPrimary)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    PulsingLiveDot(color = EmeraldPrimary)
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "COINDCX FUTURES LIVE",
-                        color = EmeraldPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        text          = "COINDCX FUTURES LIVE",
+                        color         = EmeraldPrimary,
+                        fontSize      = 10.sp,
+                        fontWeight    = FontWeight.Black,
+                        letterSpacing = 1.2.sp
                     )
                 }
-
                 Row {
-                    IconButton(onClick = onSendTestAlert, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = "Test Notification",
-                            tint = CyanAccent
-                        )
+                    IconButton(onClick = onSendTestAlert, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Outlined.Notifications, null, tint = CyanAccent, modifier = Modifier.size(18.dp))
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
-                            tint = TextSecondary
-                        )
+                    IconButton(onClick = onRefresh, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Default.Refresh, null, tint = TextMuted, modifier = Modifier.size(18.dp))
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
+            // Equity
+            Text("Total Equity", color = TextMuted, fontSize = 11.sp)
             Text(
-                text = "Total Account Equity",
-                color = TextSecondary,
-                fontSize = 12.sp
-            )
-            Text(
-                text = "$${String.format("%,.2f", account?.equity ?: 1059.07)} USDT",
-                color = TextPrimary,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Black
+                text       = "$${String.format("%,.2f", account?.equity ?: 0.0)} USDT",
+                color      = TextPrimary,
+                fontSize   = 36.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace
             )
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Free Cash & Margin row
+            // Free Cash & Margin
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(DarkElevatedSurface)
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text(text = "Available Cash", color = TextMuted, fontSize = 11.sp)
+                    Text("Free Cash", color = TextMuted, fontSize = 10.sp)
                     Text(
-                        text = "$${String.format("%,.2f", account?.availableBalance ?: 1000.0)}",
-                        color = TextPrimary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
+                        text       = "$${String.format("%,.2f", account?.availableBalance ?: 0.0)}",
+                        color      = TextPrimary,
+                        fontSize   = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(38.dp)
+                        .background(BorderColor.copy(0.5f))
+                )
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "Margin Locked", color = TextMuted, fontSize = 11.sp)
+                    Text("Margin Locked", color = TextMuted, fontSize = 10.sp)
                     Text(
-                        text = "$${String.format("%,.2f", account?.marginUsed ?: 0.0)}",
-                        color = TextPrimary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
+                        text       = "$${String.format("%,.2f", account?.marginUsed ?: 0.0)}",
+                        color      = AmberWarning,
+                        fontSize   = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Daily Profit Target Progress Bar ($6 Cap)
-            Box(
+            // Daily Goal Progress
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(DarkElevatedSurface)
                     .padding(12.dp)
             ) {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Daily Goal ($${String.format("%.2f", target)} Cap - Scalp Plan)",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${if (isProfit) "+" else ""}$${String.format("%.2f", dailyPnl)} / $${String.format("%.2f", target)}",
-                            color = if (isProfit) ProfitGreen else LossRed,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = if (dailyPnl >= target) AmberWarning else EmeraldPrimary,
-                        trackColor = Color(0xFF334155)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text       = if (goalHit) "🏆 DAILY GOAL REACHED!" else "Daily P&L Target",
+                        color      = if (goalHit) GoldAccent else TextSecondary,
+                        fontSize   = 11.sp,
+                        fontWeight = FontWeight.Bold
                     )
+                    Text(
+                        text       = "${if (isProfit) "+" else ""}$${String.format("%.2f", dailyPnl)} / $${String.format("%.2f", target)}",
+                        color      = if (isProfit) ProfitGreen else LossRed,
+                        fontSize   = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
 
-                    if (dailyPnl >= target) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "🏆 GOAL REACHED! Profits Locked for Today.",
-                            color = AmberWarning,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LinearProgressIndicator(
+                    progress      = { animProgress },
+                    modifier      = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
+                    color         = if (goalHit) GoldAccent else EmeraldPrimary,
+                    trackColor    = BorderColor,
+                    strokeCap     = StrokeCap.Round
+                )
+
+                if (!goalHit) {
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        text   = "Scalp target: ≥ +$1.00/trade • 4x Leverage • $25 Margin",
+                        color  = TextMuted,
+                        fontSize = 10.sp
+                    )
+                } else {
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        text       = "🎉 Profits locked. Auto-engine paused until tomorrow.",
+                        color      = GoldAccent,
+                        fontSize   = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
     }
 }
+
+// ─── Safety Alert ─────────────────────────────────────────────────────────────
+
+@Composable
+fun SafetyAlertCard(state: TradingUiState, onReset: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, LossRed.copy(0.5f), RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = LossRed.copy(0.08f)),
+        shape  = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Warning, null, tint = LossRed, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text       = "Safety Alert: ${state.status?.lastApiError ?: state.errorMessage ?: "Engine Blocked"}",
+                    color      = LossRed,
+                    fontSize   = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines   = 2,
+                    overflow   = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(
+                onClick = onReset,
+                colors  = ButtonDefaults.buttonColors(containerColor = LossRed),
+                shape   = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.RestartAlt, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Unblock & Reconcile Engine", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+// ─── Margin Notice ────────────────────────────────────────────────────────────
+
+@Composable
+fun MarginNoticeCard(state: TradingUiState, freeCash: Double) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, CyanAccent.copy(0.4f), RoundedCornerShape(14.dp)),
+        colors = CardDefaults.cardColors(containerColor = CyanDim),
+        shape  = RoundedCornerShape(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Info, null, tint = CyanAccent, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    text       = "Margin Locked ($${String.format("%,.2f", state.account?.marginUsed ?: 0.0)})",
+                    color      = CyanAccent,
+                    fontSize   = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text    = "Free cash $${String.format("%,.2f", freeCash)} — close a position to release margin for new scalps.",
+                    color   = TextSecondary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+    }
+}
+
+// ─── Engine Controls ──────────────────────────────────────────────────────────
 
 @Composable
 fun EngineStatusStrip(
@@ -377,66 +414,64 @@ fun EngineStatusStrip(
     onPunchScalp: (String, String, Double) -> Unit
 ) {
     val autoActive = state.status?.autoExecution == true
+    var selectedSide by remember { mutableStateOf("buy") }
+    val isBuy = selectedSide == "buy"
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Auto-Pilot Control Card
+
+        // Auto-Pilot Toggle Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .border(
                     1.dp,
-                    if (autoActive) EmeraldPrimary.copy(alpha = 0.6f) else BorderColor,
-                    RoundedCornerShape(16.dp)
+                    if (autoActive) EmeraldPrimary.copy(0.5f) else BorderColor,
+                    RoundedCornerShape(18.dp)
                 ),
             colors = CardDefaults.cardColors(
-                containerColor = if (autoActive) EmeraldPrimary.copy(alpha = 0.08f) else DarkCardSurface
+                containerColor = if (autoActive) EmeraldPrimary.copy(0.07f) else DarkCardSurface
             ),
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(18.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 13.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (autoActive) EmeraldPrimary else TextMuted)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        if (autoActive) PulsingLiveDot(EmeraldPrimary)
+                        else Box(Modifier.size(7.dp).clip(CircleShape).background(TextMuted))
+                        Spacer(modifier = Modifier.width(7.dp))
                         Text(
-                            text = if (autoActive) "AUTO-PILOT RUNNING" else "AUTO-PILOT STANDBY",
-                            color = if (autoActive) EmeraldPrimary else TextMuted,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
+                            text          = if (autoActive) "AUTO-PILOT RUNNING" else "AUTO-PILOT STANDBY",
+                            color         = if (autoActive) EmeraldPrimary else TextMuted,
+                            fontSize      = 10.sp,
+                            fontWeight    = FontWeight.Black,
+                            letterSpacing = 0.6.sp
                         )
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Auto Research • Plan • Entry • Exit",
-                        color = TextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
+                        text       = "Research → Entry → Auto-Exit",
+                        color      = TextPrimary,
+                        fontSize   = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
                     Text(
-                        text = "Real-time alerts sent to your S24 Ultra",
-                        color = TextSecondary,
+                        text    = "500ms scan • Breakeven lock @ +$0.50 • Target ≥ $1.00",
+                        color   = TextSecondary,
                         fontSize = 11.sp
                     )
                 }
-
                 Switch(
-                    checked = autoActive,
+                    checked  = autoActive,
                     onCheckedChange = { onToggleAutoTrading() },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = EmeraldPrimary,
-                        checkedTrackColor = EmeraldPrimary.copy(alpha = 0.35f),
+                    colors   = SwitchDefaults.colors(
+                        checkedThumbColor   = EmeraldPrimary,
+                        checkedTrackColor   = EmeraldPrimary.copy(0.30f),
                         uncheckedThumbColor = TextMuted,
                         uncheckedTrackColor = DarkElevatedSurface
                     )
@@ -444,172 +479,194 @@ fun EngineStatusStrip(
             }
         }
 
-        // Badges Row
+        // Info Badge Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            BadgeChip(
-                label = "Target Profit",
-                subLabel = "+$1.00+ USDT",
-                color = ProfitGreen,
-                modifier = Modifier.weight(1f)
-            )
-            BadgeChip(
-                label = "4x Leverage",
-                subLabel = "$25 Margin",
-                color = CyanAccent,
-                modifier = Modifier.weight(1f)
-            )
-            BadgeChip(
-                label = "Breakeven Lock",
-                subLabel = "$0 Risk @ +$0.50",
-                color = AmberWarning,
-                modifier = Modifier.weight(1f)
-            )
+            InfoBadge("Target",   "+$1.00+ USDT", ProfitGreen,   Modifier.weight(1f))
+            InfoBadge("Leverage", "4× @ $25",     CyanAccent,    Modifier.weight(1f))
+            InfoBadge("Breakeven","$0 Risk",       AmberWarning,  Modifier.weight(1f))
         }
 
-        // Bi-Directional Toggle & Scalp Action Buttons
-        var selectedSide by remember { mutableStateOf("buy") }
-        val isBuy = selectedSide == "buy"
-
+        // Side Toggle + Label
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "⚡ 1-Tap Scalp Execution",
-                color = TextPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Text("⚡ 1-Tap Scalp", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
 
-            // BUY vs SELL Switch
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(DarkElevatedSurface)
-                    .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
-                    .padding(2.dp)
+                    .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
+                    .padding(3.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isBuy) EmeraldPrimary else Color.Transparent)
-                        .clickable { selectedSide = "buy" }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "BUY / LONG",
-                        color = if (isBuy) Color.Black else TextSecondary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (!isBuy) LossRed else Color.Transparent)
-                        .clickable { selectedSide = "sell" }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "SELL / SHORT",
-                        color = if (!isBuy) Color.White else TextSecondary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black
-                    )
+                listOf("buy" to "BUY", "sell" to "SELL").forEach { (id, label) ->
+                    val isMe = selectedSide == id
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isMe) {
+                                    if (id == "buy") EmeraldPrimary else LossRed
+                                } else Color.Transparent
+                            )
+                            .clickable { selectedSide = id }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text       = label,
+                            color      = if (isMe) Color.Black else TextSecondary,
+                            fontSize   = 11.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
                 }
             }
         }
 
-        // Scalp Action Buttons Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = { onPunchScalp("B-XRP_USDT", selectedSide, 15.0) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isBuy) EmeraldPrimary.copy(alpha = 0.15f) else LossRed.copy(alpha = 0.15f)
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .border(1.dp, if (isBuy) EmeraldPrimary else LossRed, RoundedCornerShape(12.dp))
-            ) {
-                Text(
-                    text = if (isBuy) "⚡ XRP BUY 4x" else "⚡ XRP SELL 4x",
-                    color = if (isBuy) EmeraldPrimary else LossRed,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
-
-            Button(
-                onClick = { onPunchScalp("B-DOGE_USDT", selectedSide, 100.0) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isBuy) CyanAccent.copy(alpha = 0.15f) else AmberWarning.copy(alpha = 0.15f)
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .border(1.dp, if (isBuy) CyanAccent else AmberWarning, RoundedCornerShape(12.dp))
-            ) {
-                Text(
-                    text = if (isBuy) "⚡ DOGE BUY 4x" else "⚡ DOGE SELL 4x",
-                    color = if (isBuy) CyanAccent else AmberWarning,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
+        // Quick Scalp Buttons
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuickScalpButton("XRP",  "B-XRP_USDT",  15.0,  isBuy, onPunchScalp, Modifier.weight(1f))
+            QuickScalpButton("DOGE", "B-DOGE_USDT", 100.0, isBuy, onPunchScalp, Modifier.weight(1f))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuickScalpButton("SOL",  "B-SOL_USDT",  1.0,   isBuy, onPunchScalp, Modifier.weight(1f))
+            QuickScalpButton("ETH",  "B-ETH_USDT",  0.01,  isBuy, onPunchScalp, Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-fun BadgeChip(label: String, subLabel: String, color: Color, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(color.copy(alpha = 0.12f))
-            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-            .padding(vertical = 8.dp, horizontal = 10.dp),
-        contentAlignment = Alignment.Center
+fun QuickScalpButton(
+    label: String,
+    symbol: String,
+    qty: Double,
+    isBuy: Boolean,
+    onPunch: (String, String, Double) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val side = if (isBuy) "buy" else "sell"
+    val color = if (isBuy) EmeraldPrimary else LossRed
+    Button(
+        onClick = { onPunch(symbol, side, qty) },
+        colors  = ButtonDefaults.buttonColors(containerColor = color.copy(alpha = 0.12f)),
+        shape   = RoundedCornerShape(12.dp),
+        modifier = modifier.border(1.dp, color, RoundedCornerShape(12.dp)),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = label, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text(text = subLabel, color = TextSecondary, fontSize = 10.sp)
+        Text(
+            text       = "${if (isBuy) "▲" else "▼"} $label 4×",
+            color      = color,
+            fontSize   = 12.sp,
+            fontWeight = FontWeight.Black
+        )
+    }
+}
+
+@Composable
+fun InfoBadge(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(0.09f))
+            .border(1.dp, color.copy(0.25f), RoundedCornerShape(12.dp))
+            .padding(vertical = 8.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(label, color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(value,  color = color,     fontSize = 11.sp, fontWeight = FontWeight.Black)
+    }
+}
+
+// ─── Empty State ──────────────────────────────────────────────────────────────
+
+@Composable
+fun EmptyPositionsCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors   = CardDefaults.cardColors(containerColor = DarkCardSurface),
+        shape    = RoundedCornerShape(18.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(Icons.Default.Shield, null, tint = EmeraldPrimary.copy(0.4f), modifier = Modifier.size(48.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+            Text("No open positions", color = TextSecondary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text      = "Auto-engine is scanning 499 markets every 60s for high-probability 4× scalps",
+                color     = TextMuted,
+                fontSize  = 12.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
     }
 }
+
+// ─── Position Card ────────────────────────────────────────────────────────────
 
 @Composable
 fun PositionCard(
     position: PositionItem,
     onExit: (String, String) -> Unit
 ) {
-    val isLong = position.direction.lowercase() == "long" || position.direction.lowercase() == "buy"
-    val pnl = position.unrealizedPnl
-    val isProfit = pnl >= 0
-    val entry = position.averagePrice
-    val mark = position.markPrice ?: entry
+    val isLong  = position.direction.lowercase().let { it == "long" || it == "buy" }
+    val pnl     = position.unrealizedPnl
+    val isProfit= pnl >= 0
+    val entry   = position.averagePrice
+    val mark    = position.markPrice ?: entry
     val diffPct = if (entry > 0) {
         if (isLong) ((mark - entry) / entry) * 100 else ((entry - mark) / entry) * 100
     } else 0.0
-    val roePct = diffPct * (position.leverage ?: 3)
+    val roePct  = diffPct * (position.leverage ?: 4)
+    val isBotManaged = position.botManaged == true || position.origin == "bot"
+    val isBreakeven  = position.breakevenActivated == true
+
+    val borderColor = when {
+        isProfit && isBreakeven -> GoldAccent.copy(0.5f)
+        isProfit                -> ProfitGreen.copy(0.4f)
+        else                    -> LossRed.copy(0.35f)
+    }
+
+    val animatedPnl by animateFloatAsState(
+        targetValue   = pnl.toFloat(),
+        animationSpec = tween(600, easing = EaseOutQuart),
+        label         = "pnl"
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, if (isProfit) ProfitGreen.copy(alpha = 0.4f) else LossRed.copy(alpha = 0.4f), RoundedCornerShape(16.dp)),
+            .border(1.dp, borderColor, RoundedCornerShape(18.dp)),
         colors = CardDefaults.cardColors(containerColor = DarkCardSurface),
-        shape = RoundedCornerShape(16.dp)
+        shape  = RoundedCornerShape(18.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Top Row: Symbol, Side, Badge
+
+            // Top accent stripe
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            if (isProfit) listOf(ProfitGreen, EmeraldPrimary)
+                            else listOf(LossRed, OrangeAlert)
+                        )
+                    )
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Symbol header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -617,134 +674,142 @@ fun PositionCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = position.pair.replace("B-", "").replace("_USDT", ""),
-                        color = TextPrimary,
-                        fontSize = 18.sp,
+                        text       = position.pair.replace("B-", "").replace("_USDT", ""),
+                        color      = TextPrimary,
+                        fontSize   = 20.sp,
                         fontWeight = FontWeight.Black
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isLong) ProfitGreenBg else LossRedBg)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (isLong) "BUY (LONG)" else "SELL (SHORT)",
-                            color = if (isLong) ProfitGreen else LossRed,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "${position.leverage ?: 3}x",
-                        color = CyanAccent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                    Chip(
+                        label = if (isLong) "LONG ▲" else "SHORT ▼",
+                        color = if (isLong) ProfitGreen else LossRed
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Chip(label = "${position.leverage ?: 4}×", color = CyanAccent)
                 }
 
-                val isBotManaged = position.botManaged == true || position.origin == "bot"
+                // Bot / Manual badge
                 if (isBotManaged) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(EmeraldPrimary.copy(alpha = 0.15f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (position.breakevenActivated == true) "🔒 Breakeven ($0 Risk)" else "🤖 Bot Scalp (<1s Exit)",
-                            color = EmeraldPrimary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Chip(
+                        label = if (isBreakeven) "🔒 Zero Risk" else "🤖 Bot",
+                        color = if (isBreakeven) GoldAccent else EmeraldPrimary
+                    )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF7C3AED).copy(alpha = 0.2f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "🛡️ Manual Hold (Bot-Immune)",
-                            color = Color(0xFFD8B4FE),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Chip(label = "🛡 Manual", color = VioletAccent)
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Main P&L Row
+            // P&L + ROE row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
                 Column {
-                    Text(text = "Unrealized P&L", color = TextMuted, fontSize = 11.sp)
+                    Text("Unrealized P&L", color = TextMuted, fontSize = 10.sp)
                     Text(
-                        text = "${if (isProfit) "+" else ""}$${String.format("%.4f", pnl)} USDT",
-                        color = if (isProfit) ProfitGreen else LossRed,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black
+                        text       = "${if (isProfit) "+" else ""}$${String.format("%.4f", animatedPnl)} USDT",
+                        color      = if (isProfit) ProfitGreenBright else LossRedBright,
+                        fontSize   = 26.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
-
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(if (isProfit) ProfitGreenBg else LossRedBg)
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "${if (roePct >= 0) "+" else ""}${String.format("%.2f", roePct)}% ROE",
-                        color = if (isProfit) ProfitGreen else LossRed,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        text       = "${if (roePct >= 0) "+" else ""}${String.format("%.2f", roePct)}% ROE",
+                        color      = if (isProfit) ProfitGreen else LossRed,
+                        fontSize   = 15.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
-            Divider(color = BorderColor.copy(alpha = 0.5f))
+            HorizontalDivider(color = BorderColor.copy(0.4f))
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Details Grid
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text(text = "Entry Price", color = TextMuted, fontSize = 11.sp)
-                    Text(text = "$${String.format("%.5g", entry)}", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-                Column {
-                    Text(text = "Current Mark", color = TextMuted, fontSize = 11.sp)
-                    Text(text = "$${String.format("%.5g", mark)}", color = CyanAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "Target (+1.8%)", color = TextMuted, fontSize = 11.sp)
-                    Text(text = "$${String.format("%.5g", position.target ?: (entry * 1.018))}", color = ProfitGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
+            // Price grid
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                PriceCell("Entry",   "$${String.format("%.5g", entry)}", TextPrimary)
+                PriceCell("Current", "$${String.format("%.5g", mark)}",  CyanAccent)
+                PriceCell("Target",  "$${String.format("%.5g", position.target ?: (entry * 1.018))}", ProfitGreen)
+                PriceCell("Stop",    "$${String.format("%.5g", position.stop   ?: (entry * 0.990))}", LossRed)
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Market Exit Button
+            // Exit button
             Button(
                 onClick = { onExit(position.exchangePositionId ?: position.positionId ?: "", position.pair) },
-                colors = ButtonDefaults.buttonColors(containerColor = LossRed.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(10.dp),
+                colors  = ButtonDefaults.buttonColors(containerColor = LossRed.copy(0.12f)),
+                shape   = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, LossRed.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                    .border(1.dp, LossRed.copy(0.5f), RoundedCornerShape(12.dp)),
+                contentPadding = PaddingValues(vertical = 12.dp)
             ) {
-                Icon(imageVector = Icons.Default.Close, contentDescription = null, tint = LossRed, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Close, null, tint = LossRed, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "Exit Position at Market", color = LossRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Exit Position at Market", color = LossRed, fontSize = 12.sp, fontWeight = FontWeight.Black)
             }
         }
     }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+@Composable
+fun PriceCell(label: String, value: String, valueColor: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, color = TextMuted, fontSize = 10.sp)
+        Text(
+            text       = value,
+            color      = valueColor,
+            fontSize   = 12.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            maxLines   = 1
+        )
+    }
+}
+
+@Composable
+fun Chip(label: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.copy(0.15f))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(label, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun PulsingLiveDot(color: Color) {
+    val inf = rememberInfiniteTransition(label = "dot")
+    val scale by inf.animateFloat(
+        0.6f, 1.4f,
+        infiniteRepeatable(tween(600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "ds"
+    )
+    Box(
+        modifier = Modifier
+            .size(8.dp)
+            .scale(scale)
+            .clip(CircleShape)
+            .background(color)
+    )
 }

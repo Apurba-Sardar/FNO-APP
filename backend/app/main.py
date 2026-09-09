@@ -358,23 +358,51 @@ async def lifespan(application: FastAPI):
                             # Sort by highest dynamic opportunity score across top 1-10 ranked Longs & Shorts
                             scored_pool.sort(key=lambda x: x[0], reverse=True)
                             
-                            best_rating, best_cand = scored_pool[0]
-                            best_symbol = best_cand.symbol
-                            best_side = getattr(best_cand, "direction", "buy")
-                            best_score = best_rating
-                            live_px = best_cand.last_price
+                            # Pro-trader spread & liquidity filtering across candidate pool
+                            for cand_rating, cand in scored_pool:
+                                spread_ok = True
+                                spread_pct = 0.0
+                                try:
+                                    ob = await pub_client.orderbook(cand.symbol, depth=10)
+                                    if ob and ob.bids and ob.asks:
+                                        top_bid = max(float(p) for p in ob.bids.keys())
+                                        top_ask = min(float(p) for p in ob.asks.keys())
+                                        if top_bid > 0 and top_ask > top_bid:
+                                            mid = (top_ask + top_bid) / 2.0
+                                            spread_pct = ((top_ask - top_bid) / mid) * 100.0
+                                            # Skip illiquid pairs with spread > 0.18% (18 bps) to prevent starting in deficit
+                                            if spread_pct > 0.18:
+                                                spread_ok = False
+                                                log.info(
+                                                    "AUTO_SCALP_SKIP_WIDE_SPREAD",
+                                                    symbol=cand.symbol,
+                                                    spread_pct=round(spread_pct, 3),
+                                                    score=round(cand_rating, 1),
+                                                )
+                                except Exception:
+                                    spread_ok = True
 
-                            log.info(
-                                "AUTO_SCALP_TOP_OPPORTUNITY_SELECTED",
-                                symbol=best_symbol,
-                                side=best_side.upper(),
-                                rank_in_direction=best_cand.gain_rank,
-                                change=f"{best_cand.change_24h_pct:+}%",
-                                volume=f"${best_cand.volume_24h:,.0f}",
-                                price=live_px,
-                                opportunity_score=round(best_rating, 1),
-                                evaluated_candidates=len(eligible_candidates),
-                            )
+                                if not spread_ok:
+                                    continue
+
+                                best_symbol = cand.symbol
+                                best_side = getattr(cand, "direction", "buy")
+                                best_score = cand_rating
+                                live_px = cand.last_price
+
+                                log.info(
+                                    "AUTO_SCALP_TOP_OPPORTUNITY_SELECTED",
+                                    symbol=best_symbol,
+                                    side=best_side.upper(),
+                                    rank_in_direction=cand.gain_rank,
+                                    change=f"{cand.change_24h_pct:+}%",
+                                    volume=f"${cand.volume_24h:,.0f}",
+                                    price=live_px,
+                                    spread_pct=round(spread_pct, 3),
+                                    opportunity_score=round(cand_rating, 1),
+                                    evaluated_candidates=len(eligible_candidates),
+                                )
+                                break
                 except Exception as scan_err:
                     log.warning("AUTO_SCALP_DYNAMIC_MOVERS_SCAN_ERROR", error=str(scan_err))
 
@@ -488,8 +516,8 @@ async def lifespan(application: FastAPI):
                 entry_px = live_px
                 # Target: +1.35% on Long (Yields ~$1.35 gross, nets +$1.23 USDT cash in wallet)
                 target_px = round(entry_px * 0.9865, 6) if is_sell else round(entry_px * 1.0135, 6)
-                # Stop: -1.60% (Gives room to absorb 0.2%-0.4% entry spread noise)
-                stop_px   = round(entry_px * 1.016, 6) if is_sell else round(entry_px * 0.984, 6)
+                # Stop: -1.05% (Pro-trader tight risk, strictly caps loss at ~$1.05 USDT)
+                stop_px   = round(entry_px * 1.0105, 6) if is_sell else round(entry_px * 0.9895, 6)
 
                 order_payload = {
                     "side": best_side,
@@ -530,7 +558,7 @@ async def lifespan(application: FastAPI):
                     if pos:
                         ep = float(pos.average_price) if pos.average_price > 0 else entry_px
                         tp = round(ep * 0.9865, 6) if is_sell else round(ep * 1.0135, 6)
-                        sl = round(ep * 1.016, 6) if is_sell else round(ep * 0.984, 6)
+                        sl = round(ep * 1.0105, 6) if is_sell else round(ep * 0.9895, 6)
                         updated = pos.model_copy(update={
                             "bot_managed": True,
                             "origin": "bot",

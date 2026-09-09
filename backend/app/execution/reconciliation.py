@@ -85,7 +85,7 @@ class PositionReconciliationService:
                 is_target_sane = (t_px is not None) and ((t_px > normalized.average_price * 1.005) if is_long else (t_px < normalized.average_price * 0.995))
                 if bot_mgr and (not t_px or not s_px or not is_stop_sane or not is_target_sane):
                     t_px = round(normalized.average_price * 1.0135, 6) if is_long else round(normalized.average_price * 0.9865, 6)
-                    s_px = round(normalized.average_price * 0.984, 6) if is_long else round(normalized.average_price * 1.016, 6)
+                    s_px = round(normalized.average_price * 0.9895, 6) if is_long else round(normalized.average_price * 1.0105, 6)
                 
                 normalized = normalized.model_copy(update={
                     "position_id": local.position_id,
@@ -108,7 +108,7 @@ class PositionReconciliationService:
                 is_long = normalized.direction == StrategyDirection.LONG
                 entry_p = normalized.average_price
                 t_px = round(entry_p * 1.0135, 6) if is_long else round(entry_p * 0.9865, 6)
-                s_px = round(entry_p * 0.984, 6) if is_long else round(entry_p * 1.016, 6)
+                s_px = round(entry_p * 0.9895, 6) if is_long else round(entry_p * 1.0105, 6)
                 normalized = normalized.model_copy(update={
                     "bot_managed": True,
                     "origin": "bot",

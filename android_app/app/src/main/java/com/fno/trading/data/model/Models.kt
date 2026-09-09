@@ -51,15 +51,16 @@ data class OrdersResponse(
 )
 
 data class OrderItem(
-    @SerializedName("order_id") val orderId: String = "",
+    @SerializedName("order_id") val orderId: String? = null,
     @SerializedName("pair") val pair: String = "",
     @SerializedName("side") val side: String = "buy",
     @SerializedName("price") val price: Double = 0.0,
-    @SerializedName("filled_quantity") val filledQuantity: Double = 0.0,
+    @SerializedName("filled_quantity") val filledQuantity: String = "0",
     @SerializedName("requested_quantity") val requestedQuantity: Double = 0.0,
     @SerializedName("order_type") val orderType: String = "market_order",
     @SerializedName("status") val status: String = "filled",
-    @SerializedName("created_at") val createdAt: String? = null
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("timestamp") val timestamp: String? = null
 )
 
 data class OpportunitiesResponse(

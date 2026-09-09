@@ -238,10 +238,10 @@ class LiveExecutionRuntime:
             if not target or not stop or not is_stop_sane or not is_target_sane:
                 if is_long:
                     target = round(entry * 1.0135, 6)
-                    stop = round(entry * 0.984, 6)
+                    stop = round(entry * 0.9895, 6)
                 else:
                     target = round(entry * 0.9865, 6)
-                    stop = round(entry * 1.016, 6)
+                    stop = round(entry * 1.0105, 6)
 
                 updated = pos.model_copy(update={
                     "target": target,
@@ -291,8 +291,8 @@ class LiveExecutionRuntime:
             roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 4.0))
 
             # Tier 1 Dynamic Breakeven Lock:
-            # Once in profit by >= +0.40 USDT (or +0.40% move), shift stop to entry + 0.08% to cover all fees and guarantee zero loss!
-            if (pos.unrealized_pnl >= 0.40 or price_diff_pct >= 0.40) and not getattr(pos, "breakeven_activated", False):
+            # Once in profit by >= +0.35 USDT (or +0.35% move), shift stop to entry + 0.08% to cover all fees and eliminate all risk!
+            if (pos.unrealized_pnl >= 0.35 or price_diff_pct >= 0.35) and not getattr(pos, "breakeven_activated", False):
                 be_stop = round(entry * 1.0008, 6) if is_long else round(entry * 0.9992, 6)
                 pos = pos.model_copy(update={"stop": be_stop, "breakeven_activated": True})
                 self.positions[pos.position_id] = pos
@@ -300,20 +300,30 @@ class LiveExecutionRuntime:
                 structlog.get_logger().info("BREAKEVEN_STOP_LOCKED", pair=pos.pair, new_stop=be_stop)
                 stop = be_stop
 
-            # Tier 2 Trailing Profit Lock:
-            # Once in profit by >= +0.75 USDT (or +0.75% move), shift stop to entry + 0.40% to lock in >= +$0.40 USDT guaranteed profit!
-            if (pos.unrealized_pnl >= 0.75 or price_diff_pct >= 0.75) and not getattr(pos, "trailing_locked", False):
-                trail_stop = round(entry * 1.0040, 6) if is_long else round(entry * 0.9960, 6)
+            # Tier 2 Capital Defense Lock:
+            # Once in profit by >= +0.65 USDT (or +0.65% move), shift stop to entry + 0.35% to lock in >= +$0.35 USDT guaranteed profit!
+            if (pos.unrealized_pnl >= 0.65 or price_diff_pct >= 0.65) and not getattr(pos, "trailing_locked", False):
+                trail_stop = round(entry * 1.0035, 6) if is_long else round(entry * 0.9965, 6)
                 pos = pos.model_copy(update={"stop": trail_stop, "trailing_locked": True})
                 self.positions[pos.position_id] = pos
                 await self.repository.save_position(pos)
-                structlog.get_logger().info("TRAILING_PROFIT_LOCKED", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.40 USDT")
+                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T2", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.35 USDT")
                 stop = trail_stop
 
+            # Tier 3 High-Profit Guarantee Lock:
+            # Once in profit by >= +0.95 USDT (or +0.95% move), shift stop to entry + 0.70% to lock in >= +$0.70 USDT guaranteed profit!
+            if (pos.unrealized_pnl >= 0.95 or price_diff_pct >= 0.95) and not getattr(pos, "tier3_locked", False):
+                t3_stop = round(entry * 1.0070, 6) if is_long else round(entry * 0.9930, 6)
+                pos = pos.model_copy(update={"stop": t3_stop, "tier3_locked": True})
+                self.positions[pos.position_id] = pos
+                await self.repository.save_position(pos)
+                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T3", pair=pos.pair, new_stop=t3_stop, guaranteed_pnl="+0.70 USDT")
+                stop = t3_stop
+
             auto_close_reason = None
-            # Condition 1: Primary Target Profit Reached (PnL >= +$1.15 USDT gross, netting >= +$1.03 USDT cash)
-            if pos.unrealized_pnl >= 1.15:
-                auto_close_reason = f"PROFIT_TARGET_REACHED (PnL +${pos.unrealized_pnl:.2f} USDT >= +$1.15 USDT | +{price_diff_pct:.2f}%)"
+            # Condition 1: Primary Target Profit Reached (PnL >= +$1.25 USDT gross, netting >= +$1.13 USDT cash)
+            if pos.unrealized_pnl >= 1.25:
+                auto_close_reason = f"PROFIT_TARGET_REACHED (PnL +${pos.unrealized_pnl:.2f} USDT >= +$1.25 USDT | +{price_diff_pct:.2f}%)"
             elif is_long and mark >= target:
                 auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
             elif not is_long and mark <= target:
@@ -328,22 +338,25 @@ class LiveExecutionRuntime:
                 else:
                     age_seconds = 0.0
 
-                # Stagnation Cut: If open > 4 minutes and price is stagnant/negative (<= -0.40%), cut early to prevent slow bleed
-                if age_seconds >= 240.0 and (price_diff_pct <= -0.40 or pos.unrealized_pnl <= -0.40):
-                    auto_close_reason = f"STAGNATION_TIMEOUT_CUT (Open > 4m without forward momentum | PnL ${pos.unrealized_pnl:.2f} USDT)"
+                # Fast Fakeout Cut: If trade has run for 20s-120s and immediately reverses <= -0.60%, cut early to cap loss!
+                if 20.0 <= age_seconds <= 120.0 and (price_diff_pct <= -0.60 or pos.unrealized_pnl <= -0.60):
+                    auto_close_reason = f"EARLY_FAKEOUT_CUT (Reversal at {int(age_seconds)}s | PnL ${pos.unrealized_pnl:.2f} USDT)"
+                # Stagnation Cut: If open > 2.5 minutes (150s) and price is negative (<= -0.30%), cut early
+                elif age_seconds >= 150.0 and (price_diff_pct <= -0.30 or pos.unrealized_pnl <= -0.30):
+                    auto_close_reason = f"STAGNATION_TIMEOUT_CUT (Open > 2.5m without forward momentum | PnL ${pos.unrealized_pnl:.2f} USDT)"
                 else:
-                    # Grace period: first 25s allows momentum to build; only emergency deep loss triggers
-                    can_trigger_stop = age_seconds >= 25.0 or price_diff_pct <= -2.5 or pos.unrealized_pnl <= -1.75
+                    # Grace period: first 15s allows momentum to build
+                    can_trigger_stop = age_seconds >= 15.0 or price_diff_pct <= -1.2 or pos.unrealized_pnl <= -1.0
 
                     if can_trigger_stop:
                         if is_long and mark <= stop:
-                            trigger_name = "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                            trigger_name = "TRAILING_STOP_TRIGGER" if (getattr(pos, "tier3_locked", False) or getattr(pos, "trailing_locked", False)) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
                             auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
                         elif not is_long and mark >= stop:
-                            trigger_name = "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                            trigger_name = "TRAILING_STOP_TRIGGER" if (getattr(pos, "tier3_locked", False) or getattr(pos, "trailing_locked", False)) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
                             auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
-                        elif pos.unrealized_pnl <= -1.45 and not getattr(pos, "breakeven_activated", False):
-                            auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.45 USDT)"
+                        elif pos.unrealized_pnl <= -1.05 and not getattr(pos, "breakeven_activated", False):
+                            auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.05 USDT)"
 
             if auto_close_reason:
                 structlog.get_logger().info(
