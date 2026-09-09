@@ -432,8 +432,8 @@ class LiveExecutionRuntime:
                     self.last_trade_closed_at = now_closed
                     if not hasattr(self, "symbol_cooldowns"):
                         self.symbol_cooldowns = {}
-                    # Lock symbol for 8 minutes after exit so it cannot be re-bought repeatedly at tops
-                    self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=8)
+                    # Lock symbol for 2 minutes after exit so it cannot be re-bought immediately at tops
+                    self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=2)
                     
                     # ── Daily Target & Loss/Win Tracking ──
                     pnl_res = float(pos.unrealized_pnl)
@@ -460,12 +460,12 @@ class LiveExecutionRuntime:
                             total_loss=round(self.today_realized_loss, 3),
                             streak=self.consecutive_losses,
                         )
-                        # Consecutive Loss Circuit Breaker: 2 losses in a row pauses for 12 minutes
+                        # Consecutive Loss Circuit Breaker: 2 losses in a row pauses for 3 minutes
                         if self.consecutive_losses >= 2:
-                            self.consecutive_loss_cooldown_until = now_closed + timedelta(minutes=12)
+                            self.consecutive_loss_cooldown_until = now_closed + timedelta(minutes=3)
                             structlog.get_logger().warning(
                                 "CONSECUTIVE_LOSS_CIRCUIT_BREAKER_ACTIVE",
-                                cooldown_minutes=12,
+                                cooldown_minutes=3,
                                 streak=self.consecutive_losses,
                             )
 

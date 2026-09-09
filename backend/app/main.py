@@ -288,12 +288,12 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(min(rem_wait, 30))
                     continue
 
-                # ── Post-Trade Inter-Scalp Global Cooldown (30s) ──────────────
+                # ── Post-Trade Inter-Scalp Global Cooldown (10s) ──────────────
                 last_closed = getattr(live_runtime, "last_trade_closed_at", None)
                 if last_closed:
                     elapsed = (datetime.now(UTC) - last_closed).total_seconds()
-                    if elapsed < 30.0:
-                        rem = int(30.0 - elapsed)
+                    if elapsed < 10.0:
+                        rem = int(10.0 - elapsed)
                         log.info("AUTO_SCALP_POST_TRADE_COOLDOWN", remaining_seconds=rem)
                         await _asyncio.sleep(rem)
                         continue
@@ -311,7 +311,7 @@ async def lifespan(application: FastAPI):
                         entry=cur.average_price,
                         mark=cur.mark_price,
                     )
-                    await _asyncio.sleep(15)
+                    await _asyncio.sleep(5)
                     continue
 
                 # ── Per-Symbol Anti-Churn Cooldown ────────────────────────────
@@ -553,8 +553,8 @@ async def lifespan(application: FastAPI):
                     # Tag position as bot-managed with profit target and stop
                     from datetime import UTC as _UTC, timedelta as _timedelta
                     now_t = datetime.now(_UTC)
-                    # Register 8-minute symbol cooldown so this coin is not churned back-to-back
-                    live_runtime.symbol_cooldowns[best_symbol] = now_t + _timedelta(minutes=8)
+                    # Register 2-minute symbol cooldown so this coin is not churned back-to-back
+                    live_runtime.symbol_cooldowns[best_symbol] = now_t + _timedelta(minutes=2)
 
                     pos = next(
                         (p for p in live_runtime.positions.values() if p.pair == best_symbol and p.status == "open"),
@@ -600,7 +600,7 @@ async def lifespan(application: FastAPI):
             except Exception as daemon_exc:
                 structlog.get_logger().error("AUTO_SCALP_DAEMON_LOOP_ERROR", error=str(daemon_exc))
 
-            await _asyncio.sleep(20)  # evaluate every 20s for active, prompt execution
+            await _asyncio.sleep(10)  # evaluate every 10s for hyper-responsive trade punching
 
     auto_scalp_task = _asyncio.create_task(_auto_scalp_daemon(), name="auto-scalp-daemon")
 
