@@ -123,7 +123,15 @@ class PositionReconciliationService:
         for exchange_id in report.ghost_positions:
             local = known_positions.get(exchange_id)
             if local:
-                closed = local.model_copy(update={"status": "closed", "unrealized_pnl": 0.0})
+                pnl_val = local.realized_pnl if local.realized_pnl != 0.0 else local.unrealized_pnl
+                closed = local.model_copy(update={
+                    "status": "closed",
+                    "realized_pnl": pnl_val,
+                    "unrealized_pnl": 0.0,
+                    "closed_at": getattr(local, "closed_at", None) or datetime.now(UTC),
+                    "exit_reason": getattr(local, "exit_reason", None) or "EXCHANGE_SETTLED_CLOSE",
+                    "updated_at": datetime.now(UTC),
+                })
                 local_positions[local.position_id] = closed
                 await self.repository.save_position(closed)
         for exchange_id, local in known_orders.items():

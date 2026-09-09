@@ -144,6 +144,33 @@ class LiveExecutionRuntime:
         self.positions = {item.position_id: item for item in positions}
         if runtime.get("emergency_stop") == "triggered":
             self.emergency_stop.trigger()
+
+        # Re-hydrate today's metrics from closed positions in database
+        today_date = datetime.now(UTC).date()
+        today_profit = 0.0
+        today_loss = 0.0
+        today_wins = 0
+        today_losses = 0
+        for pos in self.positions.values():
+            if getattr(pos, "status", None) == "closed":
+                t = getattr(pos, "closed_at", None) or getattr(pos, "updated_at", None)
+                if t:
+                    if getattr(t, "tzinfo", None) is None:
+                        t = t.replace(tzinfo=UTC)
+                    if t.date() == today_date:
+                        pnl = float(getattr(pos, "realized_pnl", 0.0) or 0.0)
+                        if pnl > 0.0:
+                            today_profit += pnl
+                            today_wins += 1
+                        elif pnl < 0.0:
+                            today_loss += abs(pnl)
+                            today_losses += 1
+
+        self.today_realized_profit = round(today_profit, 3)
+        self.today_realized_loss = round(today_loss, 3)
+        self.today_winning_trades = today_wins
+        self.today_losing_trades = today_losses
+
         # Restart is deliberately fail-closed; persisted READY/ARMED is ignored.
         self.state = LiveRuntimeState.DISABLED
 
@@ -373,7 +400,17 @@ class LiveExecutionRuntime:
                 )
                 try:
                     exit_res = await self.client.exit_position(pos.exchange_position_id)
-                    closed_pos = pos.model_copy(update={"status": "closed", "updated_at": datetime.now(UTC)})
+                    pnl_res = float(pos.unrealized_pnl)
+                    now_closed = datetime.now(UTC)
+                    closed_pos = pos.model_copy(update={
+                        "status": "closed",
+                        "exit_price": mark,
+                        "exit_reason": auto_close_reason,
+                        "closed_at": now_closed,
+                        "realized_pnl": pnl_res,
+                        "unrealized_pnl": 0.0,
+                        "updated_at": now_closed,
+                    })
                     self.positions[pos.position_id] = closed_pos
                     await self.repository.save_position(closed_pos)
                     await self.audit.record(AuditEvent(
@@ -499,13 +536,20 @@ class LiveExecutionRuntime:
                 equity = float(wallets.get("total_account_equity") or wallets.get("total_wallet_balance") or 0)
                 available = float(wallets.get("available_balance_cross") or wallets.get("withdrawable_balance") or equity)
                 locked = float(wallets.get("locked_margin") or wallets.get("locked_balance") or 0)
+                net_daily_pnl = round(getattr(self, "today_realized_profit", 0.0) - getattr(self, "today_realized_loss", 0.0), 3)
                 self.account = LiveAccount(
                     equity=equity,
                     available_balance=available,
                     locked_margin=locked,
                     cross_order_margin=float(wallets.get("cross_order_margin") or 0),
                     cross_user_margin=float(wallets.get("cross_user_margin") or 0),
-                    daily_pnl=self.risk_runtime.state.risk_state.daily_pnl if self.risk_runtime else 0,
+                    daily_pnl=net_daily_pnl,
+                    daily_profit=round(getattr(self, "today_realized_profit", 0.0), 3),
+                    daily_loss=round(getattr(self, "today_realized_loss", 0.0), 3),
+                    daily_wins=getattr(self, "today_winning_trades", 0),
+                    daily_losses=getattr(self, "today_losing_trades", 0),
+                    consecutive_losses=getattr(self, "consecutive_losses", 0),
+                    max_daily_loss=getattr(self, "max_daily_loss_limit", 3.50),
                     timestamp=datetime.now(UTC),
                 )
                 if self.risk_runtime:
@@ -536,13 +580,20 @@ class LiveExecutionRuntime:
             if wallet:
                 balance = float(wallet.get("balance") or wallet.get("available_balance") or wallet.get("free") or 0)
                 locked = float(wallet.get("locked_balance") or wallet.get("locked_margin") or wallet.get("locked") or 0)
+                net_daily_pnl = round(getattr(self, "today_realized_profit", 0.0) - getattr(self, "today_realized_loss", 0.0), 3)
                 self.account = LiveAccount(
                     equity=balance + locked,
                     available_balance=balance,
                     locked_margin=locked,
                     cross_order_margin=float(wallet.get("cross_order_margin") or 0),
                     cross_user_margin=float(wallet.get("cross_user_margin") or 0),
-                    daily_pnl=self.risk_runtime.state.risk_state.daily_pnl if self.risk_runtime else 0,
+                    daily_pnl=net_daily_pnl,
+                    daily_profit=round(getattr(self, "today_realized_profit", 0.0), 3),
+                    daily_loss=round(getattr(self, "today_realized_loss", 0.0), 3),
+                    daily_wins=getattr(self, "today_winning_trades", 0),
+                    daily_losses=getattr(self, "today_losing_trades", 0),
+                    consecutive_losses=getattr(self, "consecutive_losses", 0),
+                    max_daily_loss=getattr(self, "max_daily_loss_limit", 3.50),
                     timestamp=datetime.now(UTC),
                 )
                 if self.risk_runtime:

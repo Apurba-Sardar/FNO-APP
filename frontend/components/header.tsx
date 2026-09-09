@@ -15,6 +15,7 @@ const navigation = [
   ["Paper Trading", "/paper"],
   ["Backtests", "/backtests"],
   ["Live Depth", "/market-data"],
+  ["PnL & Logs", "/pnl"],
 ] as const;
 
 export function Header() {

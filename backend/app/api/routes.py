@@ -1038,6 +1038,13 @@ async def live_account(request: Request, settings: SettingsDependency) -> dict:
         except Exception as exc:
             last_err = f"{type(exc).__name__}: {exc}"
     data = runtime.account.model_dump(mode="json")
+    net_pnl = round(getattr(runtime, "today_realized_profit", 0.0) - getattr(runtime, "today_realized_loss", 0.0), 3)
+    data["daily_pnl"] = net_pnl
+    data["daily_profit"] = round(getattr(runtime, "today_realized_profit", 0.0), 3)
+    data["daily_loss"] = round(getattr(runtime, "today_realized_loss", 0.0), 3)
+    data["daily_wins"] = getattr(runtime, "today_winning_trades", 0)
+    data["daily_losses"] = getattr(runtime, "today_losing_trades", 0)
+    data["consecutive_losses"] = getattr(runtime, "consecutive_losses", 0)
     if last_err:
         data["api_error"] = last_err
     return data
@@ -1095,11 +1102,198 @@ async def live_orders(request: Request, settings: SettingsDependency) -> dict:
     return {"count": len(rows), "items": [item.model_dump(mode="json") for item in rows]}
 
 
+@router.get("/live/pnl-logs")
 @router.get("/live/trades")
-async def live_trades(request: Request, settings: SettingsDependency) -> dict:
+async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: int = 150) -> dict:
     authorize_live(request, settings)
-    rows = [item for item in live_runtime_from(request).intents.values() if item.state.value == "closed"]
-    return {"count": len(rows), "items": [item.model_dump(mode="json") for item in rows]}
+    runtime = live_runtime_from(request)
+
+    # Collect all positions from runtime memory
+    all_positions = list(runtime.positions.values())
+    closed_items = [
+        p for p in all_positions
+        if getattr(p, "status", None) == "closed" or float(getattr(p, "quantity", 0.0) or 0.0) == 0.0 or getattr(p, "realized_pnl", 0.0) != 0.0
+    ]
+
+    trades_list = []
+    for pos in closed_items:
+        entry_px = float(pos.average_price or 0.0)
+        exit_px = float(getattr(pos, "exit_price", None) or pos.mark_price or entry_px)
+        pnl = float(pos.realized_pnl or 0.0)
+        qty = float(pos.quantity or 0.0)
+        margin = float(pos.margin or 25.0)
+        leverage = float(pos.leverage or 4.0)
+        roe = (pnl / margin * 100.0) if margin > 0 else 0.0
+
+        c_time = getattr(pos, "created_at", None)
+        x_time = getattr(pos, "closed_at", None) or getattr(pos, "updated_at", None) or c_time
+        if c_time and getattr(c_time, "tzinfo", None) is None:
+            c_time = c_time.replace(tzinfo=UTC)
+        if x_time and getattr(x_time, "tzinfo", None) is None:
+            x_time = x_time.replace(tzinfo=UTC)
+
+        dur_s = (x_time - c_time).total_seconds() if (x_time and c_time) else 0.0
+        if dur_s < 0:
+            dur_s = 0.0
+
+        exit_reason = getattr(pos, "exit_reason", None)
+        if not exit_reason:
+            exit_reason = "TAKE_PROFIT" if pnl > 0 else "STOP_LOSS"
+
+        trades_list.append({
+            "position_id": str(pos.position_id),
+            "exchange_position_id": pos.exchange_position_id,
+            "pair": pos.pair,
+            "direction": str(pos.direction).lower(),
+            "quantity": qty,
+            "entry_price": entry_px,
+            "exit_price": exit_px,
+            "realized_pnl": round(pnl, 4),
+            "roe_pct": round(roe, 2),
+            "margin": margin,
+            "leverage": leverage,
+            "exit_reason": exit_reason,
+            "bot_managed": getattr(pos, "bot_managed", True),
+            "created_at": c_time.isoformat() if c_time else None,
+            "closed_at": x_time.isoformat() if x_time else None,
+            "duration_seconds": int(dur_s),
+            "is_win": pnl > 0.0,
+        })
+
+    # Sort trades by closed_at descending
+    trades_list.sort(key=lambda t: t.get("closed_at") or "", reverse=True)
+
+    # ── Daily Performance Aggregation ──
+    from collections import defaultdict
+    daily_groups = defaultdict(list)
+    for t in trades_list:
+        dt_str = (t.get("closed_at") or "")[:10]
+        if not dt_str:
+            dt_str = datetime.now(UTC).strftime("%Y-%m-%d")
+        daily_groups[dt_str].append(t)
+
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    if today_str not in daily_groups:
+        daily_groups[today_str] = []
+
+    daily_breakdown = []
+    for d_str in sorted(daily_groups.keys(), reverse=True):
+        d_trades = daily_groups[d_str]
+        d_pnl = sum(t["realized_pnl"] for t in d_trades)
+        d_wins = sum(1 for t in d_trades if t["is_win"])
+        d_losses = sum(1 for t in d_trades if not t["is_win"] and t["realized_pnl"] != 0)
+        d_profit = sum(t["realized_pnl"] for t in d_trades if t["is_win"])
+        d_loss = sum(abs(t["realized_pnl"]) for t in d_trades if not t["is_win"])
+        t_count = len(d_trades)
+        w_rate = round((d_wins / t_count) * 100.0, 1) if t_count > 0 else 0.0
+
+        daily_breakdown.append({
+            "date": d_str,
+            "realized_pnl": round(d_pnl, 3),
+            "profit": round(d_profit, 3),
+            "loss": round(d_loss, 3),
+            "wins": d_wins,
+            "losses": d_losses,
+            "trades_count": t_count,
+            "win_rate_pct": w_rate,
+            "trades": d_trades,
+        })
+
+    # ── Weekly Performance Aggregation ──
+    weekly_groups = defaultdict(list)
+    for t in trades_list:
+        raw_dt = t.get("closed_at")
+        if raw_dt:
+            try:
+                parsed_dt = datetime.fromisoformat(raw_dt.replace("Z", "+00:00"))
+            except Exception:
+                parsed_dt = datetime.now(UTC)
+        else:
+            parsed_dt = datetime.now(UTC)
+        cal = parsed_dt.isocalendar()
+        week_key = f"{cal[0]}-W{cal[1]:02d}"
+        weekly_groups[week_key].append(t)
+
+    current_cal = datetime.now(UTC).isocalendar()
+    current_week_key = f"{current_cal[0]}-W{current_cal[1]:02d}"
+    if current_week_key not in weekly_groups:
+        weekly_groups[current_week_key] = []
+
+    weekly_breakdown = []
+    for w_key in sorted(weekly_groups.keys(), reverse=True):
+        w_trades = weekly_groups[w_key]
+        w_pnl = sum(t["realized_pnl"] for t in w_trades)
+        w_wins = sum(1 for t in w_trades if t["is_win"])
+        w_losses = sum(1 for t in w_trades if not t["is_win"] and t["realized_pnl"] != 0)
+        w_profit = sum(t["realized_pnl"] for t in w_trades if t["is_win"])
+        w_loss = sum(abs(t["realized_pnl"]) for t in w_trades if not t["is_win"])
+        t_count = len(w_trades)
+        w_rate = round((w_wins / t_count) * 100.0, 1) if t_count > 0 else 0.0
+
+        weekly_breakdown.append({
+            "week_id": w_key,
+            "week_label": f"Week {w_key.split('-W')[-1]}, {w_key.split('-W')[0]}",
+            "realized_pnl": round(w_pnl, 3),
+            "profit": round(w_profit, 3),
+            "loss": round(w_loss, 3),
+            "wins": w_wins,
+            "losses": w_losses,
+            "trades_count": t_count,
+            "win_rate_pct": w_rate,
+            "trades": w_trades,
+        })
+
+    # Overall Summary
+    tot_pnl = sum(t["realized_pnl"] for t in trades_list)
+    tot_wins = sum(1 for t in trades_list if t["is_win"])
+    tot_losses = sum(1 for t in trades_list if not t["is_win"] and t["realized_pnl"] != 0)
+    tot_profit = sum(t["realized_pnl"] for t in trades_list if t["is_win"])
+    tot_loss = sum(abs(t["realized_pnl"]) for t in trades_list if not t["is_win"])
+    tot_trades = len(trades_list)
+    tot_winrate = round((tot_wins / tot_trades) * 100.0, 1) if tot_trades > 0 else 0.0
+    profit_factor = round(tot_profit / tot_loss, 2) if tot_loss > 0 else (99.0 if tot_profit > 0 else 1.0)
+
+    # Today's metrics (synced with runtime telemetry)
+    today_live_pnl = round(getattr(runtime, "today_realized_profit", 0.0) - getattr(runtime, "today_realized_loss", 0.0), 3)
+    today_live_wins = getattr(runtime, "today_winning_trades", 0)
+    today_live_losses = getattr(runtime, "today_losing_trades", 0)
+
+    today_item = next((d for d in daily_breakdown if d["date"] == today_str), None)
+    today_pnl = today_live_pnl if (today_live_wins > 0 or today_live_losses > 0) else (today_item["realized_pnl"] if today_item else 0.0)
+    today_wins = max(today_live_wins, today_item["wins"] if today_item else 0)
+    today_losses = max(today_live_losses, today_item["losses"] if today_item else 0)
+
+    this_week_item = next((w for w in weekly_breakdown if w["week_id"] == current_week_key), None)
+    this_week_pnl = this_week_item["realized_pnl"] if this_week_item else today_pnl
+
+    summary = {
+        "total_realized_pnl": round(tot_pnl, 3),
+        "total_trades": tot_trades,
+        "total_wins": tot_wins,
+        "total_losses": tot_losses,
+        "win_rate_pct": tot_winrate,
+        "profit_factor": profit_factor,
+        "today_pnl": round(today_pnl, 3),
+        "today_wins": today_wins,
+        "today_losses": today_losses,
+        "today_profit": round(getattr(runtime, "today_realized_profit", 0.0), 3),
+        "today_loss": round(getattr(runtime, "today_realized_loss", 0.0), 3),
+        "daily_target_cap": getattr(runtime.config, "max_daily_profit_target", 20.0),
+        "daily_target_progress_pct": min(100.0, max(0.0, round((today_pnl / 20.0) * 100.0, 1))) if today_pnl > 0 else 0.0,
+        "this_week_pnl": round(this_week_pnl, 3),
+        "this_week_wins": this_week_item["wins"] if this_week_item else today_wins,
+        "this_week_losses": this_week_item["losses"] if this_week_item else today_losses,
+    }
+
+    return {
+        "status": "success",
+        "count": len(trades_list),
+        "summary": summary,
+        "daily_breakdown": daily_breakdown,
+        "weekly_breakdown": weekly_breakdown,
+        "trades": trades_list[:limit],
+        "items": trades_list[:limit],
+    }
 
 
 @router.get("/live/exposure")
@@ -1518,7 +1712,9 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
         state_str = runtime.state.value if hasattr(runtime.state, "value") else str(runtime.state)
         is_armed = state_str == "armed"
         account_obj = getattr(runtime, "account", None)
-        daily_pnl = getattr(account_obj, "daily_pnl", 0.0) or 0.0
+        today_live_profit = getattr(runtime, "today_realized_profit", 0.0) or 0.0
+        today_live_loss = getattr(runtime, "today_realized_loss", 0.0) or 0.0
+        daily_pnl = round(today_live_profit - today_live_loss, 3)
         avail_bal = getattr(account_obj, "available_balance", 66.6) or 66.6
         daily_target = getattr(runtime.config, "max_daily_profit_target", 20.0) or 20.0
 

@@ -166,6 +166,9 @@ class LivePosition(ExecutionModel):
     breakeven_activated: bool = False
     trailing_stop: float | None = None
     highest_roe: float = 0.0
+    exit_price: float | None = None
+    exit_reason: str | None = None
+    closed_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

@@ -573,11 +573,19 @@ export default function LivePage() {
               </b>
             </div>
             <div className="border-l border-white/10 pl-6">
-              <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Realized Net P&L</span>
+              <div className="flex items-center justify-end gap-2">
+                <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Realized Net P&L</span>
+                <a
+                  href="/pnl"
+                  className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold hover:bg-emerald-500/30 transition flex items-center gap-1"
+                >
+                  <span>Ledger ↗</span>
+                </a>
+              </div>
               <b className={`mt-0.5 block text-2xl font-black font-mono tracking-tight ${
-                (account.daily_pnl ?? 0) >= 0 ? "text-[#00F5A0]" : "text-rose-400"
+                (status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) >= 0 ? "text-[#00F5A0]" : "text-rose-400"
               }`}>
-                {(account.daily_pnl ?? 0) >= 0 ? "+" : ""}{balance(account.daily_pnl ?? 0)} <span className="text-xs font-normal text-slate-400">USDT</span>
+                {(status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) >= 0 ? "+" : ""}{balance(status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0)))} <span className="text-xs font-normal text-slate-400">USDT</span>
               </b>
             </div>
           </div>
@@ -619,20 +627,18 @@ export default function LivePage() {
               <span className="text-[10px] text-slate-400">USDT</span>
             </div>
             <span className="text-[10px] text-slate-400 mt-0.5">
-              Controlled tight stops
+              Circuit Breaker: Max -${balance(status.max_daily_loss_limit ?? 3.50)}
             </span>
           </div>
 
           {/* Card 3: Capital Shield */}
-          <div className="rounded-xl bg-black/40 border border-blue-500/20 p-3 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-blue-400">
-              <span>Capital Risk Shield</span>
+          <div className="rounded-xl bg-black/40 border border-cyan-500/20 p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-cyan-400">
+              <span>Capital Shield</span>
               <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
-                status.capital_shield_active
-                  ? "bg-rose-500/30 text-rose-300 animate-pulse"
-                  : "bg-blue-500/20 text-blue-300"
+                status.capital_shield_active ? "bg-rose-500/30 text-rose-300" : "bg-emerald-500/20 text-emerald-300"
               }`}>
-                {status.capital_shield_active ? "HALTED" : "PROTECTED"}
+                {status.capital_shield_active ? "Halted" : "Armored"}
               </span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1">
@@ -678,7 +684,13 @@ export default function LivePage() {
             <span className="font-semibold flex items-center gap-2">
               <span>Goal Progress:</span>
               <b className="text-amber-300 font-mono">
-                {Math.min(Math.round(((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 20.0)) * 100), 100)}%
+                {Math.min(
+                  Math.max(
+                    Math.round((((status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) / (status.daily_profit_target ?? 20.0)) * 100)),
+                    Math.round(((status.daily_wins ?? 0) / 20) * 100)
+                  ),
+                  100
+                )}%
               </b>
               <span className="text-[11px] text-slate-400">
                 ({status.daily_wins ?? 0}/20 Wins)
@@ -693,7 +705,14 @@ export default function LivePage() {
             <div
               className="h-full rounded-full bg-gradient-to-r from-amber-400 via-[#00F5A0] to-[#00D9F5] relative transition-all duration-500 shadow-[0_0_15px_rgba(0,245,160,0.5)]"
               style={{
-                width: `${Math.min(Math.max((((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 20.0)) * 100), 4), 100)}%`
+                width: `${Math.min(
+                  Math.max(
+                    Math.round((((status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) / (status.daily_profit_target ?? 20.0)) * 100)),
+                    Math.round(((status.daily_wins ?? 0) / 20) * 100),
+                    4
+                  ),
+                  100
+                )}%`
               }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
