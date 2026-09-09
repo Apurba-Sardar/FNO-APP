@@ -633,11 +633,12 @@ async def lifespan(application: FastAPI):
                         live_runtime.positions[pos.position_id] = updated
                         await live_runtime.repository.save_position(updated)
 
-                    # Send push notification
+                    # Send push notification immediately
                     try:
                         from app.services.notifications import notification_service
                         _asyncio.create_task(notification_service.notify_trade_entry(
                             symbol=best_symbol,
+                            side="sell" if is_sell else "buy",
                             direction="short" if is_sell else "long",
                             quantity=qty,
                             entry_price=entry_px,
@@ -646,8 +647,9 @@ async def lifespan(application: FastAPI):
                             stop_price=stop_px,
                             margin=margin,
                         ))
-                    except Exception:
-                        pass
+                        log.info("AUTO_SCALP_TRADE_ENTRY_NOTIFICATION_DISPATCHED", symbol=best_symbol, side="sell" if is_sell else "buy", entry_px=entry_px)
+                    except Exception as notif_err:
+                        log.warning("AUTO_SCALP_NOTIFICATION_TRIGGER_ERROR", symbol=best_symbol, error=str(notif_err))
 
                     log.info("AUTO_SCALP_ORDER_FILLED_SUCCESS", symbol=best_symbol, order=res)
 

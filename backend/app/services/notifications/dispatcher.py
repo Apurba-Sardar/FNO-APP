@@ -150,18 +150,21 @@ class NotificationDispatcher:
     async def notify_trade_entry(
         self,
         symbol: str,
-        side: str,
-        quantity: float,
-        entry_price: float,
+        side: str | None = None,
+        quantity: float = 0.0,
+        entry_price: float = 0.0,
         leverage: int = 3,
         target_price: float | None = None,
         stop_price: float | None = None,
         margin: float | None = None,
+        direction: str | None = None,
+        **kwargs: Any,
     ) -> None:
         """Triggered immediately when a trade entry is punched."""
-        is_buy = side.lower() == "buy"
+        raw_side = str(side or direction or "buy").strip().lower()
+        is_buy = raw_side in ("buy", "long")
         direction_label = "BUY (LONG)" if is_buy else "SELL (SHORT)"
-        title = f"🚀 TRADE PUNCHED: {symbol}"
+        title = f"🚀 TRADE PUNCHED: {symbol} ({direction_label})"
         lines = [
             f"• Action: {direction_label} @ {leverage}x Isolated",
             f"• Entry Price: ${entry_price:,.6g} USDT",
@@ -178,11 +181,18 @@ class NotificationDispatcher:
         lines.append(f"• Time: {format_ist()}")
 
         message = "\n".join(lines)
+        structlog.get_logger().info(
+            "NOTIFICATION_TRADE_ENTRY_TRIGGERED",
+            symbol=symbol,
+            direction=direction_label,
+            entry_price=entry_price,
+            quantity=quantity,
+        )
         await self.broadcast(
             title,
             message,
             priority="urgent",
-            tags=["rocket", "chart_with_upwards_trend" if is_buy else "chart_with_downwards_trend"],
+            tags=["rocket", "chart_with_upwards_trend" if is_buy else "chart_with_downwards_trend", "bell"],
         )
 
     async def notify_trade_exit(

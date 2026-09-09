@@ -1462,6 +1462,7 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
             asyncio.create_task(
                 notification_service.notify_trade_entry(
                     symbol=target_pair,
+                    side="sell" if dir_str.lower() in ("sell", "short") else "buy",
                     direction=dir_str,
                     quantity=qty,
                     entry_price=entry_px,
@@ -1471,8 +1472,8 @@ async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, se
                     margin=margin,
                 )
             )
-        except Exception:
-            pass
+        except Exception as notif_err:
+            structlog.get_logger().warning("TRADE_ENTRY_NOTIFICATION_TRIGGER_ERROR", symbol=target_pair, error=str(notif_err))
 
         return {
             "status": "success",
