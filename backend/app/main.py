@@ -417,7 +417,6 @@ async def lifespan(application: FastAPI):
                                                     spread_pct=round(spread_pct, 3),
                                                     score=round(cand_rating, 1),
                                                 )
-                                catch_err = None
                                 except Exception as _e:
                                     spread_ok = True
 
