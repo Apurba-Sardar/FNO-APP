@@ -237,11 +237,14 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(45)
                     continue
 
+                # ── Daily Rollover & Day Boundary Check ─────────────────────
+                live_runtime.check_and_apply_daily_rollover()
+
                 # ── Daily Profit Goal & Win Count Gate ──────────────────────
                 today_pnl = getattr(live_runtime.account, "daily_pnl", 0.0) or 0.0
                 today_wins = getattr(live_runtime, "today_winning_trades", 0)
-                max_target = settings.live_max_daily_profit_target or 10.0
-                if (max_target > 0 and today_pnl >= max_target) or today_wins >= 10:
+                max_target = settings.live_max_daily_profit_target or 20.0
+                if (max_target > 0 and today_pnl >= max_target) or today_wins >= 20:
                     log.info(
                         "AUTO_SCALP_DAILY_GOAL_ACHIEVED",
                         pnl=round(today_pnl, 2),

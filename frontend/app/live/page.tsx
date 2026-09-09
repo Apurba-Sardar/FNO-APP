@@ -537,16 +537,16 @@ export default function LivePage() {
             <div>
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-300">
-                  Daily Compounding Goal · $10 USDT Target
+                  Daily Compounding Goal · $20 USDT Target
                 </span>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                  (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 10.0) || (status.daily_wins ?? 0) >= 10
+                  (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 20.0) || (status.daily_wins ?? 0) >= 20
                     ? "bg-emerald-400 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
                     : "bg-amber-400/15 text-amber-300 border border-amber-400/30"
                 }`}>
-                  {(account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 10.0) || (status.daily_wins ?? 0) >= 10
-                    ? "Goal Unlocked 🏆 (10 Wins Reached)"
-                    : `Active Target: $${balance(status.daily_profit_target ?? 10.0)} USDT`}
+                  {(account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 20.0) || (status.daily_wins ?? 0) >= 20
+                    ? "Goal Unlocked 🏆 (20 Wins Reached)"
+                    : `Active Target: $${balance(status.daily_profit_target ?? 20.0)} USDT`}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00F5A0]/10 text-[#00F5A0] border border-[#00F5A0]/30">
                   ⚡ Target: ≥ +$1.00 USDT Net / Trade
@@ -560,7 +560,7 @@ export default function LivePage() {
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1.5 max-w-xl leading-relaxed">
-                Autonomous capital-shielded compounding plan. Allocates $25 margin @ 4x leverage ($100 notional) with sub-second profit locking (+0.40% breakeven stop, +0.75% trailing lock, 4m stagnation cut). Automatically halts entries if daily losses hit -$3.50 or target reaches $10.00 USDT.
+                Autonomous capital-shielded compounding plan. Allocates $25 margin @ 4x leverage ($100 notional) with sub-second profit locking (+0.40% breakeven stop, +0.75% trailing lock, 4m stagnation cut). Automatically halts entries if daily losses hit -$3.50 or target reaches $20.00 USDT.
               </p>
             </div>
           </div>
@@ -569,7 +569,7 @@ export default function LivePage() {
             <div>
               <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Today&apos;s Target Cap</span>
               <b className="mt-0.5 block text-lg font-black text-white font-mono">
-                ${balance(status.daily_profit_target ?? 10.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
+                ${balance(status.daily_profit_target ?? 20.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
               </b>
             </div>
             <div className="border-l border-white/10 pl-6">
@@ -600,7 +600,7 @@ export default function LivePage() {
               <span className="text-[10px] text-slate-400">USDT</span>
             </div>
             <span className="text-[10px] text-slate-400 mt-0.5">
-              Goal: {status.daily_wins ?? 0} / 10 Winning Trades
+              Goal: {status.daily_wins ?? 0} / 20 Winning Trades
             </span>
           </div>
 
@@ -678,10 +678,10 @@ export default function LivePage() {
             <span className="font-semibold flex items-center gap-2">
               <span>Goal Progress:</span>
               <b className="text-amber-300 font-mono">
-                {Math.min(Math.round(((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 10.0)) * 100), 100)}%
+                {Math.min(Math.round(((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 20.0)) * 100), 100)}%
               </b>
               <span className="text-[11px] text-slate-400">
-                ({status.daily_wins ?? 0}/10 Wins)
+                ({status.daily_wins ?? 0}/20 Wins)
               </span>
             </span>
             <span className="text-slate-400 text-[11px]">
@@ -693,7 +693,7 @@ export default function LivePage() {
             <div
               className="h-full rounded-full bg-gradient-to-r from-amber-400 via-[#00F5A0] to-[#00D9F5] relative transition-all duration-500 shadow-[0_0_15px_rgba(0,245,160,0.5)]"
               style={{
-                width: `${Math.min(Math.max((((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 10.0)) * 100), 4), 100)}%`
+                width: `${Math.min(Math.max((((account.daily_pnl ?? 0) / (status.daily_profit_target ?? 20.0)) * 100), 4), 100)}%`
               }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />

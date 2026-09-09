@@ -89,6 +89,38 @@ class LiveExecutionRuntime:
         self.consecutive_losses: int = 0
         self.max_daily_loss_limit: float = 3.50
         self.consecutive_loss_cooldown_until: datetime | None = None
+        self.current_tracking_date = datetime.now(UTC).date()
+
+    def check_and_apply_daily_rollover(self) -> bool:
+        """Automatically detect UTC day boundary crossing and reset daily telemetry & gates."""
+        now_date = datetime.now(UTC).date()
+        if getattr(self, "current_tracking_date", None) != now_date:
+            old_date = getattr(self, "current_tracking_date", None)
+            structlog.get_logger().info(
+                "DAILY_DAY_ROLLOVER_TRIGGERED",
+                old_date=str(old_date),
+                new_date=str(now_date),
+                yesterday_wins=getattr(self, "today_winning_trades", 0),
+                yesterday_profit=round(getattr(self, "today_realized_profit", 0.0), 3),
+                yesterday_loss=round(getattr(self, "today_realized_loss", 0.0), 3),
+            )
+            self.current_tracking_date = now_date
+            self.today_winning_trades = 0
+            self.today_losing_trades = 0
+            self.today_realized_profit = 0.0
+            self.today_realized_loss = 0.0
+            self.consecutive_losses = 0
+            self.consecutive_loss_cooldown_until = None
+            if hasattr(self, "account") and self.account:
+                self.account.daily_profit = 0.0
+                self.account.daily_loss = 0.0
+                self.account.daily_wins = 0
+                self.account.daily_losses = 0
+                self.account.consecutive_losses = 0
+                self.account.daily_pnl = 0.0
+            self.auto_trading_enabled = True
+            return True
+        return False
 
     def validate_startup(self) -> None:
         if self.config.trading_mode != "live":
@@ -151,6 +183,7 @@ class LiveExecutionRuntime:
         while True:
             await asyncio.sleep(self.config.reconciliation_interval_seconds)
             try:
+                self.check_and_apply_daily_rollover()
                 await self.refresh_account()
                 await self.reconcile(actor="system")
                 await self.monitor_and_auto_close_positions()
@@ -406,13 +439,15 @@ class LiveExecutionRuntime:
                             status="capital_preserved_auto_trading_paused",
                         )
 
-                    # Daily Profit Target Achieved Check (10 wins or $10 daily profit target)
-                    if self.today_winning_trades >= 10 or net_pnl_today >= 10.0:
+                    # Daily Profit Target Achieved Check (20 wins or $20 daily profit target)
+                    target_cap = getattr(self.config, "max_daily_profit_target", 20.0) or 20.0
+                    if self.today_winning_trades >= 20 or net_pnl_today >= target_cap:
                         self.auto_trading_enabled = False
                         structlog.get_logger().info(
                             "DAILY_GOAL_ACHIEVED_HALTING_AUTO_TRADING",
                             daily_wins=self.today_winning_trades,
                             daily_pnl=net_pnl_today,
+                            target_cap=target_cap,
                             status="target_reached_safely_paused",
                         )
 
@@ -948,6 +983,8 @@ class LiveExecutionRuntime:
         return sum(1 for row in rows if row.created_at.date() == today)
 
     def status(self) -> dict:
+        self.check_and_apply_daily_rollover()
+        target_cap = getattr(self.config, "max_daily_profit_target", 20.0) or 20.0
         unprotected = [item for item in self.positions.values() if item.status == "open" and item.protection_status != ProtectionStatus.PROTECTED]
         health = HealthState.CRITICAL if unprotected else HealthState.BLOCKED if self.state in {LiveRuntimeState.DISABLED, LiveRuntimeState.BLOCKED} else HealthState.HEALTHY
         return {
@@ -960,7 +997,7 @@ class LiveExecutionRuntime:
             "auto_execution": self.config.auto_execution or getattr(self, "auto_trading_enabled", False),
             "auto_close_active": True,
             "enforced_leverage": 3,
-            "daily_profit_target": getattr(self.config, "max_daily_profit_target", 10.0) or 10.0,
+            "daily_profit_target": target_cap,
             "daily_pnl": getattr(self.account, "daily_pnl", 0.0) or 0.0,
             "daily_profit": getattr(self, "today_realized_profit", 0.0) or 0.0,
             "daily_loss": getattr(self, "today_realized_loss", 0.0) or 0.0,
@@ -973,8 +1010,8 @@ class LiveExecutionRuntime:
                 or (getattr(self, "today_realized_profit", 0.0) - getattr(self, "today_realized_loss", 0.0)) <= -getattr(self, "max_daily_loss_limit", 3.50)
             ),
             "daily_profit_goal_reached": bool(
-                (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= 10.0
-                or getattr(self, "today_winning_trades", 0) >= 10
+                (getattr(self.account, "daily_pnl", 0.0) or 0.0) >= target_cap
+                or getattr(self, "today_winning_trades", 0) >= 20
             ),
             "emergency_stop": self.emergency_stop.state,
             "circuit_breaker": self.circuit_breaker.state,

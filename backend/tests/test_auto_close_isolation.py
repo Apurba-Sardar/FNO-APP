@@ -128,13 +128,15 @@ async def test_auto_close_anti_churn_and_daily_win_tracking():
     repo = InMemoryLiveRepository()
     mock_client = MagicMock()
     mock_client.exit_position = AsyncMock(return_value={"status": "success"})
+    mock_client.positions = AsyncMock(return_value=[])
+    mock_client.orders = AsyncMock(return_value=[])
 
     runtime = LiveExecutionRuntime(config, repo, client=mock_client)
-    runtime.today_winning_trades = 9  # 9 wins already banked today
+    runtime.today_winning_trades = 19  # 19 wins already banked today
     
     bot_pos = LivePosition(
         position_id=uuid4(),
-        exchange_position_id="pos_win_10",
+        exchange_position_id="pos_win_20",
         pair="B-FORM_USDT",
         direction=StrategyDirection.LONG,
         quantity=300.0,
@@ -160,8 +162,8 @@ async def test_auto_close_anti_churn_and_daily_win_tracking():
     assert "B-FORM_USDT" in runtime.symbol_cooldowns
     assert runtime.symbol_cooldowns["B-FORM_USDT"] > datetime.now(UTC)
     assert runtime.last_trade_closed_at is not None
-    # 10th win banked!
-    assert runtime.today_winning_trades == 10
+    # 20th win banked!
+    assert runtime.today_winning_trades == 20
     # Auto-trading should now be paused to protect daily goal
     assert runtime.auto_trading_enabled is False
 

@@ -69,21 +69,23 @@ class PositionReconciliationService:
             ghost_positions=sorted(set(known_positions) - set(active_exchange)),
             orphan_orders=sorted(set(open_exchange_orders) - set(known_orders)),
         )
+        known_by_pair = {item.pair: item for item in local_positions.values() if item.status == "open"}
         for exchange_id, row in active_exchange.items():
-            local = known_positions.get(exchange_id)
+            pair_name = str(row.get("pair") or row.get("symbol") or "")
+            local = known_positions.get(exchange_id) or known_by_pair.get(pair_name)
             if local:
                 normalized = normalize_exchange_position(row, execution_request_id=local.execution_request_id)
                 # Preserve local bot management, origin, breakeven status, and bounds
                 is_long = normalized.direction == StrategyDirection.LONG
-                bot_mgr = getattr(local, "bot_managed", False)
-                origin = getattr(local, "origin", "manual")
+                bot_mgr = getattr(local, "bot_managed", True)
+                origin = getattr(local, "origin", "bot")
                 t_px = local.target
                 s_px = local.stop
                 is_stop_sane = (s_px is not None) and ((s_px < normalized.average_price * 1.005) if is_long else (s_px > normalized.average_price * 0.995))
                 is_target_sane = (t_px is not None) and ((t_px > normalized.average_price * 1.005) if is_long else (t_px < normalized.average_price * 0.995))
                 if bot_mgr and (not t_px or not s_px or not is_stop_sane or not is_target_sane):
-                    t_px = round(normalized.average_price * 1.014, 6) if is_long else round(normalized.average_price * 0.986, 6)
-                    s_px = round(normalized.average_price * 0.990, 6) if is_long else round(normalized.average_price * 1.010, 6)
+                    t_px = round(normalized.average_price * 1.0135, 6) if is_long else round(normalized.average_price * 0.9865, 6)
+                    s_px = round(normalized.average_price * 0.984, 6) if is_long else round(normalized.average_price * 1.016, 6)
                 
                 normalized = normalized.model_copy(update={
                     "position_id": local.position_id,
@@ -100,12 +102,19 @@ class PositionReconciliationService:
                 local_positions[local.position_id] = normalized
                 await self.repository.save_position(normalized)
             else:
-                # External/manual trade opened outside the bot: strictly flagged as manual
+                # Active position discovered on exchange:
+                # Safely adopt it into bot management with pro-trader scalp target & stop protection
                 normalized = normalize_exchange_position(row)
+                is_long = normalized.direction == StrategyDirection.LONG
+                entry_p = normalized.average_price
+                t_px = round(entry_p * 1.0135, 6) if is_long else round(entry_p * 0.9865, 6)
+                s_px = round(entry_p * 0.984, 6) if is_long else round(entry_p * 1.016, 6)
                 normalized = normalized.model_copy(update={
-                    "bot_managed": False,
-                    "origin": "manual",
-                    "protection_status": ProtectionStatus.PROTECTED if normalized.average_price > 0 else ProtectionStatus.UNPROTECTED,
+                    "bot_managed": True,
+                    "origin": "bot",
+                    "target": t_px,
+                    "stop": s_px,
+                    "protection_status": ProtectionStatus.PROTECTED if entry_p > 0 else ProtectionStatus.UNPROTECTED,
                 })
                 local_positions[normalized.position_id] = normalized
                 await self.repository.save_position(normalized)

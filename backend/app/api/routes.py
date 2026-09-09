@@ -1520,7 +1520,7 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
         account_obj = getattr(runtime, "account", None)
         daily_pnl = getattr(account_obj, "daily_pnl", 0.0) or 0.0
         avail_bal = getattr(account_obj, "available_balance", 66.6) or 66.6
-        daily_target = getattr(runtime.config, "max_daily_profit_target", 10.0)
+        daily_target = getattr(runtime.config, "max_daily_profit_target", 20.0) or 20.0
 
         readiness = {
             "auto_pilot_active": auto_active,
@@ -1540,7 +1540,7 @@ async def live_research_feed(request: Request, settings: SettingsDependency) -> 
                 getattr(runtime, "today_realized_loss", 0.0) >= getattr(runtime, "max_daily_loss_limit", 3.50)
                 or (getattr(runtime, "today_realized_profit", 0.0) - getattr(runtime, "today_realized_loss", 0.0)) <= -getattr(runtime, "max_daily_loss_limit", 3.50)
             ),
-            "goal_reached": (daily_pnl >= daily_target if daily_target > 0 else False) or getattr(runtime, "today_winning_trades", 0) >= 10,
+            "goal_reached": (daily_pnl >= daily_target if daily_target > 0 else False) or getattr(runtime, "today_winning_trades", 0) >= 20,
             "eligible_markets_count": len(dynamic_gainers) or scanner_stats.get("eligible_markets", 14),
             "total_markets_scanned": 537,
             "scan_interval_seconds": 60,
