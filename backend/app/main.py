@@ -298,39 +298,47 @@ async def lifespan(application: FastAPI):
                         await _asyncio.sleep(rem)
                         continue
 
-                # ── Strict Single Open Position Gate ─────────────────────────
-                # Always maintain exactly ONE active scalp at a time for 100% focus and zero simultaneous drawdown
+                # ── Concurrent Open Position Gate (Max 2 Active Scalps) ──────
+                # Allows up to 2 simultaneous scalps on different symbols for increased capital efficiency
                 open_positions = [p for p in live_runtime.positions.values() if p.status == "open"]
                 open_pairs = {p.pair for p in open_positions}
-                if len(open_positions) >= 1:
-                    cur = open_positions[0]
+                if len(open_positions) >= 2:
+                    summary = ", ".join(f"{p.pair} (pnl: ${round(p.unrealized_pnl, 2)})" for p in open_positions)
                     log.info(
-                        "AUTO_SCALP_POSITION_ACTIVE",
-                        pair=cur.pair,
-                        pnl=round(cur.unrealized_pnl, 3),
-                        entry=cur.average_price,
-                        mark=cur.mark_price,
+                        "AUTO_SCALP_MAX_CONCURRENT_POSITIONS_ACTIVE",
+                        count=len(open_positions),
+                        positions=summary,
                     )
                     await _asyncio.sleep(5)
                     continue
 
                 # ── Post-Trade Inter-Trade Cooling Window ───────────────────
-                # Allow 5 minutes between consecutive trades to prevent over-trading in choppy conditions
+                # When all positions exit, allow 3 minutes before seeking the next batch to avoid chop
                 now_curr = datetime.now(UTC)
-                last_closed = getattr(live_runtime, "last_trade_closed_at", None)
-                if last_closed:
-                    if getattr(last_closed, "tzinfo", None) is None:
-                        last_closed = last_closed.replace(tzinfo=UTC)
-                    elapsed_since_exit = (now_curr - last_closed).total_seconds()
-                    if elapsed_since_exit < 300:  # 5 minute cooldown after exit
-                        await _asyncio.sleep(10)
+                if len(open_positions) == 0:
+                    last_closed = getattr(live_runtime, "last_trade_closed_at", None)
+                    if last_closed:
+                        if getattr(last_closed, "tzinfo", None) is None:
+                            last_closed = last_closed.replace(tzinfo=UTC)
+                        elapsed_since_exit = (now_curr - last_closed).total_seconds()
+                        if elapsed_since_exit < 180:  # 3 minute cooldown after all trades exit
+                            await _asyncio.sleep(10)
+                            continue
+
+                # Stagger consecutive trade entries by at least 45 seconds so position #1 settles cleanly
+                last_punched = getattr(live_runtime, "last_trade_punched_at", None)
+                if last_punched:
+                    if getattr(last_punched, "tzinfo", None) is None:
+                        last_punched = last_punched.replace(tzinfo=UTC)
+                    if (now_curr - last_punched).total_seconds() < 45:
+                        await _asyncio.sleep(5)
                         continue
 
                 # ── Daily Account-Wide Trade Cap ─────────────────────────────
                 daily_counts = getattr(live_runtime, "daily_symbol_trade_count", {})
                 total_daily_trades = sum(daily_counts.values())
-                if total_daily_trades >= 12:
-                    log.info("AUTO_SCALP_DAILY_ACCOUNT_TRADE_CAP_REACHED", total_trades=total_daily_trades, cap=12)
+                if total_daily_trades >= 16:
+                    log.info("AUTO_SCALP_DAILY_ACCOUNT_TRADE_CAP_REACHED", total_trades=total_daily_trades, cap=16)
                     await _asyncio.sleep(30)
                     continue
 
@@ -690,6 +698,7 @@ async def lifespan(application: FastAPI):
                     # Tag position as bot-managed with profit target and stop
                     from datetime import UTC as _UTC, timedelta as _timedelta
                     now_t = datetime.now(_UTC)
+                    live_runtime.last_trade_punched_at = now_t
                     
                     # Update daily trade counter for this symbol
                     if not hasattr(live_runtime, "daily_symbol_trade_count"):
