@@ -60,10 +60,16 @@ export default function LivePage() {
     try {
       setIsResettingPnl(true);
       const apiBase = getApiUrl();
-      const res = await fetch(`${apiBase}/live/reset-daily-pnl`, {
+      let res = await fetch(`${apiBase}/live/reset-daily-pnl`, {
         method: "POST",
         headers: headers(),
       });
+      if (!res.ok) {
+        res = await fetch(`${apiBase}/live/reset-circuit`, {
+          method: "POST",
+          headers: headers(),
+        });
+      }
       if (res.ok) {
         setStatus((prev: any) => ({
           ...prev,

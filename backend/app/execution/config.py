@@ -36,6 +36,7 @@ class LiveExecutionConfig(BaseModel):
     max_notional_per_trade: float = Field(default=75.0, gt=0)
     max_daily_profit_target: float = Field(default=20.0, ge=0.0)
     max_daily_loss_percent: float = Field(default=0.25, gt=0)
+    max_daily_loss_limit: float = Field(default=50.0, ge=1.0)
     max_open_positions: int = Field(default=2, ge=1)
     max_total_exposure: float = Field(default=2500, gt=0)
     max_order_retries: int = Field(default=1, ge=0, le=3)

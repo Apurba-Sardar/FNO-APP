@@ -87,7 +87,7 @@ class LiveExecutionRuntime:
         self.today_realized_profit: float = 0.0
         self.today_realized_loss: float = 0.0
         self.consecutive_losses: int = 0
-        self.max_daily_loss_limit: float = 3.50
+        self.max_daily_loss_limit: float = float(getattr(config, "max_daily_loss_limit", 50.0) or 50.0)
         self.consecutive_loss_cooldown_until: datetime | None = None
         self.daily_symbol_trade_count: dict[str, int] = {}
         self.current_tracking_date = datetime.now(UTC).date()

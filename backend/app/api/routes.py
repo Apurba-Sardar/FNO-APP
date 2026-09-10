@@ -2110,7 +2110,22 @@ async def reset_circuit(request: Request, settings: SettingsDependency) -> dict:
     if hasattr(runtime, "emergency_stop"):
         runtime.emergency_stop.resume()
     from app.execution.models import LiveRuntimeState
-    runtime.state = LiveRuntimeState.ARMED
+    runtime.today_realized_loss = 0.0
+    runtime.today_realized_profit = 0.0
+    runtime.today_winning_trades = 0
+    runtime.today_losing_trades = 0
+    runtime.consecutive_losses = 0
+    runtime.consecutive_loss_cooldown_until = None
+    runtime.daily_symbol_trade_count = {}
+    runtime.symbol_cooldowns = {}
+    runtime.auto_trading_enabled = True
+    if hasattr(runtime, "account") and runtime.account:
+        runtime.account.daily_profit = 0.0
+        runtime.account.daily_loss = 0.0
+        runtime.account.daily_wins = 0
+        runtime.account.daily_losses = 0
+        runtime.account.consecutive_losses = 0
+        runtime.account.daily_pnl = 0.0
     try:
         await runtime.refresh_account()
         await runtime.reconcile(actor="operator-manual-reset")
