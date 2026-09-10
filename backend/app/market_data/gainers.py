@@ -30,7 +30,7 @@ class DynamicGainerScanner:
 
     def __init__(
         self,
-        min_volume_usdt: float = 5_000_000.0,
+        min_volume_usdt: float = 10_000_000.0,
         min_gain_pct: float = 2.5,
         max_spread_bps: float = 15.0,
     ) -> None:

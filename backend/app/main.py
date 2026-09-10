@@ -356,7 +356,7 @@ async def lifespan(application: FastAPI):
                         public_base_url=settings.coindcx_public_base_url,
                         timeout=5.0,
                     ) as pub_client:
-                        g_scanner = DynamicGainerScanner(min_volume_usdt=5_000_000.0, min_gain_pct=2.5)
+                        g_scanner = DynamicGainerScanner(min_volume_usdt=10_000_000.0, min_gain_pct=2.5)
                         ranked_pool = await g_scanner.scan_market_gainers(pub_client, limit=20)
                         # Fetch active instruments to guarantee never picking inactive or exit-only pairs
                         active_set = getattr(live_runtime, "_active_instruments_set", None)
@@ -428,6 +428,16 @@ async def lifespan(application: FastAPI):
                                         "AUTO_SCALP_SKIP_DAILY_SYMBOL_LIMIT_REACHED",
                                         symbol=cand.symbol,
                                         trades_today=trades_today,
+                                    )
+                                    continue
+
+                                # 4. Minimum 24h Volume Floor: strictly eliminate low-volume pairs (< $10M 24h volume)
+                                cand_vol = getattr(cand, "volume_24h", 0.0) or 0.0
+                                if cand_vol < 10_000_000.0:
+                                    log.info(
+                                        "AUTO_SCALP_SKIP_LOW_24H_VOLUME",
+                                        symbol=cand.symbol,
+                                        volume_24h=cand_vol,
                                     )
                                     continue
 
@@ -576,18 +586,9 @@ async def lifespan(application: FastAPI):
                             else:
                                 best_side = "buy"
 
-                # Tier 4: Fallback to high-liquidity crypto majors
-                if not best_symbol:
-                    for fallback in ("B-XRP_USDT", "B-DOGE_USDT", "B-SOL_USDT", "B-ETH_USDT"):
-                        if fallback not in open_pairs and fallback not in active_cooldowns:
-                            best_symbol = fallback
-                            best_side = "buy"
-                            best_score = 60.0
-                            break
-
                 if not best_symbol:
                     log.info("AUTO_SCALP_NO_ELIGIBLE_CANDIDATE", cooldown_count=len(active_cooldowns))
-                    await _asyncio.sleep(45)
+                    await _asyncio.sleep(30)
                     continue
 
                 # Resolve live price if not yet extracted
