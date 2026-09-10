@@ -164,6 +164,8 @@ class LivePosition(ExecutionModel):
     bot_managed: bool = False
     origin: str = "manual"  # "bot" or "manual"
     breakeven_activated: bool = False
+    trailing_locked: bool = False
+    runner_locked: bool = False
     trailing_stop: float | None = None
     highest_roe: float = 0.0
     exit_price: float | None = None
