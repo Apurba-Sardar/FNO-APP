@@ -672,9 +672,9 @@ async def lifespan(application: FastAPI):
                     continue
 
                 # Precision step & min quantity
-                margin = 36.0
+                margin = 25.0
                 leverage = 4
-                notional = 145.0  # High-conviction $145 notional achieves $20 net profit in 8-10 high-accuracy trades
+                notional = 105.0  # Sized at $105 notional (safely above CoinDCX $100 min) so max loss on SL strictly stays under $1.15 USDT
                 step = 1.0
                 min_q = 1.0
                 try:
@@ -713,10 +713,10 @@ async def lifespan(application: FastAPI):
 
                 is_sell = best_side == "sell"
                 entry_px = live_px
-                # Target: +1.35% on Long (Yields ~$1.95 gross, nets +$1.81 USDT cash; runners extend to +1.85% / +$2.60)
+                # Target: +1.35% on Long (Yields ~$1.42 gross, nets +$1.31 USDT cash; runners extend to +1.85% / +$1.94)
                 target_px = round(entry_px * 0.9865, 6) if is_sell else round(entry_px * 1.0135, 6)
-                # Stop: -1.05% (Pro-trader tight risk, strictly caps loss at ~$1.50 USDT)
-                stop_px   = round(entry_px * 1.0105, 6) if is_sell else round(entry_px * 0.9895, 6)
+                # Stop: -0.85% (Pro-trader tight risk, strictly caps loss at ~$1.10 - $1.20 USDT including fees/slippage)
+                stop_px   = round(entry_px * 1.0085, 6) if is_sell else round(entry_px * 0.9915, 6)
 
                 order_payload = {
                     "side": best_side,
@@ -776,7 +776,7 @@ async def lifespan(application: FastAPI):
                     if pos:
                         ep = float(pos.average_price) if pos.average_price > 0 else entry_px
                         tp = round(ep * 0.9865, 6) if is_sell else round(ep * 1.0135, 6)
-                        sl = round(ep * 1.0105, 6) if is_sell else round(ep * 0.9895, 6)
+                        sl = round(ep * 1.0085, 6) if is_sell else round(ep * 0.9915, 6)
                         updated = pos.model_copy(update={
                             "bot_managed": True,
                             "origin": "bot",

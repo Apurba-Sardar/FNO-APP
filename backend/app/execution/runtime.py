@@ -281,10 +281,10 @@ class LiveExecutionRuntime:
             if not target or not stop or not is_stop_sane or not is_target_sane:
                 if is_long:
                     target = round(entry * 1.0135, 6)
-                    stop = round(entry * 0.9895, 6)
+                    stop = round(entry * 0.9915, 6)
                 else:
                     target = round(entry * 0.9865, 6)
-                    stop = round(entry * 1.0105, 6)
+                    stop = round(entry * 1.0085, 6)
 
                 updated = pos.model_copy(update={
                     "target": target,
@@ -330,35 +330,41 @@ class LiveExecutionRuntime:
             if mark <= 0:
                 continue
 
+            # Sub-second live PnL recalculation: bypasses slow CoinDCX positions polling lag
+            if mark > 0 and pos.quantity and pos.quantity > 0:
+                cur_pnl = round(((mark - entry) * pos.quantity) if is_long else ((entry - mark) * pos.quantity), 4)
+                pos = pos.model_copy(update={"unrealized_pnl": cur_pnl, "mark_price": mark})
+                self.positions[pos.position_id] = pos
+
             price_diff_pct = ((mark - entry) / entry) * 100 if is_long else ((entry - mark) / entry) * 100
             roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 4.0))
 
             # Tier 1 Dynamic Breakeven Lock:
-            # Activate only once firmly in profit by >= +0.70 USDT (or +0.70% move).
-            # Shift stop to entry + 0.20% to cover all exchange fees AND lock in >= +$0.20 guaranteed cash!
-            if (pos.unrealized_pnl >= 0.70 or price_diff_pct >= 0.70) and not getattr(pos, "breakeven_activated", False):
-                be_stop = round(entry * 1.0020, 6) if is_long else round(entry * 0.9980, 6)
+            # Activate once in profit by >= +0.50 USDT (or +0.50% move).
+            # Shift stop to entry + 0.15% to cover all exchange fees AND lock in guaranteed cash!
+            if (pos.unrealized_pnl >= 0.50 or price_diff_pct >= 0.50) and not getattr(pos, "breakeven_activated", False):
+                be_stop = round(entry * 1.0015, 6) if is_long else round(entry * 0.9985, 6)
                 pos = pos.model_copy(update={"stop": be_stop, "breakeven_activated": True})
                 self.positions[pos.position_id] = pos
                 await self.repository.save_position(pos)
-                structlog.get_logger().info("BREAKEVEN_STOP_LOCKED", pair=pos.pair, new_stop=be_stop, guaranteed_pnl="+0.20 USDT")
+                structlog.get_logger().info("BREAKEVEN_STOP_LOCKED", pair=pos.pair, new_stop=be_stop, guaranteed_pnl="+0.15 USDT")
                 stop = be_stop
 
             # Tier 2 High-Profit Guarantee Lock:
-            # Once in profit by >= +1.00 USDT (or +1.00% move), shift stop to entry + 0.60% to lock in >= +$0.60 USDT guaranteed profit!
-            if (pos.unrealized_pnl >= 1.00 or price_diff_pct >= 1.00) and not getattr(pos, "trailing_locked", False):
-                trail_stop = round(entry * 1.0060, 6) if is_long else round(entry * 0.9940, 6)
+            # Once in profit by >= +0.80 USDT (or +0.80% move), shift stop to entry + 0.45% to lock in >= +$0.45 USDT guaranteed profit!
+            if (pos.unrealized_pnl >= 0.80 or price_diff_pct >= 0.80) and not getattr(pos, "trailing_locked", False):
+                trail_stop = round(entry * 1.0045, 6) if is_long else round(entry * 0.9955, 6)
                 pos = pos.model_copy(update={"stop": trail_stop, "trailing_locked": True})
                 self.positions[pos.position_id] = pos
                 await self.repository.save_position(pos)
-                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T2", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.60 USDT")
+                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T2", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.45 USDT")
                 stop = trail_stop
 
             # Tier 3 Explosive Momentum Runner Lock:
-            # Once in profit by >= +1.35% (or PnL >= +$1.90 USDT), do NOT cut the trade short!
-            # Shift stop to entry + 1.05% (locking in >= +$1.50 clean profit) and trail target to +1.85% (for +$2.60 payout)
-            if (pos.unrealized_pnl >= 1.90 or price_diff_pct >= 1.35) and not getattr(pos, "runner_locked", False):
-                runner_stop = round(entry * 1.0105, 6) if is_long else round(entry * 0.9895, 6)
+            # Once in profit by >= +1.20% (or PnL >= +$1.25 USDT), do NOT cut the trade short!
+            # Shift stop to entry + 0.85% (locking in >= +$0.90 clean profit) and trail target to +1.85% (for +$1.94 payout)
+            if (pos.unrealized_pnl >= 1.25 or price_diff_pct >= 1.20) and not getattr(pos, "runner_locked", False):
+                runner_stop = round(entry * 1.0085, 6) if is_long else round(entry * 0.9915, 6)
                 runner_target = round(entry * 1.0185, 6) if is_long else round(entry * 0.9815, 6)
                 pos = pos.model_copy(update={
                     "stop": runner_stop,
@@ -373,7 +379,7 @@ class LiveExecutionRuntime:
                     pair=pos.pair,
                     new_stop=runner_stop,
                     new_target=runner_target,
-                    guaranteed_pnl="+1.50 USDT",
+                    guaranteed_pnl="+0.90 USDT",
                 )
                 stop = runner_stop
                 target = runner_target
@@ -424,8 +430,8 @@ class LiveExecutionRuntime:
                             else "STOP_LOSS_TRIGGER"
                         )
                         auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
-                    elif pos.unrealized_pnl <= -1.50 and not getattr(pos, "breakeven_activated", False):
-                        auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.50 USDT)"
+                    elif (pos.unrealized_pnl <= -1.15 or price_diff_pct <= -0.95) and not getattr(pos, "breakeven_activated", False):
+                        auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.15 USDT | {price_diff_pct:.2f}%)"
 
             if auto_close_reason:
                 structlog.get_logger().info(
