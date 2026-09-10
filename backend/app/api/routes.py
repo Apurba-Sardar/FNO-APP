@@ -1850,6 +1850,119 @@ async def emergency_stop_live(request: Request, settings: SettingsDependency) ->
     return live_runtime_from(request).status()
 
 
+class MasterSwitchPayload(BaseModel):
+    enabled: bool
+    close_open_positions: bool = False
+    operator_token: str = "LIVE_OPERATOR_TOKEN_2026"
+
+
+@router.get("/system/master-switch")
+@router.get("/live/master-switch")
+async def get_master_switch(request: Request, settings: SettingsDependency) -> dict:
+    runtime = live_runtime_from(request)
+    is_emergency = getattr(runtime, "emergency_stop", None) and runtime.emergency_stop.triggered
+    auto_on = getattr(runtime, "auto_trading_enabled", False)
+    state_str = runtime.state.value if hasattr(runtime.state, "value") else str(runtime.state)
+    open_pos = [p for p in runtime.positions.values() if p.status == "open"]
+    master_on = (not is_emergency) and auto_on and (state_str != "blocked")
+
+    return {
+        "master_enabled": master_on,
+        "emergency_stop_active": bool(is_emergency),
+        "auto_trading_enabled": bool(auto_on),
+        "runtime_state": state_str,
+        "circuit_breaker_state": runtime.circuit_breaker.state.value if hasattr(runtime, "circuit_breaker") and hasattr(runtime.circuit_breaker.state, "value") else "closed",
+        "open_positions_count": len(open_pos),
+        "open_positions": [
+            {
+                "symbol": p.pair,
+                "pnl": round(float(p.unrealized_pnl), 2),
+                "side": p.side,
+                "entry": p.average_price,
+                "mark": p.mark_price,
+                "position_id": p.exchange_position_id,
+            }
+            for p in open_pos
+        ],
+        "today_pnl": round(float(getattr(runtime, "today_realized_profit", 0.0)) - float(getattr(runtime, "today_realized_loss", 0.0)), 2),
+        "today_profit": round(float(getattr(runtime, "today_realized_profit", 0.0)), 2),
+        "today_loss": round(float(getattr(runtime, "today_realized_loss", 0.0)), 2),
+        "capital_shield_active": bool(getattr(runtime, "today_realized_loss", 0.0) >= getattr(runtime, "max_daily_loss_limit", 3.50)),
+        "max_concurrent_positions": 2,
+        "min_24h_volume_usdt": 10_000_000.0,
+    }
+
+
+@router.post("/system/master-switch")
+@router.post("/live/master-switch")
+async def set_master_switch(body: MasterSwitchPayload, request: Request, settings: SettingsDependency) -> dict:
+    runtime = live_runtime_from(request)
+    import structlog
+    log = structlog.get_logger()
+    from app.execution.models import LiveRuntimeState
+
+    closed_report = []
+    if not body.enabled:
+        # ── EMERGENCY HALT ACTIVATION ──
+        runtime.emergency_stop.trigger()
+        runtime.auto_trading_enabled = False
+        runtime.state = LiveRuntimeState.BLOCKED
+        await runtime._persist_runtime()
+        log.warning("EMERGENCY_MASTER_SWITCH_DEACTIVATED", action="all_operations_halted", close_positions=body.close_open_positions)
+
+        # If requested, emergency close all open positions on CoinDCX
+        if body.close_open_positions and runtime.client:
+            open_pos = [p for p in list(runtime.positions.values()) if p.status == "open"]
+            for pos in open_pos:
+                try:
+                    res = await runtime.client.exit_position(pos.exchange_position_id)
+                    closed_report.append({"pair": pos.pair, "result": "closed", "res": res})
+                    pos_updated = pos.model_copy(update={
+                        "status": "closed",
+                        "exit_reason": "EMERGENCY_MASTER_SWITCH_EXIT",
+                        "closed_at": datetime.now(UTC),
+                        "unrealized_pnl": 0.0,
+                    })
+                    runtime.positions[pos.position_id] = pos_updated
+                    await runtime.repository.save_position(pos_updated)
+                except Exception as exc:
+                    closed_report.append({"pair": pos.pair, "result": "error", "error": str(exc)})
+
+        # Dispatch immediate emergency push notification
+        try:
+            from app.services.notifications import notification_service
+            asyncio.create_task(notification_service.dispatch(
+                title="🚨 EMERGENCY HALT TRIGGERED",
+                message=f"Master switch turned OFF. All trading operations halted.{f' Exited {len(closed_report)} positions.' if closed_report else ''}",
+                priority="urgent",
+                tags=["rotating_light", "warning"]
+            ))
+        except Exception:
+            pass
+    else:
+        # ── SYSTEM RESUME & RE-ARM ──
+        runtime.emergency_stop.resume()
+        runtime.auto_trading_enabled = True
+        if hasattr(runtime, "circuit_breaker"):
+            runtime.circuit_breaker.success()
+        runtime.state = LiveRuntimeState.ARMED
+        await runtime._persist_runtime()
+        log.info("EMERGENCY_MASTER_SWITCH_ACTIVATED", action="system_operational")
+
+        try:
+            from app.services.notifications import notification_service
+            asyncio.create_task(notification_service.dispatch(
+                title="🟢 SYSTEM OPERATIONAL",
+                message="Master switch turned ON. Algorithmic auto-scalper armed and active.",
+                priority="default",
+                tags=["white_check_mark", "rocket"]
+            ))
+        except Exception:
+            pass
+
+    return await get_master_switch(request, settings)
+
+
 @router.post("/live/resume")
 async def resume_live(body: LiveConfirmationRequest, request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)

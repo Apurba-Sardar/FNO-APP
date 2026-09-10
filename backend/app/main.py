@@ -221,9 +221,10 @@ async def lifespan(application: FastAPI):
         while True:
             try:
                 auto_on = getattr(live_runtime, "auto_trading_enabled", True)
-                if not auto_on:
-                    log.info("AUTO_SCALP_CHECK", status="paused", auto_trading_enabled=False)
-                    await _asyncio.sleep(45)
+                is_emergency = getattr(live_runtime, "emergency_stop", None) and live_runtime.emergency_stop.triggered
+                if not auto_on or is_emergency or live_runtime.state == LiveRuntimeState.BLOCKED:
+                    log.info("AUTO_SCALP_CHECK", status="halted_by_master_switch", auto_trading=auto_on, emergency=is_emergency)
+                    await _asyncio.sleep(10)
                     continue
 
                 state_ok = live_runtime.state in {
