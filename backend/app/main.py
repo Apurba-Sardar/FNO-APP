@@ -314,8 +314,27 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(5)
                     continue
 
-                # ── Per-Symbol Anti-Churn Cooldown ────────────────────────────
+                # ── Post-Trade Inter-Trade Cooling Window ───────────────────
+                # Allow 5 minutes between consecutive trades to prevent over-trading in choppy conditions
                 now_curr = datetime.now(UTC)
+                last_closed = getattr(live_runtime, "last_trade_closed_at", None)
+                if last_closed:
+                    if getattr(last_closed, "tzinfo", None) is None:
+                        last_closed = last_closed.replace(tzinfo=UTC)
+                    elapsed_since_exit = (now_curr - last_closed).total_seconds()
+                    if elapsed_since_exit < 300:  # 5 minute cooldown after exit
+                        await _asyncio.sleep(10)
+                        continue
+
+                # ── Daily Account-Wide Trade Cap ─────────────────────────────
+                daily_counts = getattr(live_runtime, "daily_symbol_trade_count", {})
+                total_daily_trades = sum(daily_counts.values())
+                if total_daily_trades >= 12:
+                    log.info("AUTO_SCALP_DAILY_ACCOUNT_TRADE_CAP_REACHED", total_trades=total_daily_trades, cap=12)
+                    await _asyncio.sleep(30)
+                    continue
+
+                # ── Per-Symbol Anti-Churn Cooldown ────────────────────────────
                 cooldowns = getattr(live_runtime, "symbol_cooldowns", {})
                 active_cooldowns = {s: t for s, t in cooldowns.items() if t > now_curr}
                 live_runtime.symbol_cooldowns = active_cooldowns
@@ -435,6 +454,65 @@ async def lifespan(application: FastAPI):
                                     spread_ok = True
 
                                 if not spread_ok:
+                                    continue
+
+                                # ── 5-Minute Technical Confluence Gate (A+ Setups Only) ──
+                                # Strictly validates 5m EMA-9/21 trend alignment & healthy RSI momentum
+                                # to eliminate top-buying, knife-catching, and counter-trend fakeouts.
+                                tech_confirmed = False
+                                tech_reason = ""
+                                try:
+                                    from app.indicators.ema import ema as _calc_ema
+                                    from app.indicators.rsi import rsi as _calc_rsi
+                                    end_sec = int(now_curr.timestamp())
+                                    start_sec = end_sec - (5 * 60 * 45)  # fetch 45 5m candles
+                                    c_data = await pub_client.candlesticks(cand.symbol, start_sec, end_sec, resolution="5")
+                                    if c_data and len(c_data) >= 25:
+                                        closes = [float(c.close) for c in c_data if c.close is not None and float(c.close) > 0]
+                                        if len(closes) >= 25:
+                                            ema9_series = _calc_ema(closes, 9)
+                                            ema21_series = _calc_ema(closes, 21)
+                                            rsi_series = _calc_rsi(closes, 14)
+                                            e9 = ema9_series[-1]
+                                            e21 = ema21_series[-1]
+                                            cur_rsi = rsi_series[-1]
+                                            last_c = closes[-1]
+                                            side_dir = getattr(cand, "direction", "buy")
+                                            if e9 is not None and e21 is not None and cur_rsi is not None:
+                                                if side_dir == "buy":
+                                                    # Long setup: price above EMA-9, EMA-9 >= EMA-21, RSI between 44 and 72
+                                                    if last_c >= e9 and e9 >= e21:
+                                                        if 44.0 <= cur_rsi <= 72.0:
+                                                            tech_confirmed = True
+                                                        else:
+                                                            tech_reason = f"RSI_EXHAUSTED (RSI={cur_rsi:.1f} not in 44-72)"
+                                                    else:
+                                                        tech_reason = f"EMA_TREND_MISALIGNED (Price={last_c:.4f}, EMA9={e9:.4f}, EMA21={e21:.4f})"
+                                                else:
+                                                    # Short setup: price below EMA-9, EMA-9 <= EMA-21, RSI between 28 and 56
+                                                    if last_c <= e9 and e9 <= e21:
+                                                        if 28.0 <= cur_rsi <= 56.0:
+                                                            tech_confirmed = True
+                                                        else:
+                                                            tech_reason = f"RSI_EXHAUSTED (RSI={cur_rsi:.1f} not in 28-56)"
+                                                    else:
+                                                        tech_reason = f"EMA_TREND_MISALIGNED (Price={last_c:.4f}, EMA9={e9:.4f}, EMA21={e21:.4f})"
+                                            else:
+                                                tech_reason = "INSUFFICIENT_INDICATOR_VALUES"
+                                        else:
+                                            tech_reason = "INSUFFICIENT_VALID_CLOSES"
+                                    else:
+                                        tech_reason = "TOO_FEW_5M_CANDLES"
+                                except Exception as tech_err:
+                                    tech_reason = f"ERROR: {str(tech_err)}"
+
+                                if not tech_confirmed:
+                                    log.info(
+                                        "AUTO_SCALP_SKIP_NO_TECHNICAL_CONFLUENCE",
+                                        symbol=cand.symbol,
+                                        side=getattr(cand, "direction", "buy"),
+                                        reason=tech_reason,
+                                    )
                                     continue
 
                                 best_symbol = cand.symbol

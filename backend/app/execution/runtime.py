@@ -334,39 +334,30 @@ class LiveExecutionRuntime:
             roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 4.0))
 
             # Tier 1 Dynamic Breakeven Lock:
-            # Once in profit by >= +0.35 USDT (or +0.35% move), shift stop to entry + 0.08% to cover all fees and eliminate all risk!
-            if (pos.unrealized_pnl >= 0.35 or price_diff_pct >= 0.35) and not getattr(pos, "breakeven_activated", False):
-                be_stop = round(entry * 1.0008, 6) if is_long else round(entry * 0.9992, 6)
+            # Activate only once firmly in profit by >= +0.70 USDT (or +0.70% move).
+            # Shift stop to entry + 0.20% to cover all exchange fees AND lock in >= +$0.20 guaranteed cash!
+            if (pos.unrealized_pnl >= 0.70 or price_diff_pct >= 0.70) and not getattr(pos, "breakeven_activated", False):
+                be_stop = round(entry * 1.0020, 6) if is_long else round(entry * 0.9980, 6)
                 pos = pos.model_copy(update={"stop": be_stop, "breakeven_activated": True})
                 self.positions[pos.position_id] = pos
                 await self.repository.save_position(pos)
-                structlog.get_logger().info("BREAKEVEN_STOP_LOCKED", pair=pos.pair, new_stop=be_stop)
+                structlog.get_logger().info("BREAKEVEN_STOP_LOCKED", pair=pos.pair, new_stop=be_stop, guaranteed_pnl="+0.20 USDT")
                 stop = be_stop
 
-            # Tier 2 Capital Defense Lock:
-            # Once in profit by >= +0.65 USDT (or +0.65% move), shift stop to entry + 0.35% to lock in >= +$0.35 USDT guaranteed profit!
-            if (pos.unrealized_pnl >= 0.65 or price_diff_pct >= 0.65) and not getattr(pos, "trailing_locked", False):
-                trail_stop = round(entry * 1.0035, 6) if is_long else round(entry * 0.9965, 6)
+            # Tier 2 High-Profit Guarantee Lock:
+            # Once in profit by >= +1.00 USDT (or +1.00% move), shift stop to entry + 0.60% to lock in >= +$0.60 USDT guaranteed profit!
+            if (pos.unrealized_pnl >= 1.00 or price_diff_pct >= 1.00) and not getattr(pos, "trailing_locked", False):
+                trail_stop = round(entry * 1.0060, 6) if is_long else round(entry * 0.9940, 6)
                 pos = pos.model_copy(update={"stop": trail_stop, "trailing_locked": True})
                 self.positions[pos.position_id] = pos
                 await self.repository.save_position(pos)
-                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T2", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.35 USDT")
+                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T2", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.60 USDT")
                 stop = trail_stop
 
-            # Tier 3 High-Profit Guarantee Lock:
-            # Once in profit by >= +0.95 USDT (or +0.95% move), shift stop to entry + 0.70% to lock in >= +$0.70 USDT guaranteed profit!
-            if (pos.unrealized_pnl >= 0.95 or price_diff_pct >= 0.95) and not getattr(pos, "tier3_locked", False):
-                t3_stop = round(entry * 1.0070, 6) if is_long else round(entry * 0.9930, 6)
-                pos = pos.model_copy(update={"stop": t3_stop, "tier3_locked": True})
-                self.positions[pos.position_id] = pos
-                await self.repository.save_position(pos)
-                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T3", pair=pos.pair, new_stop=t3_stop, guaranteed_pnl="+0.70 USDT")
-                stop = t3_stop
-
             auto_close_reason = None
-            # Condition 1: Primary Target Profit Reached (PnL >= +$1.25 USDT gross, netting >= +$1.13 USDT cash)
-            if pos.unrealized_pnl >= 1.25:
-                auto_close_reason = f"PROFIT_TARGET_REACHED (PnL +${pos.unrealized_pnl:.2f} USDT >= +$1.25 USDT | +{price_diff_pct:.2f}%)"
+            # Condition 1: Primary Target Profit Reached (PnL >= +$1.30 USDT gross, netting >= +$1.18 USDT cash)
+            if pos.unrealized_pnl >= 1.30:
+                auto_close_reason = f"PROFIT_TARGET_REACHED (PnL +${pos.unrealized_pnl:.2f} USDT >= +$1.30 USDT | +{price_diff_pct:.2f}%)"
             elif is_long and mark >= target:
                 auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
             elif not is_long and mark <= target:
@@ -381,25 +372,19 @@ class LiveExecutionRuntime:
                 else:
                     age_seconds = 0.0
 
-                # Fast Fakeout Cut: If trade has run for 20s-120s and immediately reverses <= -0.60%, cut early to cap loss!
-                if 20.0 <= age_seconds <= 120.0 and (price_diff_pct <= -0.60 or pos.unrealized_pnl <= -0.60):
-                    auto_close_reason = f"EARLY_FAKEOUT_CUT (Reversal at {int(age_seconds)}s | PnL ${pos.unrealized_pnl:.2f} USDT)"
-                # Stagnation Cut: If open > 2.5 minutes (150s) and price is negative (<= -0.30%), cut early
-                elif age_seconds >= 150.0 and (price_diff_pct <= -0.30 or pos.unrealized_pnl <= -0.30):
-                    auto_close_reason = f"STAGNATION_TIMEOUT_CUT (Open > 2.5m without forward momentum | PnL ${pos.unrealized_pnl:.2f} USDT)"
+                # Stagnation Cut: Only if open > 15 minutes (900s) without forward progress and negative (<= -0.50%)
+                if age_seconds >= 900.0 and (price_diff_pct <= -0.50 or pos.unrealized_pnl <= -0.50):
+                    auto_close_reason = f"STAGNATION_TIMEOUT_CUT (Open > 15m without forward momentum | PnL ${pos.unrealized_pnl:.2f} USDT)"
                 else:
-                    # Grace period: first 15s allows momentum to build
-                    can_trigger_stop = age_seconds >= 15.0 or price_diff_pct <= -1.2 or pos.unrealized_pnl <= -1.0
-
-                    if can_trigger_stop:
-                        if is_long and mark <= stop:
-                            trigger_name = "TRAILING_STOP_TRIGGER" if (getattr(pos, "tier3_locked", False) or getattr(pos, "trailing_locked", False)) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
-                            auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
-                        elif not is_long and mark >= stop:
-                            trigger_name = "TRAILING_STOP_TRIGGER" if (getattr(pos, "tier3_locked", False) or getattr(pos, "trailing_locked", False)) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
-                            auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
-                        elif pos.unrealized_pnl <= -1.05 and not getattr(pos, "breakeven_activated", False):
-                            auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.05 USDT)"
+                    # Allow momentum to build; check structural stop loss or trailing stop
+                    if is_long and mark <= stop:
+                        trigger_name = "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                        auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
+                    elif not is_long and mark >= stop:
+                        trigger_name = "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False) else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False) else "STOP_LOSS_TRIGGER"
+                        auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
+                    elif pos.unrealized_pnl <= -1.05 and not getattr(pos, "breakeven_activated", False):
+                        auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.05 USDT)"
 
             if auto_close_reason:
                 structlog.get_logger().info(
