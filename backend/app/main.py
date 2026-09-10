@@ -325,11 +325,13 @@ async def lifespan(application: FastAPI):
                         await _asyncio.sleep(5)
                         continue
 
-                # ── Daily Account-Wide Trade Cap ─────────────────────────────
+                # ── Daily Account-Wide Safety Guard ─────────────────────────────
+                # Compounding is governed by Net Profit Goal ($20) and Capital Shield (-$3.50).
+                # Generous ceiling (100 trades) prevents runaways while never blocking legitimate scalping.
                 daily_counts = getattr(live_runtime, "daily_symbol_trade_count", {})
                 total_daily_trades = sum(daily_counts.values())
-                if total_daily_trades >= 16:
-                    log.info("AUTO_SCALP_DAILY_ACCOUNT_TRADE_CAP_REACHED", total_trades=total_daily_trades, cap=16)
+                if total_daily_trades >= 100:
+                    log.info("AUTO_SCALP_DAILY_ACCOUNT_TRADE_CAP_REACHED", total_trades=total_daily_trades, cap=100)
                     await _asyncio.sleep(30)
                     continue
 

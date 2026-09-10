@@ -1307,6 +1307,8 @@ async def live_reset_daily_pnl(request: Request, settings: SettingsDependency) -
     runtime.today_losing_trades = 0
     runtime.consecutive_losses = 0
     runtime.consecutive_loss_cooldown_until = None
+    runtime.daily_symbol_trade_count = {}
+    runtime.symbol_cooldowns = {}
     if hasattr(runtime, "account") and runtime.account:
         runtime.account.daily_profit = 0.0
         runtime.account.daily_loss = 0.0
