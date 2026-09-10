@@ -1037,6 +1037,7 @@ async def live_account(request: Request, settings: SettingsDependency) -> dict:
             await runtime.refresh_account()
         except Exception as exc:
             last_err = f"{type(exc).__name__}: {exc}"
+    runtime.recalculate_today_metrics()
     data = runtime.account.model_dump(mode="json")
     net_pnl = round(getattr(runtime, "today_realized_profit", 0.0) - getattr(runtime, "today_realized_loss", 0.0), 3)
     data["daily_pnl"] = net_pnl
@@ -1107,6 +1108,7 @@ async def live_orders(request: Request, settings: SettingsDependency) -> dict:
 async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: int = 150) -> dict:
     authorize_live(request, settings)
     runtime = live_runtime_from(request)
+    runtime.recalculate_today_metrics()
 
     # Collect all positions from runtime memory
     all_positions = list(runtime.positions.values())
@@ -1141,9 +1143,12 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
             exit_reason = "TAKE_PROFIT" if pnl > 0 else "STOP_LOSS"
 
         trades_list.append({
+            "id": str(pos.position_id),
             "position_id": str(pos.position_id),
             "exchange_position_id": pos.exchange_position_id,
+            "symbol": pos.pair,
             "pair": pos.pair,
+            "side": "BUY" if str(pos.direction).lower() in ("long", "buy") else "SELL",
             "direction": str(pos.direction).lower(),
             "quantity": qty,
             "entry_price": entry_px,
@@ -1165,14 +1170,24 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
 
     # ── Daily Performance Aggregation ──
     from collections import defaultdict
+    from datetime import timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+
     daily_groups = defaultdict(list)
     for t in trades_list:
         raw_dt = t.get("closed_at") or t.get("created_at")
-        dt_str = raw_dt[:10] if raw_dt else None
+        if raw_dt:
+            try:
+                parsed_dt = datetime.fromisoformat(raw_dt.replace("Z", "+00:00")).astimezone(IST)
+                dt_str = parsed_dt.strftime("%Y-%m-%d")
+            except Exception:
+                dt_str = raw_dt[:10]
+        else:
+            dt_str = datetime.now(IST).strftime("%Y-%m-%d")
         if dt_str:
             daily_groups[dt_str].append(t)
 
-    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    today_str = datetime.now(IST).strftime("%Y-%m-%d")
     if today_str not in daily_groups:
         daily_groups[today_str] = []
 
@@ -1190,11 +1205,16 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
         daily_breakdown.append({
             "date": d_str,
             "realized_pnl": round(d_pnl, 3),
+            "net_pnl": round(d_pnl, 3),
             "profit": round(d_profit, 3),
+            "gross_profit": round(d_profit, 3),
             "loss": round(d_loss, 3),
+            "gross_loss": round(d_loss, 3),
             "wins": d_wins,
             "losses": d_losses,
             "trades_count": t_count,
+            "total_closed_trades": t_count,
+            "win_rate": w_rate,
             "win_rate_pct": w_rate,
             "trades": d_trades,
         })
@@ -1231,14 +1251,19 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
         w_rate = round((w_wins / t_count) * 100.0, 1) if t_count > 0 else 0.0
 
         weekly_breakdown.append({
+            "week": w_key,
             "week_id": w_key,
             "week_label": f"Week {w_key.split('-W')[-1]}, {w_key.split('-W')[0]}",
             "realized_pnl": round(w_pnl, 3),
+            "net_pnl": round(w_pnl, 3),
             "profit": round(w_profit, 3),
+            "gross_profit": round(w_profit, 3),
             "loss": round(w_loss, 3),
+            "gross_loss": round(w_loss, 3),
             "wins": w_wins,
             "losses": w_losses,
             "trades_count": t_count,
+            "win_rate": w_rate,
             "win_rate_pct": w_rate,
             "trades": w_trades,
         })
@@ -1269,8 +1294,12 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
     summary = {
         "total_realized_pnl": round(tot_pnl, 3),
         "total_trades": tot_trades,
+        "total_closed_trades": tot_trades,
         "total_wins": tot_wins,
+        "winning_trades": tot_wins,
         "total_losses": tot_losses,
+        "losing_trades": tot_losses,
+        "win_rate": tot_winrate,
         "win_rate_pct": tot_winrate,
         "profit_factor": profit_factor,
         "today_pnl": round(today_pnl, 3),
@@ -1278,6 +1307,8 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
         "today_losses": today_losses,
         "today_profit": round(getattr(runtime, "today_realized_profit", 0.0), 3),
         "today_loss": round(getattr(runtime, "today_realized_loss", 0.0), 3),
+        "gross_profit": round(tot_profit, 3),
+        "gross_loss": round(tot_loss, 3),
         "daily_target_cap": target_cap,
         "daily_target_progress_pct": min(100.0, max(0.0, round((today_pnl / target_cap) * 100.0, 1))) if today_pnl > 0 else 0.0,
         "this_week_pnl": round(this_week_pnl, 3),
@@ -1301,6 +1332,7 @@ async def live_reset_daily_pnl(request: Request, settings: SettingsDependency) -
     """Manually or remotely reset today's PnL, wins, and losses back to clean 0.00 baseline."""
     authorize_live(request, settings)
     runtime = live_runtime_from(request)
+    runtime.daily_metrics_reset_at = datetime.now(UTC)
     runtime.today_realized_profit = 0.0
     runtime.today_realized_loss = 0.0
     runtime.today_winning_trades = 0
@@ -2110,6 +2142,7 @@ async def reset_circuit(request: Request, settings: SettingsDependency) -> dict:
     if hasattr(runtime, "emergency_stop"):
         runtime.emergency_stop.resume()
     from app.execution.models import LiveRuntimeState
+    runtime.daily_metrics_reset_at = datetime.now(UTC)
     runtime.today_realized_loss = 0.0
     runtime.today_realized_profit = 0.0
     runtime.today_winning_trades = 0

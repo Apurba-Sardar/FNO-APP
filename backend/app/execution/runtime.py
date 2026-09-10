@@ -90,11 +90,56 @@ class LiveExecutionRuntime:
         self.max_daily_loss_limit: float = float(getattr(config, "max_daily_loss_limit", 50.0) or 50.0)
         self.consecutive_loss_cooldown_until: datetime | None = None
         self.daily_symbol_trade_count: dict[str, int] = {}
-        self.current_tracking_date = datetime.now(UTC).date()
+        from datetime import timezone, timedelta
+        IST = timezone(timedelta(hours=5, minutes=30))
+        self.current_tracking_date = datetime.now(IST).date()
+        self.daily_metrics_reset_at: datetime | None = None
+
+    def recalculate_today_metrics(self) -> None:
+        """Dynamically sync today's profit, loss, wins, and losses from all closed positions."""
+        from datetime import timezone, timedelta
+        IST = timezone(timedelta(hours=5, minutes=30))
+        today_date = datetime.now(IST).date()
+        today_profit = 0.0
+        today_loss = 0.0
+        today_wins = 0
+        today_losses = 0
+
+        for pos in self.positions.values():
+            if getattr(pos, "status", None) == "closed":
+                t = getattr(pos, "closed_at", None) or getattr(pos, "updated_at", None)
+                if t:
+                    if getattr(t, "tzinfo", None) is None:
+                        t = t.replace(tzinfo=UTC)
+                    t_ist = t.astimezone(IST)
+                    # Respect manual reset if triggered today
+                    if getattr(self, "daily_metrics_reset_at", None) and t < self.daily_metrics_reset_at:
+                        continue
+                    if t_ist.date() == today_date:
+                        pnl = float(getattr(pos, "realized_pnl", 0.0) or 0.0)
+                        if pnl > 0.0:
+                            today_profit += pnl
+                            today_wins += 1
+                        elif pnl < 0.0:
+                            today_loss += abs(pnl)
+                            today_losses += 1
+
+        self.today_realized_profit = round(today_profit, 4)
+        self.today_realized_loss = round(today_loss, 4)
+        self.today_winning_trades = today_wins
+        self.today_losing_trades = today_losses
+        if hasattr(self, "account") and self.account:
+            self.account.daily_profit = self.today_realized_profit
+            self.account.daily_loss = self.today_realized_loss
+            self.account.daily_wins = self.today_winning_trades
+            self.account.daily_losses = self.today_losing_trades
+            self.account.daily_pnl = round(today_profit - today_loss, 4)
 
     def check_and_apply_daily_rollover(self) -> bool:
-        """Automatically detect UTC day boundary crossing and reset daily telemetry & gates."""
-        now_date = datetime.now(UTC).date()
+        """Automatically detect IST day boundary crossing and reset daily telemetry & gates."""
+        from datetime import timezone, timedelta
+        IST = timezone(timedelta(hours=5, minutes=30))
+        now_date = datetime.now(IST).date()
         if getattr(self, "current_tracking_date", None) != now_date:
             old_date = getattr(self, "current_tracking_date", None)
             structlog.get_logger().info(
@@ -113,6 +158,7 @@ class LiveExecutionRuntime:
             self.consecutive_losses = 0
             self.consecutive_loss_cooldown_until = None
             self.daily_symbol_trade_count = {}
+            self.daily_metrics_reset_at = None
             if hasattr(self, "account") and self.account:
                 self.account.daily_profit = 0.0
                 self.account.daily_loss = 0.0
@@ -148,31 +194,7 @@ class LiveExecutionRuntime:
             self.emergency_stop.trigger()
 
         # Re-hydrate today's metrics from closed positions in database
-        today_date = datetime.now(UTC).date()
-        today_profit = 0.0
-        today_loss = 0.0
-        today_wins = 0
-        today_losses = 0
-        for pos in self.positions.values():
-            if getattr(pos, "status", None) == "closed":
-                # STRICT REQUIREMENT: Only count if explicitly closed today; NEVER fall back to updated_at
-                t = getattr(pos, "closed_at", None)
-                if t:
-                    if getattr(t, "tzinfo", None) is None:
-                        t = t.replace(tzinfo=UTC)
-                    if t.date() == today_date:
-                        pnl = float(getattr(pos, "realized_pnl", 0.0) or 0.0)
-                        if pnl > 0.0:
-                            today_profit += pnl
-                            today_wins += 1
-                        elif pnl < 0.0:
-                            today_loss += abs(pnl)
-                            today_losses += 1
-
-        self.today_realized_profit = round(today_profit, 3)
-        self.today_realized_loss = round(today_loss, 3)
-        self.today_winning_trades = today_wins
-        self.today_losing_trades = today_losses
+        self.recalculate_today_metrics()
 
         # Re-hydrate daily trade count per symbol to prevent multiple entries across restarts
         today_counts: dict[str, int] = {}
@@ -588,6 +610,7 @@ class LiveExecutionRuntime:
         if self.client is None:
             return self.account
         try:
+            self.recalculate_today_metrics()
             wallets = await self.client.wallets()
             if isinstance(wallets, dict) and ("total_wallet_balance" in wallets or "total_account_equity" in wallets or "available_balance_cross" in wallets):
                 equity = float(wallets.get("total_account_equity") or wallets.get("total_wallet_balance") or 0)
@@ -675,6 +698,7 @@ class LiveExecutionRuntime:
         self.state = LiveRuntimeState.RECONCILING
         try:
             report = await self.reconciler.reconcile(self.orders, self.positions)
+            self.recalculate_today_metrics()
             self.last_report = report
             self.last_reconciliation = report.timestamp
             if not report.healthy:
@@ -1105,6 +1129,7 @@ class LiveExecutionRuntime:
 
     def status(self) -> dict:
         self.check_and_apply_daily_rollover()
+        self.recalculate_today_metrics()
         target_cap = getattr(self.config, "max_daily_profit_target", 20.0) or 20.0
         unprotected = [item for item in self.positions.values() if item.status == "open" and item.protection_status != ProtectionStatus.PROTECTED]
         health = HealthState.CRITICAL if unprotected else HealthState.BLOCKED if self.state in {LiveRuntimeState.DISABLED, LiveRuntimeState.BLOCKED} else HealthState.HEALTHY

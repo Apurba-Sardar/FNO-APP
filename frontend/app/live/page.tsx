@@ -1,6 +1,6 @@
 "use client";
 
-import { balance, formatIST, formatISTTime, timeAgo } from "@/lib/format";
+import { balance, formatINR, formatIST, formatISTTime, timeAgo } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { TradingViewChart, TradeDetailInfo } from "@/components/tradingview-chart";
 import { getApiUrl } from "@/lib/api";
@@ -349,6 +349,15 @@ export default function LivePage() {
     [positions]
   );
 
+  // Normalized telemetry metrics for Today's PnL, Gains, and Losses
+  const currentDailyProfit = Number(status.daily_profit ?? account.daily_profit ?? ledgerLogsData?.summary?.today_profit ?? 0);
+  const currentDailyLoss = Number(status.daily_loss ?? account.daily_loss ?? ledgerLogsData?.summary?.today_loss ?? 0);
+  const currentDailyPnl = Number(
+    status.daily_pnl ?? account.daily_pnl ?? ledgerLogsData?.summary?.today_pnl ?? (currentDailyProfit - currentDailyLoss)
+  );
+  const currentDailyWins = Number(status.daily_wins ?? account.daily_wins ?? ledgerLogsData?.summary?.today_wins ?? 0);
+  const currentDailyLosses = Number(status.daily_losses ?? account.daily_losses ?? ledgerLogsData?.summary?.today_losses ?? 0);
+
   const isArmed = status.runtime_state === "armed";
 
   // Build tradeInfo for currently selected symbol
@@ -641,6 +650,9 @@ export default function LivePage() {
               <b className="mt-0.5 block text-base sm:text-lg font-black text-white font-mono">
                 ${balance(status.daily_profit_target && status.daily_profit_target > 0 ? status.daily_profit_target : 20.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
               </b>
+              <span className="text-[10px] font-mono font-bold text-slate-400 block mt-0.5">
+                ≈ {formatINR(status.daily_profit_target && status.daily_profit_target > 0 ? status.daily_profit_target : 20.0)}
+              </span>
             </div>
             <div className="border-l border-white/10 pl-4 sm:pl-6">
               <div className="flex items-center justify-end gap-2">
@@ -663,10 +675,13 @@ export default function LivePage() {
                 </button>
               </div>
               <b className={`mt-0.5 block text-xl sm:text-2xl font-black font-mono tracking-tight ${
-                (status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) >= 0 ? "text-[#00F5A0]" : "text-rose-400"
+                currentDailyPnl >= 0 ? "text-[#00F5A0]" : "text-rose-400"
               }`}>
-                {(status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) >= 0 ? "+" : ""}{balance(status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0)))} <span className="text-xs font-normal text-slate-400">USDT</span>
+                {currentDailyPnl >= 0 ? "+" : ""}{balance(currentDailyPnl)} <span className="text-xs font-normal text-slate-400">USDT</span>
               </b>
+              <span className={`text-xs font-bold font-mono block mt-0.5 ${currentDailyPnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                {currentDailyPnl >= 0 ? "+" : ""}{formatINR(currentDailyPnl)}
+              </span>
             </div>
           </div>
         </div>
@@ -678,17 +693,20 @@ export default function LivePage() {
             <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-emerald-400">
               <span>Today&apos;s Gains</span>
               <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">
-                {status.daily_wins ?? 0} Wins
+                {currentDailyWins} Wins
               </span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1">
               <b className="text-lg font-black text-emerald-400 font-mono">
-                +${balance(status.daily_profit ?? 0)}
+                +${balance(currentDailyProfit)}
               </b>
               <span className="text-[10px] text-slate-400">USDT</span>
             </div>
-            <span className="text-[10px] text-slate-400 mt-0.5">
-              Goal: {status.daily_wins ?? 0} / 20 Winning Trades
+            <span className="text-xs font-bold font-mono text-emerald-400/90 block mt-0.5">
+              +{formatINR(currentDailyProfit)}
+            </span>
+            <span className="text-[10px] text-slate-400 mt-1">
+              Goal: {currentDailyWins} / 20 Winning Trades
             </span>
           </div>
 
@@ -697,17 +715,20 @@ export default function LivePage() {
             <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-rose-400">
               <span>Today&apos;s Losses</span>
               <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono font-bold">
-                {status.daily_losses ?? 0} Losses
+                {currentDailyLosses} Losses
               </span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1">
               <b className="text-lg font-black text-rose-400 font-mono">
-                -${balance(status.daily_loss ?? 0)}
+                -${balance(currentDailyLoss)}
               </b>
               <span className="text-[10px] text-slate-400">USDT</span>
             </div>
-            <span className="text-[10px] text-slate-400 mt-0.5">
-              Circuit Breaker: Max -${balance(status.max_daily_loss_limit ?? 3.50)}
+            <span className="text-xs font-bold font-mono text-rose-400/90 block mt-0.5">
+              -{formatINR(currentDailyLoss)}
+            </span>
+            <span className="text-[10px] text-slate-400 mt-1">
+              Circuit Breaker: Max -${balance(status.max_daily_loss_limit ?? 50.0)} ({formatINR(status.max_daily_loss_limit ?? 50.0)})
             </span>
           </div>
 
@@ -723,12 +744,15 @@ export default function LivePage() {
             </div>
             <div className="mt-1.5 flex items-baseline gap-1">
               <b className="text-lg font-black text-white font-mono">
-                ${balance(status.max_daily_loss_limit ?? 3.50)}
+                ${balance(status.max_daily_loss_limit ?? 50.0)}
               </b>
               <span className="text-[10px] text-slate-400">Max Risk Cap</span>
             </div>
-            <span className="text-[10px] text-slate-400 mt-0.5">
-              Protects equity (~${balance(account.equity ?? 87.28)})
+            <span className="text-xs font-bold font-mono text-slate-300 block mt-0.5">
+              ≈ {formatINR(status.max_daily_loss_limit ?? 50.0)}
+            </span>
+            <span className="text-[10px] text-slate-400 mt-1">
+              Protects equity (~${balance(account.equity ?? 178.47)} · {formatINR(account.equity ?? 178.47)})
             </span>
           </div>
 
@@ -859,7 +883,10 @@ export default function LivePage() {
           <b className="mt-1.5 sm:mt-2 block text-xl sm:text-3xl font-black text-white font-mono tracking-tight">
             ${balance(account.equity)} <span className="text-xs text-slate-400 font-normal">USDT</span>
           </b>
-          <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
+          <span className="text-xs font-bold font-mono text-slate-400 block mt-0.5">
+            ≈ {formatINR(account.equity)}
+          </span>
+          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
             <span className="text-emerald-400">✓</span> Total equity on CoinDCX
           </div>
         </div>
@@ -872,7 +899,10 @@ export default function LivePage() {
           <b className="mt-1.5 sm:mt-2 block text-xl sm:text-3xl font-black text-[#00F5A0] font-mono tracking-tight">
             ${balance(account.available_balance)} <span className="text-xs text-[#00F5A0]/80 font-normal">USDT</span>
           </b>
-          <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#00F5A0]/80 truncate">
+          <span className="text-xs font-bold font-mono text-[#00F5A0]/80 block mt-0.5">
+            ≈ {formatINR(account.available_balance)}
+          </span>
+          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#00F5A0]/80 truncate">
             <span>⚡</span> 100% Free · 4x Ready
           </div>
         </div>
@@ -885,7 +915,10 @@ export default function LivePage() {
           <b className="mt-1.5 sm:mt-2 block text-xl sm:text-3xl font-black text-slate-200 font-mono tracking-tight">
             ${balance(account.locked_margin)} <span className="text-xs text-slate-400 font-normal">USDT</span>
           </b>
-          <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
+          <span className="text-xs font-bold font-mono text-slate-400 block mt-0.5">
+            ≈ {formatINR(account.locked_margin)}
+          </span>
+          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
             <span>🛡️</span> Active scalp margin
           </div>
         </div>

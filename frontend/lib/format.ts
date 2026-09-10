@@ -76,6 +76,27 @@ export function balance(value: unknown, maxDecimals = 4, minDecimals = 2): strin
   });
 }
 
+/**
+ * Benchmark USDT to INR conversion rate for CoinDCX / Indian domestic markets.
+ * Standard P2P / exchange rate benchmark is ₹91.50 per USDT.
+ */
+export const USDT_INR_RATE = 91.50;
+
+/**
+ * Format a USDT value as Indian Rupees (₹).
+ * Example: 2.50 USDT → "₹228.75"
+ */
+export function formatINR(value: unknown, maxDecimals = 2, minDecimals = 2): string {
+  const num = Number(value ?? 0);
+  if (isNaN(num)) return "₹0.00";
+  const inr = num * USDT_INR_RATE;
+  const isNeg = inr < 0;
+  return `${isNeg ? "-" : ""}₹${Math.abs(inr).toLocaleString("en-IN", {
+    maximumFractionDigits: maxDecimals,
+    minimumFractionDigits: minDecimals,
+  })}`;
+}
+
 export function formatPercent(value: number | null | undefined): string {
   if (value == null || isNaN(value)) return "0.00%";
   const prefix = value > 0 ? "+" : "";
