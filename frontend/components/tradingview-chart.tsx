@@ -125,7 +125,7 @@ export function TradingViewChart({
         </div>
 
         {/* Quick Trade Selector Pills */}
-        <div className="mt-3.5 flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+        <div className="mt-3.5 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 text-xs">
           <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider shrink-0">Select Pair:</span>
           {availableSymbols.length > 0 ? (
             availableSymbols.map(item => {
@@ -294,7 +294,7 @@ export function TradingViewChart({
       )}
 
       {/* TradingView Candlestick Graph */}
-      <div className="h-[560px] w-full bg-[#090d16]">
+      <div className="h-[380px] sm:h-[480px] lg:h-[560px] w-full bg-[#090d16]">
         <iframe
           key={`${tvSymbol}-${timeframe}`}
           src={embedUrl}

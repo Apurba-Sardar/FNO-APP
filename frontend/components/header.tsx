@@ -110,10 +110,10 @@ export function Header() {
               <span className="hidden xl:inline text-[11px]">Settings</span>
             </Link>
 
-            {/* Logout Button */}
+            {/* Logout Button (Desktop / Tablet) */}
             <button
               onClick={logout}
-              className="rounded-xl border border-white/[0.08] bg-[#0c0c10] px-3 py-1.5 font-semibold text-zinc-400 hover:bg-white/[0.08] hover:text-white hover:border-white/[0.14] transition text-xs shadow-inner"
+              className="hidden sm:inline-flex rounded-xl border border-white/[0.08] bg-[#0c0c10] px-3 py-1.5 font-semibold text-zinc-400 hover:bg-white/[0.08] hover:text-white hover:border-white/[0.14] transition text-xs shadow-inner cursor-pointer"
             >
               Sign out
             </button>
@@ -121,7 +121,8 @@ export function Header() {
             {/* Mobile menu trigger */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden rounded-lg border border-white/[0.1] bg-[#0c0c10] p-1.5 text-zinc-400 hover:text-white"
+              className="lg:hidden rounded-lg border border-white/[0.1] bg-[#0c0c10] p-1.5 text-zinc-400 hover:text-white cursor-pointer"
+              aria-label="Toggle navigation menu"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
@@ -148,6 +149,18 @@ export function Header() {
                 </Link>
               );
             })}
+            <div className="pt-2 mt-1 border-t border-white/[0.06] flex items-center justify-between px-2">
+              <span className="text-[11px] text-zinc-500 font-mono">IST: {currentIST}</span>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  logout();
+                }}
+                className="text-xs font-bold text-rose-400 hover:text-rose-300 py-1 px-2.5 rounded bg-rose-500/10 border border-rose-500/20 cursor-pointer"
+              >
+                Sign out
+              </button>
+            </div>
           </nav>
         )}
       </div>

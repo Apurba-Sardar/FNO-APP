@@ -228,3 +228,32 @@ tbody tr:hover {
   background: #3f3f46;
 }
 
+/* ── Mobile Touch & Flagship Responsive Rules (S24 Ultra / Modern Viewports) ── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Hide scrollbar for clean horizontal chip ribbons on mobile */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Mobile tap highlighting and smooth scrolling */
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Touch-friendly target size standard */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+

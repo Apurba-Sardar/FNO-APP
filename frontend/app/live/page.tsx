@@ -439,64 +439,64 @@ export default function LivePage() {
   };
 
   return (
-    <main className="mx-auto max-w-[1600px] p-4 sm:p-8 space-y-7">
+    <main className="mx-auto max-w-[1600px] p-3 sm:p-6 lg:p-8 space-y-5 sm:space-y-7">
       {/* Top CRED Luxury Command Header */}
-      <header className="cred-surface relative overflow-hidden rounded-3xl p-6 sm:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.9)]">
+      <header className="cred-surface relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-[0_25px_60px_rgba(0,0,0,0.9)]">
         {/* Subtle Ambient Radial Glows */}
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#00F5A0]/10 blur-3xl"></div>
         <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl"></div>
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5 sm:gap-6">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00F5A0]/10 px-3 py-1 text-[11px] font-black tracking-wider uppercase text-[#00F5A0] border border-[#00F5A0]/30 shadow-[0_0_15px_rgba(0,245,160,0.2)]">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-[#00F5A0]/10 px-3 py-1 text-[11px] font-black tracking-wider uppercase text-[#00F5A0] border border-[#00F5A0]/30 shadow-[0_0_15px_rgba(0,245,160,0.2)]">
                 <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-pulse"></span>
                 CoinDCX Futures Live
               </span>
-              <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-3 py-1 text-[11px] text-slate-300 font-mono">
-                Indian Standard Time (IST) Active
+              <span className="shrink-0 rounded-full bg-white/[0.04] border border-white/[0.08] px-3 py-1 text-[11px] text-slate-300 font-mono">
+                IST Time Active
               </span>
-              <span className="rounded-full bg-emerald-500/10 border border-emerald-500/25 px-3 py-1 text-[11px] font-black text-[#00F5A0] flex items-center gap-1.5">
+              <span className="shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/25 px-3 py-1 text-[11px] font-black text-[#00F5A0] flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#00F5A0] animate-pulse"></span>
-                <span>🔄 Bi-Directional: BUY & SELL Scalping Active</span>
+                <span>🔄 BUY & SELL Active</span>
               </span>
-              <span className="rounded-full bg-indigo-500/10 border border-indigo-500/25 px-3 py-1 text-[11px] font-bold text-indigo-300">
-                ⚡ 3x Isolated Leverage Enforced
+              <span className="shrink-0 rounded-full bg-indigo-500/10 border border-indigo-500/25 px-3 py-1 text-[11px] font-bold text-indigo-300">
+                ⚡ 4x Isolated Leverage
               </span>
             </div>
-            <h1 className="mt-3 text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-2">
+            <h1 className="mt-2.5 sm:mt-3 text-xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-2">
               <span className="bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
                 Live Trading Command Suite
               </span>
             </h1>
-            <p className="mt-1.5 text-xs sm:text-sm text-slate-400 font-normal max-w-2xl leading-relaxed">
+            <p className="mt-1 text-xs sm:text-sm text-slate-400 font-normal max-w-2xl leading-relaxed">
               Fully autonomous algorithmic research, position sizing, execution, and risk guardrails synchronized in real time with CoinDCX.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <button
               onClick={() => setShowAlertModal(true)}
-              className="cred-btn-secondary rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2"
+              className="cred-btn-secondary rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer"
             >
-              <span className="text-base">📱</span>
-              <span>S24 Ultra Alerts</span>
+              <span className="text-sm sm:text-base">📱</span>
+              <span>S24 Alerts</span>
               <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-pulse"></span>
             </button>
             <button
               onClick={() => setShowTokens(!showTokens)}
-              className="cred-btn-secondary rounded-xl px-4 py-2.5 text-xs font-bold text-slate-300"
+              className="cred-btn-secondary rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-bold text-slate-300 shrink-0 cursor-pointer"
             >
-              {showTokens ? "Hide Security Keys" : "Security & Keys"}
+              {showTokens ? "Hide Keys" : "Keys"}
             </button>
             <button
               onClick={() => load().catch(e => setMessage(e.message))}
-              className="cred-btn-primary rounded-xl px-5 py-2.5 text-xs font-black flex items-center gap-2"
+              className="cred-btn-primary rounded-xl px-3.5 sm:px-5 py-2 sm:py-2.5 text-xs font-black flex items-center gap-1.5 shrink-0 cursor-pointer"
             >
               <svg className="w-3.5 h-3.5 animate-spin-hover" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              Refresh Engine
+              Refresh
             </button>
           </div>
         </div>
@@ -589,21 +589,21 @@ export default function LivePage() {
       )}
 
       {/* Daily Profit Target & Milestone Card (CRED Club Luxury Gold System) */}
-      <section className="cred-surface-gold relative overflow-hidden rounded-3xl p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.85)]">
+      <section className="cred-surface-gold relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.85)]">
         {/* Subtle Ambient Gold Radial Glow */}
         <div className="pointer-events-none absolute -top-20 -right-20 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl"></div>
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-start gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-2xl text-slate-950 shadow-[0_0_25px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.6)] shrink-0">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-xl sm:text-2xl text-slate-950 shadow-[0_0_25px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.6)] shrink-0">
               🎯
             </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-300">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                <span className="shrink-0 text-[11px] font-black uppercase tracking-[0.2em] text-amber-300">
                   Daily Compounding Goal · $20 USDT Target
                 </span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                   (account.daily_pnl ?? 0) >= (status.daily_profit_target ?? 20.0) || (status.daily_wins ?? 0) >= 20
                     ? "bg-emerald-400 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
                     : "bg-amber-400/15 text-amber-300 border border-amber-400/30"
@@ -612,10 +612,10 @@ export default function LivePage() {
                     ? "Goal Unlocked 🏆 (20 Wins Reached)"
                     : `Active Target: $${balance(status.daily_profit_target ?? 20.0)} USDT`}
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00F5A0]/10 text-[#00F5A0] border border-[#00F5A0]/30">
-                  ⚡ Target: ≥ +$1.00 USDT Net / Trade
+                <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00F5A0]/10 text-[#00F5A0] border border-[#00F5A0]/30">
+                  ⚡ Target: ≥ +$1.80+ USDT Net / Trade
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   status.capital_shield_active
                     ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse"
                     : "bg-blue-500/10 text-blue-300 border border-blue-500/30"
@@ -624,19 +624,19 @@ export default function LivePage() {
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1.5 max-w-xl leading-relaxed">
-                Autonomous capital-shielded compounding plan. Allocates $25 margin @ 4x leverage ($100 notional) with sub-second profit locking (+0.40% breakeven stop, +0.75% trailing lock, 4m stagnation cut). Automatically halts entries if daily losses hit -$3.50 or target reaches $20.00 USDT.
+                Autonomous capital-shielded compounding plan. Allocates $36 margin @ 4x leverage ($145 notional) with 3-layer sniper confluence and sub-second profit locking. Automatically halts entries if daily losses hit -$3.50 or target reaches $20.00 USDT.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-6 self-end md:self-auto text-right">
+          <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 w-full sm:w-auto text-right pt-3 sm:pt-0 border-t sm:border-t-0 border-white/10">
             <div>
               <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Today&apos;s Target Cap</span>
-              <b className="mt-0.5 block text-lg font-black text-white font-mono">
+              <b className="mt-0.5 block text-base sm:text-lg font-black text-white font-mono">
                 ${balance(status.daily_profit_target && status.daily_profit_target > 0 ? status.daily_profit_target : 20.0)} <span className="text-xs text-slate-400 font-normal">USDT</span>
               </b>
             </div>
-            <div className="border-l border-white/10 pl-6">
+            <div className="border-l border-white/10 pl-4 sm:pl-6">
               <div className="flex items-center justify-end gap-2">
                 <span className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 block">Realized Net P&L</span>
                 <button
@@ -656,7 +656,7 @@ export default function LivePage() {
                   <span>📊 Ledger ↗</span>
                 </button>
               </div>
-              <b className={`mt-0.5 block text-2xl font-black font-mono tracking-tight ${
+              <b className={`mt-0.5 block text-xl sm:text-2xl font-black font-mono tracking-tight ${
                 (status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) >= 0 ? "text-[#00F5A0]" : "text-rose-400"
               }`}>
                 {(status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0))) >= 0 ? "+" : ""}{balance(status.daily_pnl ?? account.daily_pnl ?? ((status.daily_profit ?? 0) - (status.daily_loss ?? 0)))} <span className="text-xs font-normal text-slate-400">USDT</span>
@@ -666,7 +666,7 @@ export default function LivePage() {
         </div>
 
         {/* Capital Risk Shield & Daily PnL Telemetry Grid */}
-        <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08] grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08] grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
           {/* Card 1: Realized Gains */}
           <div className="rounded-xl bg-black/40 border border-emerald-500/20 p-3 flex flex-col justify-between">
             <div className="flex items-center justify-between text-[10px] uppercase font-black tracking-wider text-emerald-400">
@@ -844,61 +844,61 @@ export default function LivePage() {
       )}
 
       {/* Account Overview 4-Metric Grid (CRED Luxury Obsidian Glass) */}
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="cred-surface rounded-2xl p-5 hover:border-white/20 transition-all">
+      <section className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
+        <div className="cred-surface rounded-xl sm:rounded-2xl p-3.5 sm:p-5 hover:border-white/20 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Total Portfolio Value</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Portfolio Value</span>
             <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
           </div>
-          <b className="mt-2 block text-2xl sm:text-3xl font-black text-white font-mono tracking-tight">
+          <b className="mt-1.5 sm:mt-2 block text-xl sm:text-3xl font-black text-white font-mono tracking-tight">
             ${balance(account.equity)} <span className="text-xs text-slate-400 font-normal">USDT</span>
           </b>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="text-emerald-400">✓</span> Full account equity on CoinDCX
+          <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
+            <span className="text-emerald-400">✓</span> Total equity on CoinDCX
           </div>
         </div>
 
-        <div className="cred-surface-glow rounded-2xl p-5 hover:border-[#00F5A0]/50 transition-all">
+        <div className="cred-surface-glow rounded-xl sm:rounded-2xl p-3.5 sm:p-5 hover:border-[#00F5A0]/50 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#00F5A0]">Available Free Cash</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#00F5A0]">Available Cash</span>
             <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-pulse"></span>
           </div>
-          <b className="mt-2 block text-2xl sm:text-3xl font-black text-[#00F5A0] font-mono tracking-tight">
+          <b className="mt-1.5 sm:mt-2 block text-xl sm:text-3xl font-black text-[#00F5A0] font-mono tracking-tight">
             ${balance(account.available_balance)} <span className="text-xs text-[#00F5A0]/80 font-normal">USDT</span>
           </b>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#00F5A0]/80">
-            <span>⚡</span> 100% Free · Ready for 3x Scalps
+          <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#00F5A0]/80 truncate">
+            <span>⚡</span> 100% Free · 4x Ready
           </div>
         </div>
 
-        <div className="cred-surface rounded-2xl p-5 hover:border-white/20 transition-all">
+        <div className="cred-surface rounded-xl sm:rounded-2xl p-3.5 sm:p-5 hover:border-white/20 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Locked in Trades</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Locked Margin</span>
             <span className="h-2 w-2 rounded-full bg-indigo-400"></span>
           </div>
-          <b className="mt-2 block text-2xl sm:text-3xl font-black text-slate-200 font-mono tracking-tight">
+          <b className="mt-1.5 sm:mt-2 block text-xl sm:text-3xl font-black text-slate-200 font-mono tracking-tight">
             ${balance(account.locked_margin)} <span className="text-xs text-slate-400 font-normal">USDT</span>
           </b>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span>🛡️</span> Active position margin at risk
+          <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
+            <span>🛡️</span> Active scalp margin
           </div>
         </div>
 
-        <div className="cred-surface rounded-2xl p-5 hover:border-white/20 transition-all">
+        <div className="cred-surface rounded-xl sm:rounded-2xl p-3.5 sm:p-5 hover:border-white/20 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Active Scalp Trades</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Active Trades</span>
             <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
               openPositions.length > 0 ? "bg-[#00F5A0]/20 text-[#00F5A0]" : "bg-white/10 text-slate-400"
             }`}>
               {openPositions.length > 0 ? "In Trade" : "Scanning"}
             </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <b className="text-2xl sm:text-3xl font-black text-white font-mono">{openPositions.length}</b>
-            <span className="text-xs font-bold text-slate-400">Positions Open</span>
+          <div className="mt-1.5 sm:mt-2 flex items-baseline gap-2">
+            <b className="text-xl sm:text-3xl font-black text-white font-mono">{openPositions.length}</b>
+            <span className="text-xs font-bold text-slate-400">Positions</span>
           </div>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span>📈</span> Enforced 3x Leverage Scalper
+          <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
+            <span>📈</span> Max 2 Concurrent Scalps
           </div>
         </div>
       </section>
@@ -997,9 +997,9 @@ export default function LivePage() {
       </section>
 
       {/* Main Bottom Grid: Active Positions & Trade Logs */}
-      <section className="grid gap-6 lg:grid-cols-2">
+      <section className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Left Card: Active Trades & Open Holdings */}
-        <Card className="cred-surface rounded-3xl p-6 sm:p-7 border border-white/[0.08] shadow-2xl relative overflow-hidden">
+        <Card className="cred-surface rounded-2xl sm:rounded-3xl p-4 sm:p-7 border border-white/[0.08] shadow-2xl relative overflow-hidden">
           <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/45">CoinDCX Futures Portfolio</p>
@@ -1025,7 +1025,7 @@ export default function LivePage() {
                   <div
                     key={p.position_id}
                     onClick={() => selectAndScroll(p.pair)}
-                    className={`rounded-2xl border p-4 sm:p-5 transition cursor-pointer backdrop-blur-xl ${
+                    className={`rounded-xl sm:rounded-2xl border p-3.5 sm:p-5 transition cursor-pointer backdrop-blur-xl ${
                       isSelected
                         ? "border-[#00F5A0] bg-[#00F5A0]/[0.06] shadow-xl shadow-[#00F5A0]/10"
                         : "border-white/[0.08] bg-[#090b12]/80 hover:border-white/20"
@@ -1211,7 +1211,7 @@ export default function LivePage() {
         </Card>
 
         {/* Right Card: Dual Tab (Live Research Feed / Order History) */}
-        <Card className="cred-surface rounded-3xl p-6 sm:p-7 border border-white/[0.08] shadow-2xl relative overflow-hidden">
+        <Card className="cred-surface rounded-2xl sm:rounded-3xl p-4 sm:p-7 border border-white/[0.08] shadow-2xl relative overflow-hidden">
           <div className="flex flex-wrap items-center justify-between pb-4 border-b border-white/[0.06] gap-2">
             <div className="flex items-center gap-1.5 rounded-2xl bg-white/[0.04] p-1.5 border border-white/[0.06]">
               <button
