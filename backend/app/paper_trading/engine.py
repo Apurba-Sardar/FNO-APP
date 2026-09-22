@@ -104,10 +104,25 @@ class PaperTradingRuntime:
         refresh_account(self.state, now)
         return account_snapshot(self.state, now)
 
+    def _daily_lock_reason(self) -> str | None:
+        daily_pnl = self.state.account.daily_pnl
+        if self.config.daily_profit_ceiling and daily_pnl >= self.config.daily_profit_ceiling:
+            return f"daily paper profit ceiling reached ({daily_pnl:.2f} USDT)"
+        if self.config.daily_loss_limit and daily_pnl <= -self.config.daily_loss_limit:
+            return f"daily paper loss limit reached ({daily_pnl:.2f} USDT)"
+        return None
+
     async def process_risk_results(self, _stats=None) -> None:
         if self.state.engine_status != EngineStatus.RUNNING:
             return
         now = datetime.now(UTC)
+        daily_lock_reason = self._daily_lock_reason()
+        if daily_lock_reason:
+            self.state.trading_blocked = True
+            self.state.block_reason = daily_lock_reason
+            self._event("PAPER_DAILY_LIMIT_REACHED")
+            await self.repository.save(self.state)
+            return
         self.state.last_scan = getattr(self.scanner_state.stats, "scan_completed_at", None)
         self.state.last_strategy_evaluation = getattr(self.strategy_state.stats, "evaluated_at", None)
         self.state.last_risk_evaluation = now
@@ -225,8 +240,11 @@ class PaperTradingRuntime:
                 self.risk_state.risk_state.trading_lock.value == "blocked"
                 and "account data unavailable" not in (self.risk_state.risk_state.block_reasons or [])
             )
-            self.state.trading_blocked = had_stale or risk_blocked
-            if not self.state.trading_blocked:
+            daily_lock_reason = self._daily_lock_reason()
+            self.state.trading_blocked = had_stale or risk_blocked or bool(daily_lock_reason)
+            if daily_lock_reason:
+                self.state.block_reason = daily_lock_reason
+            elif not self.state.trading_blocked:
                 self.state.block_reason = None
             if had_stale:
                 self.state.engine_status = EngineStatus.DATA_STALE

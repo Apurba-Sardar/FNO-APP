@@ -1,4 +1,5 @@
 from datetime import timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -7,6 +8,8 @@ from app.paper_trading.analytics import compare_metrics, equity_curve, performan
 from app.paper_trading.drift import PerformanceDriftMonitor
 from app.paper_trading.models import PaperExitReason, PaperOrderStatus, StrategyHealthState
 from app.paper_trading.portfolio import refresh_account
+from app.paper_trading.engine import PaperTradingRuntime
+from app.paper_trading.config import PaperTradingConfig
 from app.paper_trading.reconciliation import reconcile
 from tests.phase9_fixtures import NOW, approved, harness, quote, triggered
 
@@ -70,3 +73,14 @@ def test_utc_day_rollover_resets_daily_pnl_without_resetting_equity():
     assert state.account.daily_pnl == 0
     assert state.account.starting_day_equity == 99_900
     assert state.account.equity == 100_000  # recomputed from durable realized/open state
+
+
+def test_daily_paper_profit_and_loss_guards_are_ceiling_rules():
+    runtime = PaperTradingRuntime.__new__(PaperTradingRuntime)
+    runtime.config = PaperTradingConfig(daily_profit_ceiling=2, daily_loss_limit=0.60)
+    runtime.state = SimpleNamespace(account=SimpleNamespace(daily_pnl=2))
+    assert runtime._daily_lock_reason() == "daily paper profit ceiling reached (2.00 USDT)"
+    runtime.state.account.daily_pnl = -0.60
+    assert runtime._daily_lock_reason() == "daily paper loss limit reached (-0.60 USDT)"
+    runtime.state.account.daily_pnl = 0.25
+    assert runtime._daily_lock_reason() is None
