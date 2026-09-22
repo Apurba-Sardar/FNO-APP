@@ -14,6 +14,8 @@ export default function PaperPage() {
   const [account, setAccount] = useState<AnyRow>({});
   const [positions, setPositions] = useState<AnyRow[]>([]);
   const [trades, setTrades] = useState<AnyRow[]>([]);
+  const [orders, setOrders] = useState<AnyRow[]>([]);
+  const [dailyReport, setDailyReport] = useState<AnyRow[]>([]);
   const [performance, setPerformance] = useState<AnyRow>({});
   const [curve, setCurve] = useState<ChartPoint[]>([]);
   const [health, setHealth] = useState<AnyRow>({});
@@ -23,8 +25,8 @@ export default function PaperPage() {
   const load = useCallback(async () => {
     try {
       const api = getApiUrl();
-      const [s, a, p, t, perf, eq, h] = await Promise.all(
-        ["status", "account", "positions?open_only=true", "trades", "performance", "equity", "health"].map((path) =>
+      const [s, a, p, t, o, d, perf, eq, h] = await Promise.all(
+        ["status", "account", "positions?open_only=true", "trades", "orders", "daily-report", "performance", "equity", "health"].map((path) =>
           fetch(`${api}/paper/${path}`, { cache: "no-store" }).then((r) => r.json())
         )
       );
@@ -32,6 +34,8 @@ export default function PaperPage() {
       setAccount(a);
       setPositions(p.items ?? []);
       setTrades(t.items ?? []);
+      setOrders(o.items ?? []);
+      setDailyReport(d.items ?? []);
       setPerformance(perf);
       setCurve((eq.items ?? []) as ChartPoint[]);
       setHealth(h);
@@ -57,13 +61,16 @@ export default function PaperPage() {
 
   const metrics = performance.metrics ?? {};
   const daily = useMemo(() => {
+    if (dailyReport.length) {
+      return dailyReport.map((row) => ({ timestamp: `${row.date}T00:00:00Z`, daily_pnl: Number(row.net_pnl ?? 0) }));
+    }
     const values = new Map<string, number>();
     trades.forEach((trade) => {
       const day = String(trade.timestamp).slice(0, 10);
       values.set(day, (values.get(day) ?? 0) + Number(trade.net_pnl));
     });
     return [...values].map(([timestamp, daily_pnl]) => ({ timestamp: `${timestamp}T00:00:00Z`, daily_pnl }));
-  }, [trades]);
+  }, [dailyReport, trades]);
 
   const cards = [
     ["Initial Equity", account.initial_equity],
@@ -355,6 +362,35 @@ export default function PaperPage() {
             {!trades.length && (
               <p className="py-8 text-center text-sm text-slate-500">No paper activity recorded yet.</p>
             )}
+          </div>
+        </Card>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-2">
+        <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-black text-white tracking-tight">Daily Paper P&amp;L</h2>
+              <p className="mt-1 text-xs text-slate-500">UTC trading day · journal-derived closed-trade totals</p>
+            </div>
+            <span className="text-xs text-slate-500 font-mono">{dailyReport.length} days</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-xs">
+              <thead><tr className="border-b border-white/[0.07] text-[10px] font-black uppercase tracking-[0.15em] text-slate-500"><th className="pb-3 px-2">Day</th><th className="pb-3 px-2 text-right">Trades</th><th className="pb-3 px-2 text-right">W / L</th><th className="pb-3 px-2 text-right">Fees</th><th className="pb-3 px-2 text-right">Net P&amp;L</th></tr></thead>
+              <tbody className="divide-y divide-white/[0.04]">{dailyReport.map((row) => { const pnl = Number(row.net_pnl ?? 0); return <tr key={row.date}><td className="py-3 px-2 font-mono text-slate-300">{row.date}{row.is_current_utc_day ? " · today" : ""}</td><td className="py-3 px-2 text-right font-mono text-white">{row.trade_count}</td><td className="py-3 px-2 text-right font-mono text-slate-300">{row.wins} / {row.losses}</td><td className="py-3 px-2 text-right font-mono text-slate-400">${money(row.fees)}</td><td className={`py-3 px-2 text-right font-mono font-black ${pnl >= 0 ? "text-[#00F5A0]" : "text-[#FF3366]"}`}>{pnl >= 0 ? "+" : ""}${money(pnl)}</td></tr>; })}</tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div><h2 className="text-lg font-black text-white tracking-tight">Paper Orders &amp; Protection</h2><p className="mt-1 text-xs text-slate-500">Entry fills plus simulated stop-loss and take-profit orders</p></div>
+            <span className="text-xs text-slate-500 font-mono">{orders.length} orders</span>
+          </div>
+          <div className="max-h-[330px] overflow-auto rounded-xl border border-white/[0.05]">
+            <table className="w-full min-w-[620px] text-left text-xs"><thead className="sticky top-0 bg-[#0e0e12]"><tr className="border-b border-white/[0.07] text-[10px] font-black uppercase tracking-[0.15em] text-slate-500"><th className="p-3">Symbol</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3 text-right">Price</th><th className="p-3 text-right">Qty</th><th className="p-3 text-right">Fees</th></tr></thead><tbody className="divide-y divide-white/[0.04]">{orders.map((order) => <tr key={order.order_id}><td className="p-3 font-bold text-white">{order.symbol}</td><td className="p-3 capitalize text-slate-300">{String(order.order_type).replaceAll("_", " ")}</td><td className="p-3 uppercase text-[#00D9F5]">{order.status}</td><td className="p-3 text-right font-mono text-slate-300">${money(order.executed_price ?? order.requested_price)}</td><td className="p-3 text-right font-mono text-slate-300">{money(order.quantity)}</td><td className="p-3 text-right font-mono text-slate-400">${money(order.fees)}</td></tr>)}</tbody></table>
+            {!orders.length && <p className="py-8 text-center text-sm text-slate-500">No paper orders yet. Approved strategy setups will appear here.</p>}
           </div>
         </Card>
       </section>
