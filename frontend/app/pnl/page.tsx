@@ -83,7 +83,7 @@ export default function PnlLogsPage() {
 
   const headers = useCallback(() => {
     const head: Record<string, string> = { "Content-Type": "application/json" };
-    const token = typeof window !== "undefined" ? localStorage.getItem("live_operator_token") || "LIVE_OPERATOR_TOKEN_2026" : "LIVE_OPERATOR_TOKEN_2026";
+    const token = typeof window !== "undefined" ? sessionStorage.getItem("live_operator_token") || "" : "";
     head["x-live-operator-token"] = token;
     return head;
   }, []);

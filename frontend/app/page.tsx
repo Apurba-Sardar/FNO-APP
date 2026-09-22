@@ -30,7 +30,7 @@ export default function Home() {
 
   useEffect(() => {
     const api = getApiUrl();
-    const token = "LIVE_OPERATOR_TOKEN_2026";
+    const token = sessionStorage.getItem("live_operator_token") ?? "";
     const headers = { "x-live-operator-token": token };
 
     fetch(`${api}/health`, { cache: "no-store" })

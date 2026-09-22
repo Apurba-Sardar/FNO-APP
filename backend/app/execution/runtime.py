@@ -78,7 +78,7 @@ class LiveExecutionRuntime:
         self.last_successful_order: datetime | None = None
         self.reconciliation_task: asyncio.Task | None = None
         self.monitor_task: asyncio.Task | None = None
-        self.auto_trading_enabled = True
+        self.auto_trading_enabled = bool(config.auto_execution and config.stage == ExecutionStage.AUTOMATIC)
         self._automatic_execution_lock = asyncio.Lock()
         self.symbol_cooldowns: dict[str, datetime] = {}
         self.last_trade_closed_at: datetime | None = None
@@ -107,7 +107,8 @@ class LiveExecutionRuntime:
 
         for pos in self.positions.values():
             if getattr(pos, "status", None) == "closed":
-                t = getattr(pos, "closed_at", None) or getattr(pos, "updated_at", None)
+                # updated_at can change during reconciliation; it is not an exit time.
+                t = getattr(pos, "closed_at", None)
                 if t:
                     if getattr(t, "tzinfo", None) is None:
                         t = t.replace(tzinfo=UTC)
@@ -166,7 +167,11 @@ class LiveExecutionRuntime:
                 self.account.daily_losses = 0
                 self.account.consecutive_losses = 0
                 self.account.daily_pnl = 0.0
-            self.auto_trading_enabled = True
+            self.auto_trading_enabled = bool(
+                self.config.auto_execution
+                and self.config.stage == ExecutionStage.AUTOMATIC
+                and not self.emergency_stop.triggered
+            )
             return True
         return False
 
@@ -197,6 +202,8 @@ class LiveExecutionRuntime:
         self.recalculate_today_metrics()
 
         # Re-hydrate daily trade count per symbol to prevent multiple entries across restarts
+        from datetime import timedelta, timezone
+        today_date = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
         today_counts: dict[str, int] = {}
         for pos in self.positions.values():
             t_ref = getattr(pos, "closed_at", None) or getattr(pos, "created_at", None)
@@ -361,65 +368,13 @@ class LiveExecutionRuntime:
             price_diff_pct = ((mark - entry) / entry) * 100 if is_long else ((entry - mark) / entry) * 100
             roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 4.0))
 
-            # Tier 1 Dynamic Breakeven Lock:
-            # Activate once in profit by >= +0.50 USDT (or +0.50% move).
-            # Shift stop to entry + 0.15% to cover all exchange fees AND lock in guaranteed cash!
-            if (pos.unrealized_pnl >= 0.50 or price_diff_pct >= 0.50) and not getattr(pos, "breakeven_activated", False):
-                be_stop = round(entry * 1.0015, 6) if is_long else round(entry * 0.9985, 6)
-                pos = pos.model_copy(update={"stop": be_stop, "breakeven_activated": True})
-                self.positions[pos.position_id] = pos
-                await self.repository.save_position(pos)
-                structlog.get_logger().info("BREAKEVEN_STOP_LOCKED", pair=pos.pair, new_stop=be_stop, guaranteed_pnl="+0.15 USDT")
-                stop = be_stop
-
-            # Tier 2 High-Profit Guarantee Lock:
-            # Once in profit by >= +0.80 USDT (or +0.80% move), shift stop to entry + 0.45% to lock in >= +$0.45 USDT guaranteed profit!
-            if (pos.unrealized_pnl >= 0.80 or price_diff_pct >= 0.80) and not getattr(pos, "trailing_locked", False):
-                trail_stop = round(entry * 1.0045, 6) if is_long else round(entry * 0.9955, 6)
-                pos = pos.model_copy(update={"stop": trail_stop, "trailing_locked": True})
-                self.positions[pos.position_id] = pos
-                await self.repository.save_position(pos)
-                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T2", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.45 USDT")
-                stop = trail_stop
-
-            # Tier 3 Explosive Momentum Runner Lock:
-            # Once in profit by >= +1.20% (or PnL >= +$1.25 USDT), do NOT cut the trade short!
-            # Shift stop to entry + 0.85% (locking in >= +$0.90 clean profit) and trail target to +1.85% (for +$1.94 payout)
-            if (pos.unrealized_pnl >= 1.25 or price_diff_pct >= 1.20) and not getattr(pos, "runner_locked", False):
-                runner_stop = round(entry * 1.0085, 6) if is_long else round(entry * 0.9915, 6)
-                runner_target = round(entry * 1.0185, 6) if is_long else round(entry * 0.9815, 6)
-                pos = pos.model_copy(update={
-                    "stop": runner_stop,
-                    "target": runner_target,
-                    "runner_locked": True,
-                    "trailing_locked": True,
-                })
-                self.positions[pos.position_id] = pos
-                await self.repository.save_position(pos)
-                structlog.get_logger().info(
-                    "EXPLOSIVE_RUNNER_LOCKED_T3",
-                    pair=pos.pair,
-                    new_stop=runner_stop,
-                    new_target=runner_target,
-                    guaranteed_pnl="+0.90 USDT",
-                )
-                stop = runner_stop
-                target = runner_target
-
             auto_close_reason = None
-            # Condition 1: Primary or Extended Runner Target Profit Reached
-            if getattr(pos, "runner_locked", False):
-                if pos.unrealized_pnl >= 2.60:
-                    auto_close_reason = f"RUNNER_TARGET_REACHED (PnL +${pos.unrealized_pnl:.2f} USDT >= +$2.60 USDT | +{price_diff_pct:.2f}%)"
-                elif is_long and mark >= target:
-                    auto_close_reason = f"RUNNER_TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
-                elif not is_long and mark <= target:
-                    auto_close_reason = f"RUNNER_TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
-            else:
-                if is_long and mark >= target:
-                    auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
-                elif not is_long and mark <= target:
-                    auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
+            # Local trailing values are not native CoinDCX orders. Respect the
+            # recorded target; do not silently move it and call gains guaranteed.
+            if is_long and mark >= target:
+                auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
+            elif not is_long and mark <= target:
+                auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
             
             if not auto_close_reason:
                 # Stop Loss & Timing Evaluation
@@ -610,7 +565,8 @@ class LiveExecutionRuntime:
         if self.client is None:
             return self.account
         try:
-            self.recalculate_today_metrics()
+            if self.positions:
+                self.recalculate_today_metrics()
             wallets = await self.client.wallets()
             if isinstance(wallets, dict) and ("total_wallet_balance" in wallets or "total_account_equity" in wallets or "available_balance_cross" in wallets):
                 equity = float(wallets.get("total_account_equity") or wallets.get("total_wallet_balance") or 0)
@@ -715,14 +671,14 @@ class LiveExecutionRuntime:
             ))
             return report
         except Exception as exc:
-            self.state = LiveRuntimeState.ARMED if getattr(self, "auto_trading_enabled", True) else LiveRuntimeState.RECONCILED
+            self.state = LiveRuntimeState.ARMED if self.auto_trading_enabled else LiveRuntimeState.RECONCILED
             structlog.get_logger().error("RECONCILIATION_EXCEPTION", error=str(exc))
             raise
 
     async def arm(self, safety_confirmation: str) -> None:
         if self.state != LiveRuntimeState.RECONCILED:
             raise SafetyGateRejected(["successful reconciliation is required before arming"])
-        if not (secrets.compare_digest(safety_confirmation, self.config.confirmation) or secrets.compare_digest(safety_confirmation, "LIVE_CONFIRM_SAFE_2026")):
+        if not self.config.confirmation or not secrets.compare_digest(safety_confirmation, self.config.confirmation):
             raise SafetyGateRejected(["invalid live safety confirmation"])
         if self.emergency_stop.triggered:
             raise SafetyGateRejected(["emergency stop is active"])
@@ -737,7 +693,7 @@ class LiveExecutionRuntime:
         await self.audit.record(AuditEvent(actor=actor, event_type="EMERGENCY_STOP", result="new_entries_blocked"))
 
     async def resume(self, safety_confirmation: str) -> None:
-        if not (secrets.compare_digest(safety_confirmation, self.config.confirmation) or secrets.compare_digest(safety_confirmation, "LIVE_CONFIRM_SAFE_2026")):
+        if not self.config.confirmation or not secrets.compare_digest(safety_confirmation, self.config.confirmation):
             raise SafetyGateRejected(["invalid live safety confirmation"])
         report = await self.reconcile(actor="operator")
         if not report.healthy:

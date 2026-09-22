@@ -37,7 +37,11 @@ def normalize_exchange_position(row: dict, *, execution_request_id=None) -> Live
         margin=float(row.get("locked_margin") or row.get("margin") or 0),
         stop=float(row["stop_loss_trigger"]) if row.get("stop_loss_trigger") else None,
         target=float(row["take_profit_trigger"]) if row.get("take_profit_trigger") else None,
-        protection_status=ProtectionStatus.PROTECTED if average_price > 0 else ProtectionStatus.UNPROTECTED,
+        protection_status=(
+            ProtectionStatus.PROTECTED
+            if row.get("stop_loss_trigger") and row.get("take_profit_trigger")
+            else ProtectionStatus.UNPROTECTED
+        ),
         unrealized_pnl=(mark_price - average_price) * abs(quantity) * multiplier if mark_price else float(row.get("unrealized_pnl") or row.get("pnl") or 0),
         status="open" if quantity else "closed",
         updated_at=datetime.now(UTC),
@@ -97,13 +101,12 @@ class PositionReconciliationService:
                     "breakeven_activated": getattr(local, "breakeven_activated", False),
                     "trailing_stop": getattr(local, "trailing_stop", None),
                     "highest_roe": getattr(local, "highest_roe", 0.0),
-                    "protection_status": ProtectionStatus.PROTECTED if (bot_mgr or normalized.average_price > 0) else ProtectionStatus.UNPROTECTED,
+                    "protection_status": normalized.protection_status,
                 })
                 local_positions[local.position_id] = normalized
                 await self.repository.save_position(normalized)
             else:
-                # Active position discovered on exchange:
-                # Safely adopt it into bot management with pro-trader scalp target & stop protection
+                # An orphan is not protected merely because local target/stop values exist.
                 normalized = normalize_exchange_position(row)
                 is_long = normalized.direction == StrategyDirection.LONG
                 entry_p = normalized.average_price
@@ -114,7 +117,7 @@ class PositionReconciliationService:
                     "origin": "bot",
                     "target": t_px,
                     "stop": s_px,
-                    "protection_status": ProtectionStatus.PROTECTED if entry_p > 0 else ProtectionStatus.UNPROTECTED,
+                    "protection_status": normalized.protection_status,
                 })
                 local_positions[normalized.position_id] = normalized
                 await self.repository.save_position(normalized)

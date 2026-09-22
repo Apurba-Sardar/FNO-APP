@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     coindcx_api_key: str = ""
     coindcx_api_secret: str = ""
-    trading_mode: Literal["paper", "live"] = "live"
+    trading_mode: Literal["paper", "live"] = "paper"
     database_url: str = "postgresql+asyncpg://fno:fno@localhost:5432/fno"
     redis_url: str = "redis://localhost:6379/0"
     coindcx_api_base_url: str = "https://api.coindcx.com"
@@ -61,11 +61,11 @@ class Settings(BaseSettings):
     paper_reset_requires_confirmation: bool = True
     paper_funding_enabled: bool = False
     paper_auto_start: bool = False
-    live_trading_enabled: bool = True
-    live_trading_confirmation: str = "LIVE_CONFIRM_SAFE_2026"
-    live_operator_token: str = "LIVE_OPERATOR_TOKEN_2026"
-    live_emergency_token: str = "LIVE_EMERGENCY_TOKEN_2026"
-    live_stage: int = Field(default=5, ge=0, le=5)
+    live_trading_enabled: bool = False
+    live_trading_confirmation: str = ""
+    live_operator_token: str = ""
+    live_emergency_token: str = ""
+    live_stage: int = Field(default=0, ge=0, le=5)
     live_max_orders_per_day: int = Field(default=80, ge=1)
     live_max_trades_per_day: int = Field(default=60, ge=1)
     live_max_notional_per_trade: float = Field(default=75.0, gt=0)
@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     live_require_tpsl_confirmation: bool = True
     live_emergency_stop: bool = False
     live_allow_leverage_change: bool = False
-    live_auto_execution: bool = True
+    live_auto_execution: bool = False
     live_margin_mode: Literal["isolated", "crossed"] = "isolated"
     live_confirmation_ttl_seconds: int = Field(default=30, ge=5, le=120)
     live_reconciliation_interval_seconds: int = Field(default=15, ge=5)

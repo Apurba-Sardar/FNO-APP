@@ -35,12 +35,14 @@ export default function SettingsPage() {
   const [closePositionsChecked, setClosePositionsChecked] = useState(true);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [testAlertLoading, setTestAlertLoading] = useState(false);
+  const [operatorToken, setOperatorToken] = useState("");
+  const [emergencyToken, setEmergencyToken] = useState("");
 
   const fetchStatus = useCallback(async () => {
     try {
       const apiBase = getApiUrl();
       const res = await fetch(`${apiBase}/live/master-switch`, {
-        headers: { "x-live-operator-token": "LIVE_OPERATOR_TOKEN_2026" },
+        headers: { "x-live-operator-token": operatorToken },
         cache: "no-store",
       });
       if (res.ok) {
@@ -52,7 +54,7 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [operatorToken]);
 
   useEffect(() => {
     fetchStatus();
@@ -61,6 +63,10 @@ export default function SettingsPage() {
   }, [fetchStatus]);
 
   const handleToggleMasterSwitch = async (enable: boolean) => {
+    if (enable ? !operatorToken : !emergencyToken) {
+      setActionMessage("Enter the appropriate operator or emergency key first.");
+      return;
+    }
     if (!enable) {
       const confirmText = closePositionsChecked
         ? "EMERGENCY HALT: Are you sure you want to stop all automated operations AND close all active CoinDCX positions?"
@@ -78,13 +84,13 @@ export default function SettingsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-live-operator-token": "LIVE_OPERATOR_TOKEN_2026",
-          "x-live-emergency-token": "LIVE_EMERGENCY_TOKEN_2026",
+          "x-live-operator-token": operatorToken,
+          "x-live-emergency-token": emergencyToken,
         },
         body: JSON.stringify({
           enabled: enable,
           close_open_positions: !enable && closePositionsChecked,
-          operator_token: "LIVE_OPERATOR_TOKEN_2026",
+          operator_token: "",
         }),
       });
 
@@ -164,6 +170,15 @@ export default function SettingsPage() {
           </div>
         </div>
       </header>
+
+      <section className="grid gap-3 sm:grid-cols-2">
+        <label className="text-xs text-zinc-300">Operator key
+          <input type="password" autoComplete="off" value={operatorToken} onChange={(event) => setOperatorToken(event.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 p-2" />
+        </label>
+        <label className="text-xs text-zinc-300">Emergency key
+          <input type="password" autoComplete="off" value={emergencyToken} onChange={(event) => setEmergencyToken(event.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 p-2" />
+        </label>
+      </section>
 
       {/* Action Notification Message */}
       {actionMessage && (

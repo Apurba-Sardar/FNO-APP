@@ -6,7 +6,7 @@ services:
       POSTGRES_DB: fno
       POSTGRES_USER: fno
       POSTGRES_PASSWORD: fno
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]
     volumes: [postgres_data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fno"]
@@ -16,7 +16,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
-    ports: ["6379:6379"]
+    ports: ["127.0.0.1:6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -31,13 +31,13 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://fno:fno@postgres:5432/fno}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      TRADING_MODE: ${TRADING_MODE:-live}
-      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-true}
-      LIVE_STAGE: ${LIVE_STAGE:-5}
-      LIVE_AUTO_EXECUTION: ${LIVE_AUTO_EXECUTION:-true}
-      LIVE_OPERATOR_TOKEN: ${LIVE_OPERATOR_TOKEN:-LIVE_OPERATOR_TOKEN_2026}
-      LIVE_EMERGENCY_TOKEN: ${LIVE_EMERGENCY_TOKEN:-LIVE_EMERGENCY_TOKEN_2026}
-      LIVE_TRADING_CONFIRMATION: ${LIVE_TRADING_CONFIRMATION:-LIVE_CONFIRM_SAFE_2026}
+      TRADING_MODE: ${TRADING_MODE:-paper}
+      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
+      LIVE_STAGE: ${LIVE_STAGE:-0}
+      LIVE_AUTO_EXECUTION: ${LIVE_AUTO_EXECUTION:-false}
+      LIVE_OPERATOR_TOKEN: ${LIVE_OPERATOR_TOKEN:-}
+      LIVE_EMERGENCY_TOKEN: ${LIVE_EMERGENCY_TOKEN:-}
+      LIVE_TRADING_CONFIRMATION: ${LIVE_TRADING_CONFIRMATION:-}
       NTFY_TOPIC: ${NTFY_TOPIC:-fno_trades_apurba}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
@@ -46,7 +46,7 @@ services:
       - 1.1.1.1
     volumes:
       - ./backend/app:/app/app
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

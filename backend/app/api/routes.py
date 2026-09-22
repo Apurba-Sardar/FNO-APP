@@ -17,6 +17,7 @@ from app.backtesting.state import BacktestRuntime
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.domain.market import Timeframe
+from app.execution.config import ExecutionStage
 from app.execution.exceptions import LiveExecutionError, SafetyGateRejected
 from app.execution.runtime import LiveExecutionRuntime
 from app.indicators import IndicatorEngine
@@ -919,14 +920,10 @@ def authorize_live(request: Request, settings: Settings, *, emergency: bool = Fa
     if not expected:
         raise HTTPException(status_code=503, detail="live execution authorization is not configured")
     header = "x-live-emergency-token" if emergency else "x-live-operator-token"
-    supplied = request.headers.get(header, "") or request.query_params.get("token", "")
-    default_token = "LIVE_EMERGENCY_TOKEN_2026" if emergency else "LIVE_OPERATOR_TOKEN_2026"
-    if supplied and (compare_digest(supplied, expected) or compare_digest(supplied, default_token)):
+    supplied = request.headers.get(header, "")
+    if supplied and compare_digest(supplied, expected):
         return
-    raise HTTPException(
-        status_code=403,
-        detail="live execution authorization failed. Access via the Web UI at port 3000 (http://<ip>:3000/live) or provide 'x-live-operator-token' header or ?token=LIVE_OPERATOR_TOKEN_2026",
-    )
+    raise HTTPException(status_code=403, detail="live execution authorization failed")
 
 
 def live_error(exc: LiveExecutionError) -> HTTPException:
@@ -941,23 +938,8 @@ async def live_status(request: Request, settings: SettingsDependency) -> dict:
 
 @router.get("/live/health")
 async def live_health(request: Request, settings: SettingsDependency) -> dict:
-    supplied = request.headers.get("x-live-operator-token", "") or request.query_params.get("token", "")
-    expected = getattr(settings.live, "operator_token", "LIVE_OPERATOR_TOKEN_2026")
-    is_authed = bool(supplied and (compare_digest(supplied, expected) or compare_digest(supplied, "LIVE_OPERATOR_TOKEN_2026")))
-
+    authorize_live(request, settings)
     runtime = live_runtime_from(request)
-    if not is_authed:
-        # Graceful public response when visited directly in a browser
-        return {
-            "status": "online",
-            "trading_mode": "live",
-            "live_engine": "active",
-            "auto_exit_monitor": "running (<1s sub-second loop)",
-            "claude_advisor": "connected",
-            "dashboard_ui": "http://20.244.21.190:3000/live",
-            "note": "Full live telemetry is protected. Provide ?token=LIVE_OPERATOR_TOKEN_2026 or open the Web UI at port 3000.",
-        }
-
     return runtime.status() | {
         "market_data_health": runtime.market_runtime.websocket.health()["status"] if runtime.market_runtime else "unavailable",
         "api_health": "healthy" if runtime.client and runtime.last_api_error is None else "unavailable",
@@ -1331,6 +1313,7 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
 async def live_reset_daily_pnl(request: Request, settings: SettingsDependency) -> dict:
     """Manually or remotely reset today's PnL, wins, and losses back to clean 0.00 baseline."""
     authorize_live(request, settings)
+    raise HTTPException(status_code=409, detail="Manual daily risk-counter resets are disabled; counters reset only at the configured day boundary.")
     runtime = live_runtime_from(request)
     runtime.daily_metrics_reset_at = datetime.now(UTC)
     runtime.today_realized_profit = 0.0
@@ -1397,6 +1380,7 @@ class LiveInstantScalpRequest(BaseModel):
 @router.post("/live/instant-scalp")
 async def live_instant_scalp(body: LiveInstantScalpRequest, request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
+    raise HTTPException(status_code=409, detail="Instant scalp is disabled: it bypasses the validated strategy and risk execution flow.")
     runtime = live_runtime_from(request)
     if not runtime.client:
         raise HTTPException(status_code=503, detail="CoinDCX live client unavailable")
@@ -1887,12 +1871,13 @@ async def emergency_stop_live(request: Request, settings: SettingsDependency) ->
 class MasterSwitchPayload(BaseModel):
     enabled: bool
     close_open_positions: bool = False
-    operator_token: str = "LIVE_OPERATOR_TOKEN_2026"
+    operator_token: str = ""
 
 
 @router.get("/system/master-switch")
 @router.get("/live/master-switch")
 async def get_master_switch(request: Request, settings: SettingsDependency) -> dict:
+    authorize_live(request, settings, emergency=bool(request.headers.get("x-live-emergency-token")))
     runtime = live_runtime_from(request)
     is_emergency = getattr(runtime, "emergency_stop", None) and runtime.emergency_stop.triggered
     auto_on = getattr(runtime, "auto_trading_enabled", False)
@@ -1930,6 +1915,9 @@ async def get_master_switch(request: Request, settings: SettingsDependency) -> d
 @router.post("/system/master-switch")
 @router.post("/live/master-switch")
 async def set_master_switch(body: MasterSwitchPayload, request: Request, settings: SettingsDependency) -> dict:
+    authorize_live(request, settings, emergency=not body.enabled)
+    if body.enabled and (settings.live.stage != ExecutionStage.AUTOMATIC or not settings.live.auto_execution):
+        raise HTTPException(status_code=409, detail="Automatic execution is disabled by server configuration.")
     runtime = live_runtime_from(request)
     import structlog
     log = structlog.get_logger()
@@ -2039,6 +2027,7 @@ class LiveTestTradeRequest(LiveModel):
 @router.post("/live/test-trade")
 async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
+    raise HTTPException(status_code=409, detail="Raw test-trade endpoint is disabled: it bypasses the risk and protection workflow.")
     runtime = live_runtime_from(request)
     if runtime.state.value != "armed":
         raise HTTPException(status_code=409, detail=f"Live runtime must be ARMED (currently {runtime.state.value})")
@@ -2122,6 +2111,8 @@ async def live_test_trade(body: LiveTestTradeRequest, request: Request, settings
 @router.post("/live/auto-trading/toggle")
 async def toggle_auto_trading(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
+    if settings.live.stage != ExecutionStage.AUTOMATIC or not settings.live.auto_execution:
+        raise HTTPException(status_code=409, detail="Automatic execution is disabled by server configuration.")
     runtime = live_runtime_from(request)
     runtime.auto_trading_enabled = not getattr(runtime, "auto_trading_enabled", False)
     return {
@@ -2135,6 +2126,7 @@ async def toggle_auto_trading(request: Request, settings: SettingsDependency) ->
 @router.post("/live/reset-circuit")
 async def reset_circuit(request: Request, settings: SettingsDependency) -> dict:
     authorize_live(request, settings)
+    raise HTTPException(status_code=409, detail="Risk circuit reset is disabled; daily limits cannot be manually cleared.")
     runtime = live_runtime_from(request)
     runtime.last_api_error = None
     if hasattr(runtime, "circuit_breaker"):
@@ -2354,5 +2346,3 @@ async def deploy_webhook(request: Request) -> dict:
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Deploy failed: {exc}") from exc
-
-

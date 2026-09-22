@@ -820,14 +820,17 @@ async def lifespan(application: FastAPI):
 
             await _asyncio.sleep(10)  # evaluate every 10s for hyper-responsive trade punching
 
-    auto_scalp_task = _asyncio.create_task(_auto_scalp_daemon(), name="auto-scalp-daemon")
+    # The legacy daemon submits orders directly and bypasses the strategy/risk
+    # execution pipeline. Keep it disabled until replaced by a validated path.
+    auto_scalp_task = None
 
     try:
         yield
     finally:
         try:
-            auto_scalp_task.cancel()
-            await _asyncio.gather(auto_scalp_task, return_exceptions=True)
+            if auto_scalp_task is not None:
+                auto_scalp_task.cancel()
+                await _asyncio.gather(auto_scalp_task, return_exceptions=True)
             await live_runtime.shutdown()
             await paper_runtime.shutdown()
             await scanner_runtime.shutdown()

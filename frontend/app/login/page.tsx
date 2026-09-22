@@ -15,9 +15,8 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // Secure authentication check
-    // Default Username: admin, Password: fno2026 (or custom password)
-    if (username.trim() === "admin" && (password === "fno2026" || password === "admin" || password === "LIVE_OPERATOR_TOKEN_2026")) {
+    // UI navigation lock only. Backend trading actions require separate server-side authorization.
+    if (username.trim() === "admin" && password === "fno2026") {
       sessionStorage.setItem("fno_authenticated", "true");
       sessionStorage.setItem("fno_user", username.trim());
       router.push("/");
@@ -45,7 +44,7 @@ export default function LoginPage() {
             FNO SUITE ACCESS
           </h1>
           <p className="mt-1.5 text-xs text-zinc-400">
-            Enter authorized security credentials to unlock institutional futures algorithmic controls.
+            This screen is a UI navigation lock. Real-money actions require separate backend authorization.
           </p>
         </div>
 

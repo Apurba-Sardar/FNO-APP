@@ -9,9 +9,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 type Row = Record<string, any>;
 
 export default function LivePage() {
-  const [operatorToken, setOperatorToken] = useState("LIVE_OPERATOR_TOKEN_2026");
-  const [emergencyToken, setEmergencyToken] = useState("LIVE_EMERGENCY_TOKEN_2026");
-  const [safetyConfirmation, setSafetyConfirmation] = useState("LIVE_CONFIRM_SAFE_2026");
+  const [operatorToken, setOperatorToken] = useState("");
+  const [emergencyToken, setEmergencyToken] = useState("");
+  const [safetyConfirmation, setSafetyConfirmation] = useState("");
   const [status, setStatus] = useState<Row>({});
   const [account, setAccount] = useState<Row>({});
   const [positions, setPositions] = useState<Row[]>([]);
@@ -19,7 +19,7 @@ export default function LivePage() {
   const [setupId, setSetupId] = useState("");
   const [intent, setIntent] = useState<Row | null>(null);
   const [grant, setGrant] = useState("");
-  const [message, setMessage] = useState("Connected to CoinDCX live engine.");
+  const [message, setMessage] = useState("Loading trading status. Do not assume live execution is enabled.");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [showTokens, setShowTokens] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState<string>("B-XRP_USDT");
@@ -189,9 +189,11 @@ export default function LivePage() {
   }, [headers]);
 
   const punchInstantScalp = async (pair: string, direction: "buy" | "sell" = "buy") => {
+    setMessage("Instant scalp is disabled pending a full risk and protection audit. No order was sent.");
+    return;
     try {
       setIsPunchingScalp(pair);
-      setMessage(`Submitting 4x scalp order for ${pair} (Target: +$1.00+ USDT Profit)...`);
+      setMessage(`Submitting scalp order for ${pair}...`);
       const apiBase = getApiUrl();
       const response = await fetch(`${apiBase}/live/instant-scalp`, {
         method: "POST",
@@ -1193,7 +1195,7 @@ export default function LivePage() {
               </div>
               <h3 className="text-base font-extrabold tracking-tight text-white">0 Active Trades · 100% Free Capital</h3>
               <p className="mt-1.5 text-xs text-white/50 max-w-md leading-relaxed">
-                Zero capital locked on CoinDCX. All <b className="text-white font-mono">${balance(account.available_balance ?? 66.6)} USDT</b> is liquid. Auto-pilot scanner is continuously hunting high-probability 3x scalp setups to reach the $6.00 daily profit target.
+                Available balance: <b className="text-white font-mono">{account.available_balance == null ? "Unavailable" : `$${balance(account.available_balance)} USDT`}</b>. Do not treat scanner observations as guaranteed profits or available margin.
               </p>
               <div className="mt-4 flex flex-wrap gap-2.5 justify-center">
                 <button
@@ -1309,13 +1311,13 @@ export default function LivePage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
-                      <span>⚡ 1-Tap Scalp Punch</span>
+                      <span>Instant scalp disabled</span>
                       <span className="text-[9px] rounded-full bg-[#00F5A0]/20 text-[#00F5A0] px-2 py-0.5 font-black border border-[#00F5A0]/30 shadow-[0_0_10px_rgba(0,245,160,0.3)]">
-                        $25 MARGIN · 4x ISOLATED (TARGET: +$1.00+ USDT)
+                        RISK AUDIT REQUIRED
                       </span>
                     </h4>
                     <p className="text-xs text-white/50 mt-0.5">
-                      Bi-directional execution: Punch live 4x scalps aiming for at least +$1.00 USDT profit with 20s grace period and tight risk management.
+                      This shortcut bypassed the validated risk workflow. It cannot submit orders.
                     </p>
                   </div>
                   {/* CRED Pill Direction Selector */}
@@ -1375,7 +1377,7 @@ export default function LivePage() {
                         <button
                           key={btn.symbol}
                           onClick={() => punchInstantScalp(btn.symbol, scalpDirection)}
-                          disabled={isPunchingScalp !== null}
+                          disabled
                           className={`flex-1 min-w-[130px] py-2.5 px-3 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg disabled:opacity-50 active:scale-95 ${
                             scalpDirection === "buy"
                               ? "bg-gradient-to-r from-[#00F5A0] to-emerald-400 text-slate-950 hover:brightness-110 shadow-[#00F5A0]/20"
@@ -1614,7 +1616,7 @@ export default function LivePage() {
                                   e.stopPropagation();
                                   punchInstantScalp(item.symbol, "buy");
                                 }}
-                                disabled={isPunchingScalp !== null}
+                                disabled
                                 className="flex-1 sm:flex-none rounded-xl bg-gradient-to-r from-[#00F5A0] to-[#00D9F5] text-slate-950 font-black text-xs px-4 py-2 hover:brightness-110 active:scale-95 transition shadow-[0_0_15px_rgba(0,245,160,0.3)] disabled:opacity-50 flex items-center justify-center gap-1.5"
                               >
                                 <span>⚡ PUNCH BUY @ ${balance(item.current_price)}</span>
@@ -1626,7 +1628,7 @@ export default function LivePage() {
                                   e.stopPropagation();
                                   punchInstantScalp(item.symbol, "sell");
                                 }}
-                                disabled={isPunchingScalp !== null}
+                                disabled
                                 className="flex-1 sm:flex-none rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 text-white font-black text-xs px-4 py-2 hover:brightness-110 active:scale-95 transition shadow-[0_0_15px_rgba(244,63,94,0.3)] disabled:opacity-50 flex items-center justify-center gap-1.5"
                               >
                                 <span>⚡ PUNCH SELL @ ${balance(item.current_price)}</span>
@@ -1641,7 +1643,7 @@ export default function LivePage() {
                                   e.stopPropagation();
                                   punchInstantScalp(item.symbol, "sell");
                                 }}
-                                disabled={isPunchingScalp !== null}
+                                disabled
                                 className="rounded-xl bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 text-rose-400 text-[11px] font-bold px-2.5 py-2 transition active:scale-95 disabled:opacity-50"
                                 title="Scalp Short instead"
                               >
@@ -1653,7 +1655,7 @@ export default function LivePage() {
                                   e.stopPropagation();
                                   punchInstantScalp(item.symbol, "buy");
                                 }}
-                                disabled={isPunchingScalp !== null}
+                                disabled
                                 className="rounded-xl bg-[#00F5A0]/15 hover:bg-[#00F5A0]/30 border border-[#00F5A0]/30 text-[#00F5A0] text-[11px] font-bold px-2.5 py-2 transition active:scale-95 disabled:opacity-50"
                                 title="Scalp Long instead"
                               >
