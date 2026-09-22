@@ -1,3 +1,4 @@
+import asyncio
 from datetime import timedelta
 from types import SimpleNamespace
 from uuid import uuid4
@@ -6,7 +7,7 @@ import pytest
 
 from app.paper_trading.analytics import compare_metrics, daily_performance, equity_curve, performance
 from app.paper_trading.drift import PerformanceDriftMonitor
-from app.paper_trading.models import PaperExitReason, PaperOrderStatus, StrategyHealthState
+from app.paper_trading.models import PaperExitReason, PaperOrderStatus, PaperSession, StrategyHealthState
 from app.paper_trading.portfolio import refresh_account
 from app.paper_trading.engine import PaperTradingRuntime
 from app.paper_trading.config import PaperTradingConfig
@@ -25,6 +26,24 @@ async def test_restart_restores_open_position_without_duplicate():
     assert reconcile(restored) == []
     await repository.save(restored)
     assert len((await repository.load()).positions) == 1
+
+
+@pytest.mark.asyncio
+async def test_reset_discards_an_active_session_so_the_next_run_is_fresh():
+    config, repository, state, _ = harness()
+    runtime = PaperTradingRuntime.__new__(PaperTradingRuntime)
+    runtime.config = config
+    runtime.repository = repository
+    runtime.state = state
+    runtime._lock = asyncio.Lock()
+    state.sessions.append(PaperSession(
+        start_time=NOW,
+        initial_equity=state.account.equity,
+        configuration_snapshot={}, strategy_version="s", risk_version="r",
+    ))
+    await runtime.reset("RESET PAPER TRADING")
+    assert runtime.state.sessions == []
+    assert runtime.state.account.initial_equity == config.initial_equity
 
 
 def test_crash_reconciliation_quarantines_orphaned_fill():

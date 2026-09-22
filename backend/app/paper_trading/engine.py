@@ -387,12 +387,13 @@ class PaperTradingRuntime:
             await self.monitor_once()
 
     async def reset(self, confirmation: str) -> None:
-        if self.config.reset_requires_confirmation and confirmation != "RESET PAPER TRADING":
-            raise PaperExecutionRejected("exact reset confirmation is required")
-        if any(p.status == PaperPositionStatus.OPEN for p in self.state.positions):
-            raise PaperExecutionRejected("close open paper positions before reset")
-        await self.repository.reset(self.state)
-        self.state = await self.repository.load()
+        async with self._lock:
+            if self.config.reset_requires_confirmation and confirmation != "RESET PAPER TRADING":
+                raise PaperExecutionRejected("exact reset confirmation is required")
+            if any(p.status == PaperPositionStatus.OPEN for p in self.state.positions):
+                raise PaperExecutionRejected("close open paper positions before reset")
+            await self.repository.reset(self.state)
+            self.state = await self.repository.load()
 
     def analytics(self, backtest=None):
         metrics = performance(self.state)

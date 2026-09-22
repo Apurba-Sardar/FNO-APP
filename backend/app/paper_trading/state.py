@@ -95,8 +95,13 @@ class PaperStateRepository:
             ))
 
     async def reset(self, state: PaperState) -> None:
-        """Clear current paper lifecycle data while preserving historical sessions."""
-        historical = list(state.sessions)
+        """Clear lifecycle data while preserving only completed historical sessions.
+
+        An active session cannot be carried into a reset because it references the
+        prior account/configuration.  Keeping it would make a fresh account appear
+        to belong to an old run.
+        """
+        historical = [item for item in state.sessions if item.end_time is not None]
         async with self.session_factory() as session, session.begin():
             for table in (
                 PaperAccountRecord,
@@ -130,5 +135,5 @@ class InMemoryPaperStateRepository(PaperStateRepository):
 
     async def reset(self, state: PaperState) -> None:
         fresh = self.new_state()
-        fresh.sessions = list(state.sessions)
+        fresh.sessions = [item for item in state.sessions if item.end_time is not None]
         self.persisted = fresh
