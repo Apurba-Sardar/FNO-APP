@@ -33,6 +33,7 @@ class PaperTradingConfig(BaseModel):
     monitor_interval_seconds: float = Field(default=1, gt=0, le=60)
     minimum_health_sample: int = Field(default=30, ge=1)
     auto_start: bool = False
+    run_duration_days: int = Field(default=0, ge=0, le=31)
     daily_profit_ceiling: float = Field(default=0, ge=0)
     daily_loss_limit: float = Field(default=0, ge=0)
     strategy_version: str = "phase6-v1"

@@ -112,15 +112,41 @@ class PaperTradingRuntime:
             return f"daily paper loss limit reached ({daily_pnl:.2f} USDT)"
         return None
 
+    def _run_duration_lock_reason(self, now: datetime) -> str | None:
+        session = self.current_session
+        if (
+            session is not None
+            and self.config.run_duration_days
+            and now >= session.start_time + timedelta(days=self.config.run_duration_days)
+        ):
+            return (
+                f"paper run duration reached ({self.config.run_duration_days} days); "
+                "no new entries are allowed"
+            )
+        return None
+
     async def process_risk_results(self, _stats=None) -> None:
         if self.state.engine_status != EngineStatus.RUNNING:
             return
         now = datetime.now(UTC)
+        duration_lock_reason = self._run_duration_lock_reason(now)
+        if duration_lock_reason:
+            newly_locked = self.state.block_reason != duration_lock_reason
+            self.state.trading_blocked = True
+            self.state.block_reason = duration_lock_reason
+            if newly_locked:
+                self._event("PAPER_RUN_DURATION_REACHED")
+                await self._notify_duration_complete()
+            await self.repository.save(self.state)
+            return
         daily_lock_reason = self._daily_lock_reason()
         if daily_lock_reason:
+            newly_locked = self.state.block_reason != daily_lock_reason
             self.state.trading_blocked = True
             self.state.block_reason = daily_lock_reason
-            self._event("PAPER_DAILY_LIMIT_REACHED")
+            if newly_locked:
+                self._event("PAPER_DAILY_LIMIT_REACHED")
+                await self._notify_daily_limit(daily_lock_reason)
             await self.repository.save(self.state)
             return
         self.state.last_scan = getattr(self.scanner_state.stats, "scan_completed_at", None)
@@ -162,7 +188,7 @@ class PaperTradingRuntime:
                 try:
                     quote = await self.quote(symbol)
                     candidate = self.scanner_state.candidates.get(symbol)
-                    self.executor.execute_entry(
+                    position = self.executor.execute_entry(
                         self.state, setup, decision, quote, now, setup_id,
                         market_regime=str(analysis.timeframe_trends.get("1h", "unknown")),
                         factor_snapshot={
@@ -194,6 +220,7 @@ class PaperTradingRuntime:
                             ],
                         },
                     )
+                    await self._notify_entry(position)
                     status, reason = PaperSetupStatus.ENTERED, None
                 except PaperExecutionRejected as exc:
                     status, reason = PaperSetupStatus.ARMED, str(exc)
@@ -277,9 +304,70 @@ class PaperTradingRuntime:
         }.get(reason)
         if event_type:
             self._event(event_type, setup_id=position.setup_id, position=position)
+        await self._notify_exit(trade)
         self.state.cooldowns[position.symbol] = now + timedelta(minutes=self.config.symbol_cooldown_minutes)
         await self.repository.save(self.state)
         return trade
+
+    async def _notify_entry(self, position) -> None:
+        try:
+            from app.services.notifications import notification_service
+            await notification_service.notify_trade_entry(
+                position.symbol,
+                direction=position.direction.value,
+                quantity=position.quantity,
+                entry_price=position.entry_price,
+                leverage=round(position.leverage),
+                target_price=position.target_price,
+                stop_price=position.stop_price,
+                margin=position.notional / max(position.leverage, 1),
+            )
+        except Exception as exc:
+            self.log.warning("PAPER_NOTIFICATION_FAILED", event="entry", error=str(exc))
+
+    async def _notify_exit(self, trade) -> None:
+        try:
+            from app.services.notifications import notification_service
+            await notification_service.notify_trade_exit(
+                trade.symbol,
+                trade.exit,
+                trade.net_pnl,
+                reason=trade.exit_reason.value,
+                available_balance=self.state.account.available_balance,
+            )
+        except Exception as exc:
+            self.log.warning("PAPER_NOTIFICATION_FAILED", event="exit", error=str(exc))
+
+    async def _notify_daily_limit(self, reason: str) -> None:
+        try:
+            from app.services.notifications import notification_service
+            if self.state.account.daily_pnl >= self.config.daily_profit_ceiling:
+                await notification_service.notify_daily_profit_target(
+                    self.state.account.daily_pnl, self.config.daily_profit_ceiling
+                )
+            else:
+                await notification_service.broadcast(
+                    "🛑 PAPER DAILY LOSS STOP REACHED",
+                    f"• Net paper P&L today: ${self.state.account.daily_pnl:,.2f} USDT\n"
+                    f"• Loss limit: ${self.config.daily_loss_limit:,.2f} USDT\n"
+                    "• Action: new paper entries locked for this UTC day.",
+                    priority="urgent", tags=["stop_sign", "lock"],
+                )
+        except Exception as exc:
+            self.log.warning("PAPER_NOTIFICATION_FAILED", event="daily_limit", error=str(exc))
+
+    async def _notify_duration_complete(self) -> None:
+        try:
+            from app.services.notifications import notification_service
+            await notification_service.broadcast(
+                "✅ PAPER VALIDATION WINDOW COMPLETE",
+                f"• Duration: {self.config.run_duration_days} days\n"
+                f"• Current equity: ${self.state.account.equity:,.2f} USDT\n"
+                "• Action: no new paper entries will be opened.",
+                priority="high", tags=["white_check_mark", "lock"],
+            )
+        except Exception as exc:
+            self.log.warning("PAPER_NOTIFICATION_FAILED", event="duration_complete", error=str(exc))
 
     async def _invalidation(self, setup_id, setup, now):
         current = self.state.setups.get(setup_id)

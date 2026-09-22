@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.paper_trading.analytics import compare_metrics, equity_curve, performance
+from app.paper_trading.analytics import compare_metrics, daily_performance, equity_curve, performance
 from app.paper_trading.drift import PerformanceDriftMonitor
 from app.paper_trading.models import PaperExitReason, PaperOrderStatus, StrategyHealthState
 from app.paper_trading.portfolio import refresh_account
@@ -84,3 +84,28 @@ def test_daily_paper_profit_and_loss_guards_are_ceiling_rules():
     assert runtime._daily_lock_reason() == "daily paper loss limit reached (-0.60 USDT)"
     runtime.state.account.daily_pnl = 0.25
     assert runtime._daily_lock_reason() is None
+
+
+def test_paper_run_duration_blocks_new_entries_after_deadline():
+    runtime = PaperTradingRuntime.__new__(PaperTradingRuntime)
+    runtime.config = PaperTradingConfig(run_duration_days=3)
+    runtime.state = SimpleNamespace(
+        sessions=[SimpleNamespace(start_time=NOW, end_time=None)],
+    )
+    assert runtime._run_duration_lock_reason(NOW + timedelta(days=2, hours=23)) is None
+    assert runtime._run_duration_lock_reason(NOW + timedelta(days=3)) == (
+        "paper run duration reached (3 days); no new entries are allowed"
+    )
+
+
+def test_daily_performance_is_derived_from_closed_trade_journal_in_utc():
+    _, _, state, executor = harness()
+    position = executor.execute_entry(state, triggered(), approved(), quote(), NOW, "daily-report")
+    executor.execute_exit(
+        state, position, quote(bid=102, ask=102.1, timestamp=NOW + timedelta(seconds=30)),
+        PaperExitReason.TAKE_PROFIT, NOW + timedelta(seconds=30), uuid4(), "s", "r"
+    )
+    rows = daily_performance(state, NOW)
+    assert rows[0]["date"] == NOW.date().isoformat()
+    assert rows[0]["trade_count"] == 1
+    assert rows[0]["net_pnl"] == state.trades[0].net_pnl

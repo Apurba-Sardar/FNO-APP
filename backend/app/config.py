@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     paper_reset_requires_confirmation: bool = True
     paper_funding_enabled: bool = False
     paper_auto_start: bool = False
+    paper_run_duration_days: int = Field(default=0, ge=0, le=31)
     paper_daily_profit_ceiling: float = Field(default=0, ge=0)
     paper_daily_loss_limit: float = Field(default=0, ge=0)
     live_trading_enabled: bool = False
@@ -111,6 +112,7 @@ class Settings(BaseSettings):
             reset_requires_confirmation=self.paper_reset_requires_confirmation,
             funding_enabled=self.paper_funding_enabled,
             auto_start=self.paper_auto_start,
+            run_duration_days=self.paper_run_duration_days,
             daily_profit_ceiling=self.paper_daily_profit_ceiling,
             daily_loss_limit=self.paper_daily_loss_limit,
         )

@@ -25,7 +25,7 @@ from app.market_data.candles import HistoricalCandleService
 from app.market_data.repository import CandleRepository
 from app.market_data.runtime import MarketDataRuntime
 from app.market_data.service import MarketDataService
-from app.paper_trading.analytics import equity_curve
+from app.paper_trading.analytics import daily_performance, equity_curve
 from app.paper_trading.engine import PaperTradingRuntime
 from app.paper_trading.exceptions import PaperExecutionRejected
 from app.paper_trading.models import PaperPositionStatus
@@ -827,6 +827,13 @@ async def paper_performance(request: Request, backtest_id: UUID | None = None) -
 async def paper_equity(request: Request) -> dict:
     rows = equity_curve(paper_runtime_from(request).state)
     return {"count": len(rows), "items": rows}
+
+
+@router.get("/paper/daily-report")
+async def paper_daily_report(request: Request) -> dict:
+    """UTC-day paper P&L report derived from immutable closed-trade journal rows."""
+    rows = daily_performance(paper_runtime_from(request).state)
+    return {"timezone": "UTC", "count": len(rows), "items": rows}
 
 
 @router.get("/paper/drawdown")

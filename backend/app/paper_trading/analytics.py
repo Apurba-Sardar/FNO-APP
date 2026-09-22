@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+from datetime import UTC, datetime
 from statistics import mean
 
 from app.backtesting.metrics import metric_set
@@ -74,6 +75,38 @@ def equity_curve(state: PaperState) -> list[dict]:
             "cumulative_pnl": state.account.equity - state.account.initial_equity,
         })
     return points
+
+
+def daily_performance(state: PaperState, now: datetime | None = None) -> list[dict]:
+    """Derive durable daily P&L records from the paper trade journal.
+
+    UTC is deliberately used to match the risk engine's trading-day boundary.
+    """
+    now = now or datetime.now(UTC)
+    grouped: dict[str, list] = defaultdict(list)
+    for trade in state.trades:
+        closed_at = trade.exit_time or trade.timestamp
+        grouped[closed_at.astimezone(UTC).date().isoformat()].append(trade)
+    today = now.date().isoformat()
+    grouped.setdefault(today, [])
+    reports = []
+    for day, trades in sorted(grouped.items(), reverse=True):
+        gross = sum(item.gross_pnl for item in trades)
+        fees = sum(item.fees for item in trades)
+        slippage = sum(item.slippage for item in trades)
+        net = sum(item.net_pnl for item in trades)
+        reports.append({
+            "date": day,
+            "trade_count": len(trades),
+            "wins": sum(item.net_pnl > 0 for item in trades),
+            "losses": sum(item.net_pnl < 0 for item in trades),
+            "gross_pnl": gross,
+            "fees": fees,
+            "slippage": slippage,
+            "net_pnl": net,
+            "is_current_utc_day": day == today,
+        })
+    return reports
 
 
 def compare_metrics(paper: dict, backtest) -> dict:
