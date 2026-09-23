@@ -241,11 +241,11 @@ async def lifespan(application: FastAPI):
                 # ── Daily Rollover & Day Boundary Check ─────────────────────
                 live_runtime.check_and_apply_daily_rollover()
 
-                # ── Daily Profit Goal Gate (Strictly When Net $20 USDT Earned After Losses) ──
+                # ── Daily Profit Goal Gate (Target: $2.00 USDT Daily) ──────────────────────
                 today_profit = getattr(live_runtime, "today_realized_profit", 0.0) or 0.0
                 today_loss = getattr(live_runtime, "today_realized_loss", 0.0) or 0.0
                 today_net_pnl = round(today_profit - today_loss, 3)
-                max_target = settings.live_max_daily_profit_target or 20.0
+                max_target = settings.live_max_daily_profit_target or 2.0
                 if max_target > 0 and today_net_pnl >= max_target:
                     log.info(
                         "AUTO_SCALP_DAILY_PROFIT_GOAL_ACHIEVED",
@@ -255,15 +255,15 @@ async def lifespan(application: FastAPI):
                         wins=getattr(live_runtime, "today_winning_trades", 0),
                         losses=getattr(live_runtime, "today_losing_trades", 0),
                         target=max_target,
-                        status="net_profit_target_achieved_halting_for_the_day",
+                        status="daily_goal_achieved_halting_for_the_day",
                     )
                     live_runtime.auto_trading_enabled = False
                     await _asyncio.sleep(300)
                     continue
 
-                # ── Capital Risk Shield: Daily Loss Limit Gate ───────────────
+                # ── Capital Risk Shield: Daily Loss Limit Gate ($1.50 Max Loss) ──
                 daily_loss = getattr(live_runtime, "today_realized_loss", 0.0) or 0.0
-                max_daily_loss = getattr(live_runtime, "max_daily_loss_limit", 3.50)
+                max_daily_loss = getattr(live_runtime, "max_daily_loss_limit", 1.50) or 1.50
                 today_pnl = today_net_pnl
                 if daily_loss >= max_daily_loss or (today_net_pnl <= -max_daily_loss):
                     log.warning(
@@ -289,11 +289,10 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(min(rem_wait, 30))
                     continue
 
-                # ── Concurrent Open Position Gate (Max 2 Active Scalps) ──────
-                # Allows up to 2 simultaneous scalps on different symbols for increased capital efficiency
+                # ── Concurrent Open Position Gate (Max 1 Single Scalp for $53 Capital) ──
                 open_positions = [p for p in live_runtime.positions.values() if p.status == "open"]
                 open_pairs = {p.pair for p in open_positions}
-                if len(open_positions) >= 2:
+                if len(open_positions) >= 1:
                     summary = ", ".join(f"{p.pair} (pnl: ${round(p.unrealized_pnl, 2)})" for p in open_positions)
                     log.info(
                         "AUTO_SCALP_MAX_CONCURRENT_POSITIONS_ACTIVE",
@@ -341,6 +340,12 @@ async def lifespan(application: FastAPI):
                 live_runtime.symbol_cooldowns = active_cooldowns
 
                 # ── Candidate Discovery (Bidirectional Long & Short Momentum) ──
+                EXCLUDED_PAIRS = {
+                    "B-BTC_USDT", "B-ETH_USDT", "B-ETC_USDT", "B-LTC_USDT",
+                    "B-BCH_USDT", "B-ADA_USDT", "B-XRP_USDT", "B-BNB_USDT",
+                    "B-TRX_USDT", "B-LINK_USDT", "B-DOT_USDT", "B-UNI_USDT",
+                    "B-MET_USDT", "B-BZ_USDT",
+                }
                 best_symbol = None
                 best_score = 0.0
                 best_side = "buy"
@@ -373,11 +378,12 @@ async def lifespan(application: FastAPI):
                             except Exception:
                                 pass
 
-                        # Filter for eligible candidates (active on exchange, not currently open, and not in cooldown)
+                        # Filter for eligible candidates (active on exchange, not currently open, not excluded, and not in cooldown)
                         eligible_candidates = [
                             g for g in ranked_pool
                             if g.symbol not in open_pairs 
                             and g.symbol not in active_cooldowns 
+                            and g.symbol not in EXCLUDED_PAIRS
                             and g.last_price > 0
                             and (not active_set or g.symbol in active_set)
                         ]
@@ -629,7 +635,7 @@ async def lifespan(application: FastAPI):
                 if not best_symbol and live_runtime.strategy_runtime and getattr(live_runtime.strategy_runtime, "state", None):
                     analyses = getattr(live_runtime.strategy_runtime.state, "analyses", {})
                     for sym, analysis in analyses.items():
-                        if sym in open_pairs or sym in active_cooldowns:
+                        if sym in open_pairs or sym in active_cooldowns or sym in EXCLUDED_PAIRS:
                             continue
                         sc = float(getattr(analysis, "opportunity_score", 0.0) or 0.0)
                         px_cand = float(getattr(analysis, "current_price", 0.0) or 0.0)
@@ -671,10 +677,12 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(30)
                     continue
 
-                # Precision step & min quantity
-                margin = 25.0
-                leverage = 4
-                notional = 105.0  # Sized at $105 notional (safely above CoinDCX $100 min) so max loss on SL strictly stays under $1.15 USDT
+                # Precision step & min quantity (Tailored for $53 USDT capital)
+                leverage = 3
+                notional = min(25.0, round(float(getattr(live_runtime.account, "equity", 53.0) or 53.0) * 0.48, 1))
+                if notional < 15.0:
+                    notional = 15.0
+                margin = round(notional / leverage, 2)
                 step = 1.0
                 min_q = 1.0
                 try:
@@ -820,9 +828,10 @@ async def lifespan(application: FastAPI):
 
             await _asyncio.sleep(10)  # evaluate every 10s for hyper-responsive trade punching
 
-    # The legacy daemon submits orders directly and bypasses the strategy/risk
-    # execution pipeline. Keep it disabled until replaced by a validated path.
+    # Auto-scalp daemon: Activated for live auto execution with strict capital shield and $2 daily target
     auto_scalp_task = None
+    if settings.trading_mode == "live" or (settings.live.enabled and settings.live_auto_execution):
+        auto_scalp_task = _asyncio.create_task(_auto_scalp_daemon(), name="auto-scalp-daemon")
 
     try:
         yield
