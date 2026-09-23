@@ -903,6 +903,25 @@ async def close_paper_position(position_id: UUID, request: Request) -> dict:
     return trade.model_dump(mode="json")
 
 
+@router.post("/paper/clear-losses")
+async def clear_paper_losses(request: Request) -> dict:
+    from app.risk.models import RiskLockState
+    runtime = paper_runtime_from(request)
+    async with runtime._lock:
+        runtime.state.account.consecutive_losses = 0
+        runtime.state.trading_blocked = False
+        runtime.state.block_reason = None
+        if hasattr(request.app.state, "risk_runtime"):
+            risk = request.app.state.risk_runtime
+            risk.state.risk_state.trading_lock = RiskLockState.OPEN
+            risk.state.risk_state.block_reasons = []
+            if risk.state.risk_state.account:
+                risk.state.risk_state.account.consecutive_losses = 0
+                risk.state.risk_state.account.open_positions = []
+        await runtime.repository.save(runtime.state)
+    return {"status": "ok", "consecutive_losses": 0, "trading_blocked": False}
+
+
 class LiveModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

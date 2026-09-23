@@ -290,6 +290,7 @@ class PaperTradingRuntime:
             self.last_monitor_at = datetime.now(UTC)
             risk_blocked = (
                 self.risk_state.risk_state.trading_lock.value == "blocked"
+                and "account data unavailable" not in (self.risk_state.risk_state.block_reasons or [])
             )
             daily_lock_reason = self._run_duration_lock_reason(now) or self._daily_lock_reason()
             self.state.trading_blocked = had_stale or risk_blocked or bool(daily_lock_reason)
