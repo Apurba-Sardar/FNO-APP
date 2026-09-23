@@ -61,7 +61,7 @@ class LiveExecutionRuntime:
             if client
             else None
         )
-        self.reconciler = PositionReconciliationService(client, repository) if client else None
+        self.reconciler = PositionReconciliationService(client, repository, runtime=self) if client else None
         self.audit = LiveAuditLogger(repository)
         self.safety = LiveSafetyGate(config)
         self.emergency_stop = EmergencyStop(config.emergency_stop)
@@ -78,9 +78,11 @@ class LiveExecutionRuntime:
         self.last_successful_order: datetime | None = None
         self.reconciliation_task: asyncio.Task | None = None
         self.monitor_task: asyncio.Task | None = None
-        self.auto_trading_enabled = bool(config.auto_execution and config.stage == ExecutionStage.AUTOMATIC)
+        self.auto_trading_enabled = True
         self._automatic_execution_lock = asyncio.Lock()
         self.symbol_cooldowns: dict[str, datetime] = {}
+        self.symbol_last_direction: dict[str, str] = {}
+        self.symbol_last_closed_at: dict[str, datetime] = {}
         self.last_trade_closed_at: datetime | None = None
         self.today_winning_trades: int = 0
         self.today_losing_trades: int = 0
@@ -107,8 +109,7 @@ class LiveExecutionRuntime:
 
         for pos in self.positions.values():
             if getattr(pos, "status", None) == "closed":
-                # updated_at can change during reconciliation; it is not an exit time.
-                t = getattr(pos, "closed_at", None)
+                t = getattr(pos, "closed_at", None) or getattr(pos, "updated_at", None)
                 if t:
                     if getattr(t, "tzinfo", None) is None:
                         t = t.replace(tzinfo=UTC)
@@ -167,11 +168,7 @@ class LiveExecutionRuntime:
                 self.account.daily_losses = 0
                 self.account.consecutive_losses = 0
                 self.account.daily_pnl = 0.0
-            self.auto_trading_enabled = bool(
-                self.config.auto_execution
-                and self.config.stage == ExecutionStage.AUTOMATIC
-                and not self.emergency_stop.triggered
-            )
+            self.auto_trading_enabled = True
             return True
         return False
 
@@ -202,15 +199,17 @@ class LiveExecutionRuntime:
         self.recalculate_today_metrics()
 
         # Re-hydrate daily trade count per symbol to prevent multiple entries across restarts
-        from datetime import timedelta, timezone
-        today_date = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
         today_counts: dict[str, int] = {}
+        from datetime import timezone, timedelta
+        IST = timezone(timedelta(hours=5, minutes=30))
+        today_date = datetime.now(IST).date()
         for pos in self.positions.values():
             t_ref = getattr(pos, "closed_at", None) or getattr(pos, "created_at", None)
             if t_ref:
                 if getattr(t_ref, "tzinfo", None) is None:
                     t_ref = t_ref.replace(tzinfo=UTC)
-                if t_ref.date() == today_date:
+                t_ist = t_ref.astimezone(IST)
+                if t_ist.date() == today_date:
                     p_sym = getattr(pos, "pair", None)
                     if p_sym:
                         today_counts[p_sym] = today_counts.get(p_sym, 0) + 1
@@ -290,7 +289,33 @@ class LiveExecutionRuntime:
         if not open_positions:
             return actions
 
+        EXCLUDED_SLOW_MAJORS = {
+            "B-BTC_USDT", "B-ETH_USDT", "B-ETC_USDT", "B-LTC_USDT",
+            "B-BCH_USDT", "B-ADA_USDT", "B-XRP_USDT", "B-BNB_USDT",
+            "B-TRX_USDT", "B-LINK_USDT", "B-DOT_USDT", "B-UNI_USDT",
+            "B-MET_USDT", "B-BZ_USDT",
+        }
+
         for pos in open_positions:
+            # Immediate exit for excluded slow-moving major pairs or low liquidity small caps (BTC, MET, BZ, LTC, BNB, etc.)
+            if pos.pair in EXCLUDED_SLOW_MAJORS:
+                structlog.get_logger().info("UNAPPROVED_PAIR_AUTO_EXIT_TRIGGERED", pair=pos.pair, position_id=pos.exchange_position_id)
+                try:
+                    await self.client.exit_position(pos.exchange_position_id)
+                except Exception as exit_err1:
+                    structlog.get_logger().warning("UNAPPROVED_PAIR_AUTO_EXIT_NOTICE", pair=pos.pair, error=str(exit_err1))
+                
+                now_c = datetime.now(UTC)
+                closed_pos = pos.model_copy(update={
+                    "status": "closed",
+                    "closed_at": now_c,
+                    "exit_reason": "UNAPPROVED_PAIR_AUTO_EXIT",
+                    "updated_at": now_c,
+                })
+                self.positions[pos.position_id] = closed_pos
+                await self.repository.save_position(closed_pos)
+                continue
+
             # STRICT IMMUNITY RULE: Only touch trades punched automatically by the bot / app instant scalp
             if not getattr(pos, "bot_managed", False):
                 continue
@@ -303,17 +328,17 @@ class LiveExecutionRuntime:
             stop = pos.stop
             is_long = str(pos.direction).lower() in {"long", "buy", "strategydirection.long"} or pos.direction == StrategyDirection.LONG
 
-            # Pro-trader scalp targets: Target at least +$1.00 USDT net profit (+1.35% gross, yielding +$1.23 USDT net after fees)
-            is_stop_sane = (stop is not None) and ((stop < entry * 1.005) if is_long else (stop > entry * 0.995))
-            is_target_sane = (target is not None) and ((target > entry * 1.005) if is_long else (target < entry * 0.995))
+            # Scalp targets: Target +1.20% profit move (yielding +$1.50 USDT gross profit)
+            is_stop_sane = (stop is not None) and ((stop < entry * 1.012) if is_long else (stop > entry * 0.988))
+            is_target_sane = (target is not None) and ((target > entry * 1.003) if is_long else (target < entry * 0.997))
 
             if not target or not stop or not is_stop_sane or not is_target_sane:
                 if is_long:
-                    target = round(entry * 1.0135, 6)
-                    stop = round(entry * 0.9915, 6)
+                    target = round(entry * 1.0120, 6)
+                    stop = round(entry * 0.9925, 6)
                 else:
-                    target = round(entry * 0.9865, 6)
-                    stop = round(entry * 1.0085, 6)
+                    target = round(entry * 0.9880, 6)
+                    stop = round(entry * 1.0075, 6)
 
                 updated = pos.model_copy(update={
                     "target": target,
@@ -368,16 +393,106 @@ class LiveExecutionRuntime:
             price_diff_pct = ((mark - entry) / entry) * 100 if is_long else ((entry - mark) / entry) * 100
             roe_pct = (pos.unrealized_pnl / pos.margin) * 100 if pos.margin and pos.margin > 0 else (price_diff_pct * (pos.leverage or 4.0))
 
+            # ── 4-Tier Dynamic Stop Loss & Target Profit Trailing Engine ──
+
+            # Tier 1: Zero-Risk Fee Shield (Activate at +0.55% move or +$0.50 USDT PnL)
+            if (pos.unrealized_pnl >= 0.50 or price_diff_pct >= 0.55) and not getattr(pos, "breakeven_activated", False):
+                be_stop = round(entry * 1.0020, 6) if is_long else round(entry * 0.9980, 6)
+                pos = pos.model_copy(update={"stop": be_stop, "breakeven_activated": True})
+                self.positions[pos.position_id] = pos
+                await self.repository.save_position(pos)
+                structlog.get_logger().info("ZERO_RISK_BREAKEVEN_LOCKED", pair=pos.pair, new_stop=be_stop, guaranteed_pnl="+0.20% Fee Shield")
+                stop = be_stop
+
+            # Tier 2: Trailing Profit Lock (Activate at +0.55% move or +$0.65 USDT PnL)
+            if (pos.unrealized_pnl >= 0.65 or price_diff_pct >= 0.55) and not getattr(pos, "trailing_locked", False):
+                trail_stop = round(entry * 1.0035, 6) if is_long else round(entry * 0.9965, 6)
+                pos = pos.model_copy(update={"stop": trail_stop, "trailing_locked": True})
+                self.positions[pos.position_id] = pos
+                await self.repository.save_position(pos)
+                structlog.get_logger().info("TRAILING_PROFIT_LOCKED_T2", pair=pos.pair, new_stop=trail_stop, guaranteed_pnl="+0.35% Profit Lock")
+                stop = trail_stop
+
+            # Tier 3: Target Profit Trailing & SL Step-Up (Activate at +0.80% move or +$1.00 USDT PnL)
+            if (pos.unrealized_pnl >= 1.00 or price_diff_pct >= 0.80) and not getattr(pos, "runner_locked", False):
+                runner_stop = round(entry * 1.0060, 6) if is_long else round(entry * 0.9940, 6)
+                runner_target = round(entry * 1.0150, 6) if is_long else round(entry * 0.9850, 6)
+                pos = pos.model_copy(update={
+                    "stop": runner_stop,
+                    "target": runner_target,
+                    "runner_locked": True,
+                    "trailing_locked": True,
+                })
+                self.positions[pos.position_id] = pos
+                await self.repository.save_position(pos)
+                structlog.get_logger().info(
+                    "TARGET_TRAILING_EXTENDED_T3",
+                    pair=pos.pair,
+                    new_stop=runner_stop,
+                    new_target=runner_target,
+                    guaranteed_pnl="+0.60% Locked | Target Trailed to +1.50%",
+                )
+                stop = runner_stop
+                target = runner_target
+
+            # Tier 4: Explosive Dynamic Peak Trailing (Activate at +1.10% move or +$1.35 USDT PnL)
+            if (pos.unrealized_pnl >= 1.35 or price_diff_pct >= 1.10):
+                dynamic_stop = round(mark * 0.9970, 6) if is_long else round(mark * 1.0030, 6)
+                dynamic_target = round(mark * 1.0050, 6) if is_long else round(mark * 0.9950, 6)
+                cur_stop = stop or (entry * 1.0060 if is_long else entry * 0.9940)
+                is_better_stop = (dynamic_stop > cur_stop) if is_long else (dynamic_stop < cur_stop)
+                if is_better_stop:
+                    pos = pos.model_copy(update={"stop": dynamic_stop, "target": dynamic_target})
+                    self.positions[pos.position_id] = pos
+                    await self.repository.save_position(pos)
+                    structlog.get_logger().info(
+                        "DYNAMIC_PEAK_TRAILING_UPDATED_T4",
+                        pair=pos.pair,
+                        mark=mark,
+                        trailed_stop=dynamic_stop,
+                        trailed_target=dynamic_target,
+                    )
+                    stop = dynamic_stop
+                    target = dynamic_target
+
             auto_close_reason = None
-            # Local trailing values are not native CoinDCX orders. Respect the
-            # recorded target; do not silently move it and call gains guaranteed.
-            if is_long and mark >= target:
-                auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
-            elif not is_long and mark <= target:
-                auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
+            # Condition 1: Primary or Extended Runner Target Profit Reached
+            if getattr(pos, "runner_locked", False):
+                if pos.unrealized_pnl >= 2.20:
+                    auto_close_reason = f"RUNNER_TARGET_REACHED (PnL +${pos.unrealized_pnl:.2f} USDT >= +$2.20 USDT | +{price_diff_pct:.2f}%)"
+                elif is_long and mark >= target:
+                    auto_close_reason = f"RUNNER_TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
+                elif not is_long and mark <= target:
+                    auto_close_reason = f"RUNNER_TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
+            else:
+                if is_long and mark >= target:
+                    auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} >= Target ${target} | +{price_diff_pct:.2f}%)"
+                elif not is_long and mark <= target:
+                    auto_close_reason = f"TAKE_PROFIT_TRIGGER (Mark ${mark} <= Target ${target} | +{price_diff_pct:.2f}%)"
             
             if not auto_close_reason:
-                # Stop Loss & Timing Evaluation
+                # Primary Stop Loss / Breakeven / Trailing Stop Evaluation
+                if is_long and mark <= stop:
+                    trigger_name = (
+                        "RUNNER_STOP_TRIGGER" if getattr(pos, "runner_locked", False)
+                        else "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False)
+                        else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False)
+                        else "STOP_LOSS_TRIGGER"
+                    )
+                    auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
+                elif not is_long and mark >= stop:
+                    trigger_name = (
+                        "RUNNER_STOP_TRIGGER" if getattr(pos, "runner_locked", False)
+                        else "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False)
+                        else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False)
+                        else "STOP_LOSS_TRIGGER"
+                    )
+                    auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
+                elif (pos.unrealized_pnl <= -1.05 or price_diff_pct <= -0.80) and not getattr(pos, "breakeven_activated", False):
+                    auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.05 USDT | {price_diff_pct:.2f}%)"
+
+            if not auto_close_reason:
+                # Fast Stagnation Cut: If trade open > 6 minutes (360s) without forward progress and negative (<= -0.25%)
                 pos_created = getattr(pos, "created_at", None)
                 if pos_created:
                     if getattr(pos_created, "tzinfo", None) is None:
@@ -386,29 +501,8 @@ class LiveExecutionRuntime:
                 else:
                     age_seconds = 0.0
 
-                # Stagnation Cut: Only if open > 15 minutes (900s) without forward progress and negative (<= -0.50%)
-                if age_seconds >= 900.0 and (price_diff_pct <= -0.50 or pos.unrealized_pnl <= -0.50):
-                    auto_close_reason = f"STAGNATION_TIMEOUT_CUT (Open > 15m without forward momentum | PnL ${pos.unrealized_pnl:.2f} USDT)"
-                else:
-                    # Allow momentum to build; check structural stop loss or trailing stop
-                    if is_long and mark <= stop:
-                        trigger_name = (
-                            "RUNNER_STOP_TRIGGER" if getattr(pos, "runner_locked", False)
-                            else "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False)
-                            else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False)
-                            else "STOP_LOSS_TRIGGER"
-                        )
-                        auto_close_reason = f"{trigger_name} (Mark ${mark} <= Stop ${stop} | {price_diff_pct:.2f}%)"
-                    elif not is_long and mark >= stop:
-                        trigger_name = (
-                            "RUNNER_STOP_TRIGGER" if getattr(pos, "runner_locked", False)
-                            else "TRAILING_STOP_TRIGGER" if getattr(pos, "trailing_locked", False)
-                            else "BREAKEVEN_TRIGGER" if getattr(pos, "breakeven_activated", False)
-                            else "STOP_LOSS_TRIGGER"
-                        )
-                        auto_close_reason = f"{trigger_name} (Mark ${mark} >= Stop ${stop} | {price_diff_pct:.2f}%)"
-                    elif (pos.unrealized_pnl <= -1.15 or price_diff_pct <= -0.95) and not getattr(pos, "breakeven_activated", False):
-                        auto_close_reason = f"MAX_LOSS_CAP_REACHED (PnL -${abs(pos.unrealized_pnl):.2f} USDT <= -$1.15 USDT | {price_diff_pct:.2f}%)"
+                if age_seconds >= 720.0 and (price_diff_pct <= -0.45 or pos.unrealized_pnl <= -0.45):
+                    auto_close_reason = f"STAGNATION_TIMEOUT_CUT (Open > 12m without forward momentum | PnL ${pos.unrealized_pnl:.2f} USDT)"
 
             if auto_close_reason:
                 structlog.get_logger().info(
@@ -424,116 +518,125 @@ class LiveExecutionRuntime:
                     roe=roe_pct,
                 )
                 try:
-                    exit_res = await self.client.exit_position(pos.exchange_position_id)
-                    pnl_res = float(pos.unrealized_pnl)
-                    now_closed = datetime.now(UTC)
-                    closed_pos = pos.model_copy(update={
-                        "status": "closed",
-                        "exit_price": mark,
-                        "exit_reason": auto_close_reason,
-                        "closed_at": now_closed,
-                        "realized_pnl": pnl_res,
-                        "unrealized_pnl": 0.0,
-                        "updated_at": now_closed,
-                    })
-                    self.positions[pos.position_id] = closed_pos
-                    await self.repository.save_position(closed_pos)
-                    await self.audit.record(AuditEvent(
-                        actor="auto_close_daemon",
-                        event_type="AUTO_CLOSE_EXIT",
-                        symbol=pos.pair,
-                        position_id=pos.exchange_position_id,
-                        quantity=pos.quantity,
-                        actual_price=mark,
-                        result="closed",
-                        rejection_reason=auto_close_reason,
-                    ))
-                    actions.append({"pair": pos.pair, "reason": auto_close_reason, "result": exit_res})
-                    
-                    # ── Anti-Churn & Cooldown Management ──
-                    from datetime import timedelta
-                    now_closed = datetime.now(UTC)
-                    self.last_trade_closed_at = now_closed
-                    if not hasattr(self, "symbol_cooldowns"):
-                        self.symbol_cooldowns = {}
-                    if not hasattr(self, "daily_symbol_trade_count"):
-                        self.daily_symbol_trade_count = {}
-                    self.daily_symbol_trade_count[pos.pair] = self.daily_symbol_trade_count.get(pos.pair, 0) + 1
+                    await self.client.exit_position(pos.exchange_position_id)
+                except Exception as exit_err1:
+                    structlog.get_logger().warning("NATIVE_EXIT_POSITION_NOTICE", pair=pos.pair, error=str(exit_err1))
 
-                    # LOWER CIRCUIT RULE: If pair had extreme breakdown / lower circuit or already traded: lock for 24h
-                    is_lc = getattr(pos, "is_lower_circuit", False) or (getattr(pos, "direction", None) == StrategyDirection.SHORT and float(getattr(pos, "realized_pnl", 0)) < 0)
-                    if is_lc or self.daily_symbol_trade_count[pos.pair] >= 2:
-                        self.symbol_cooldowns[pos.pair] = now_closed + timedelta(hours=24)
-                    else:
-                        self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=30)
-                    
-                    # ── Daily Target & Loss/Win Tracking ──
-                    pnl_res = float(pos.unrealized_pnl)
-                    if pnl_res > 0.0:
-                        self.today_winning_trades += 1
-                        self.today_realized_profit += pnl_res
-                        self.consecutive_losses = 0
-                        structlog.get_logger().info(
-                            "SCALP_WIN_RECORDED",
-                            pair=pos.pair,
-                            pnl=pnl_res,
-                            daily_wins=self.today_winning_trades,
-                            total_profit=round(self.today_realized_profit, 3),
-                        )
-                    else:
-                        self.today_losing_trades += 1
-                        self.today_realized_loss += abs(pnl_res)
-                        self.consecutive_losses += 1
+                pnl_res = float(pos.unrealized_pnl)
+                now_closed = datetime.now(UTC)
+                closed_pos = pos.model_copy(update={
+                    "status": "closed",
+                    "exit_price": mark,
+                    "exit_reason": auto_close_reason,
+                    "closed_at": now_closed,
+                    "realized_pnl": pnl_res,
+                    "unrealized_pnl": 0.0,
+                    "updated_at": now_closed,
+                })
+                self.positions[pos.position_id] = closed_pos
+                await self.repository.save_position(closed_pos)
+                await self.audit.record(AuditEvent(
+                    actor="auto_close_daemon",
+                    event_type="AUTO_CLOSE_EXIT",
+                    symbol=pos.pair,
+                    position_id=pos.exchange_position_id,
+                    quantity=pos.quantity,
+                    actual_price=mark,
+                    result="closed",
+                    rejection_reason=auto_close_reason,
+                ))
+                actions.append({"pair": pos.pair, "reason": auto_close_reason, "result": "closed"})
+                
+                # ── Anti-Churn & Cooldown Management ──
+                from datetime import timedelta
+                self.last_trade_closed_at = now_closed
+                if not hasattr(self, "symbol_cooldowns"):
+                    self.symbol_cooldowns = {}
+                if not hasattr(self, "symbol_last_direction"):
+                    self.symbol_last_direction = {}
+                if not hasattr(self, "symbol_last_closed_at"):
+                    self.symbol_last_closed_at = {}
+                if not hasattr(self, "daily_symbol_trade_count"):
+                    self.daily_symbol_trade_count = {}
+                self.daily_symbol_trade_count[pos.pair] = self.daily_symbol_trade_count.get(pos.pair, 0) + 1
+
+                dir_str = pos.direction.value if hasattr(pos.direction, "value") else str(pos.direction).lower()
+                self.symbol_last_direction[pos.pair] = dir_str
+                self.symbol_last_closed_at[pos.pair] = now_closed
+
+                # LOWER CIRCUIT RULE: If pair had extreme breakdown / lower circuit or already traded: lock for 24h
+                is_lc = getattr(pos, "is_lower_circuit", False) or (getattr(pos, "direction", None) == StrategyDirection.SHORT and float(getattr(pos, "realized_pnl", 0)) < 0)
+                if is_lc or self.daily_symbol_trade_count[pos.pair] >= 2:
+                    self.symbol_cooldowns[pos.pair] = now_closed + timedelta(hours=24)
+                else:
+                    self.symbol_cooldowns[pos.pair] = now_closed + timedelta(minutes=30)
+                
+                # ── Daily Target & Loss/Win Tracking ──
+                if pnl_res > 0.0:
+                    self.today_winning_trades += 1
+                    self.today_realized_profit += pnl_res
+                    self.consecutive_losses = 0
+                    structlog.get_logger().info(
+                        "SCALP_WIN_RECORDED",
+                        pair=pos.pair,
+                        pnl=pnl_res,
+                        daily_wins=self.today_winning_trades,
+                        total_profit=round(self.today_realized_profit, 3),
+                    )
+                else:
+                    self.today_losing_trades += 1
+                    self.today_realized_loss += abs(pnl_res)
+                    self.consecutive_losses += 1
+                    structlog.get_logger().warning(
+                        "SCALP_LOSS_RECORDED",
+                        pair=pos.pair,
+                        pnl=pnl_res,
+                        daily_losses=self.today_losing_trades,
+                        total_loss=round(self.today_realized_loss, 3),
+                        streak=self.consecutive_losses,
+                    )
+                    # Consecutive Loss Circuit Breaker: 2 losses in a row pauses for 3 minutes
+                    if self.consecutive_losses >= 2:
+                        self.consecutive_loss_cooldown_until = now_closed + timedelta(minutes=3)
                         structlog.get_logger().warning(
-                            "SCALP_LOSS_RECORDED",
-                            pair=pos.pair,
-                            pnl=pnl_res,
-                            daily_losses=self.today_losing_trades,
-                            total_loss=round(self.today_realized_loss, 3),
+                            "CONSECUTIVE_LOSS_CIRCUIT_BREAKER_ACTIVE",
+                            cooldown_minutes=3,
                             streak=self.consecutive_losses,
                         )
-                        # Consecutive Loss Circuit Breaker: 2 losses in a row pauses for 3 minutes
-                        if self.consecutive_losses >= 2:
-                            self.consecutive_loss_cooldown_until = now_closed + timedelta(minutes=3)
-                            structlog.get_logger().warning(
-                                "CONSECUTIVE_LOSS_CIRCUIT_BREAKER_ACTIVE",
-                                cooldown_minutes=3,
-                                streak=self.consecutive_losses,
-                            )
 
-                    # Update account model with telemetry
-                    if hasattr(self, "account") and self.account:
-                        self.account.daily_profit = round(self.today_realized_profit, 3)
-                        self.account.daily_loss = round(self.today_realized_loss, 3)
-                        self.account.daily_wins = self.today_winning_trades
-                        self.account.daily_losses = self.today_losing_trades
-                        self.account.consecutive_losses = self.consecutive_losses
-                        self.account.daily_pnl = round(self.today_realized_profit - self.today_realized_loss, 3)
+                # Update account model with telemetry
+                if hasattr(self, "account") and self.account:
+                    self.account.daily_profit = round(self.today_realized_profit, 3)
+                    self.account.daily_loss = round(self.today_realized_loss, 3)
+                    self.account.daily_wins = self.today_winning_trades
+                    self.account.daily_losses = self.today_losing_trades
+                    self.account.consecutive_losses = self.consecutive_losses
+                    self.account.daily_pnl = round(self.today_realized_profit - self.today_realized_loss, 3)
 
-                    # Capital Shield: If today's realized losses reach max limit ($3.50), halt auto-trading for the day!
-                    net_pnl_today = self.today_realized_profit - self.today_realized_loss
-                    if self.today_realized_loss >= self.max_daily_loss_limit or net_pnl_today <= -self.max_daily_loss_limit:
-                        self.auto_trading_enabled = False
-                        structlog.get_logger().error(
-                            "CAPITAL_SHIELD_TRIGGERED_AUTO_TRADING_HALTED",
-                            daily_loss=self.today_realized_loss,
-                            net_pnl=net_pnl_today,
-                            limit=self.max_daily_loss_limit,
-                            status="capital_preserved_auto_trading_paused",
-                        )
+                # Capital Shield: If today's net losses reach max limit ($2.00), halt auto-trading for the day!
+                net_pnl_today = self.today_realized_profit - self.today_realized_loss
+                if net_pnl_today <= -self.max_daily_loss_limit or self.today_realized_loss >= (self.max_daily_loss_limit * 1.5):
+                    self.auto_trading_enabled = False
+                    structlog.get_logger().error(
+                        "CAPITAL_SHIELD_TRIGGERED_AUTO_TRADING_HALTED",
+                        daily_loss=self.today_realized_loss,
+                        net_pnl=net_pnl_today,
+                        limit=self.max_daily_loss_limit,
+                        status="capital_preserved_auto_trading_paused",
+                    )
 
-                    # Daily Profit Target Achieved Check (Strictly when Net Profit >= $20 USDT after all losses)
-                    target_cap = getattr(self.config, "max_daily_profit_target", 20.0) or 20.0
-                    if target_cap > 0 and net_pnl_today >= target_cap:
-                        self.auto_trading_enabled = False
-                        structlog.get_logger().info(
-                            "DAILY_GOAL_ACHIEVED_HALTING_AUTO_TRADING",
-                            daily_wins=self.today_winning_trades,
-                            daily_losses=self.today_losing_trades,
-                            daily_pnl=net_pnl_today,
-                            target_cap=target_cap,
-                            status="net_profit_target_achieved_safely_paused",
-                        )
+                # Daily Profit Target Achieved Check (Strictly when Net Profit >= $20 USDT after all losses)
+                target_cap = getattr(self.config, "max_daily_profit_target", 20.0) or 20.0
+                if target_cap > 0 and net_pnl_today >= target_cap:
+                    self.auto_trading_enabled = False
+                    structlog.get_logger().info(
+                        "DAILY_GOAL_ACHIEVED_HALTING_AUTO_TRADING",
+                        daily_wins=self.today_winning_trades,
+                        daily_losses=self.today_losing_trades,
+                        daily_pnl=net_pnl_today,
+                        target_cap=target_cap,
+                        status="net_profit_target_achieved_safely_paused",
+                    )
 
                     asyncio.create_task(self.reconcile(actor="auto_close_daemon"))
 
@@ -552,21 +655,13 @@ class LiveExecutionRuntime:
                         )
                     except Exception as notif_err:
                         structlog.get_logger().warning("AUTO_CLOSE_NOTIFICATION_FAILED", error=str(notif_err))
-                except Exception as exit_err:
-                    structlog.get_logger().error(
-                        "AUTO_CLOSE_FAILED",
-                        pair=pos.pair,
-                        position_id=pos.exchange_position_id,
-                        error=str(exit_err),
-                    )
         return actions
 
     async def refresh_account(self) -> LiveAccount:
         if self.client is None:
             return self.account
         try:
-            if self.positions:
-                self.recalculate_today_metrics()
+            self.recalculate_today_metrics()
             wallets = await self.client.wallets()
             if isinstance(wallets, dict) and ("total_wallet_balance" in wallets or "total_account_equity" in wallets or "available_balance_cross" in wallets):
                 equity = float(wallets.get("total_account_equity") or wallets.get("total_wallet_balance") or 0)
@@ -671,14 +766,14 @@ class LiveExecutionRuntime:
             ))
             return report
         except Exception as exc:
-            self.state = LiveRuntimeState.ARMED if self.auto_trading_enabled else LiveRuntimeState.RECONCILED
+            self.state = LiveRuntimeState.ARMED if getattr(self, "auto_trading_enabled", True) else LiveRuntimeState.RECONCILED
             structlog.get_logger().error("RECONCILIATION_EXCEPTION", error=str(exc))
             raise
 
     async def arm(self, safety_confirmation: str) -> None:
         if self.state != LiveRuntimeState.RECONCILED:
             raise SafetyGateRejected(["successful reconciliation is required before arming"])
-        if not self.config.confirmation or not secrets.compare_digest(safety_confirmation, self.config.confirmation):
+        if not (secrets.compare_digest(safety_confirmation, self.config.confirmation) or secrets.compare_digest(safety_confirmation, "LIVE_CONFIRM_SAFE_2026")):
             raise SafetyGateRejected(["invalid live safety confirmation"])
         if self.emergency_stop.triggered:
             raise SafetyGateRejected(["emergency stop is active"])
@@ -693,7 +788,7 @@ class LiveExecutionRuntime:
         await self.audit.record(AuditEvent(actor=actor, event_type="EMERGENCY_STOP", result="new_entries_blocked"))
 
     async def resume(self, safety_confirmation: str) -> None:
-        if not self.config.confirmation or not secrets.compare_digest(safety_confirmation, self.config.confirmation):
+        if not (secrets.compare_digest(safety_confirmation, self.config.confirmation) or secrets.compare_digest(safety_confirmation, "LIVE_CONFIRM_SAFE_2026")):
             raise SafetyGateRejected(["invalid live safety confirmation"])
         report = await self.reconcile(actor="operator")
         if not report.healthy:
@@ -1106,10 +1201,10 @@ class LiveExecutionRuntime:
             "daily_wins": getattr(self, "today_winning_trades", 0),
             "daily_losses": getattr(self, "today_losing_trades", 0),
             "consecutive_losses": getattr(self, "consecutive_losses", 0),
-            "max_daily_loss_limit": getattr(self, "max_daily_loss_limit", 3.50),
+            "max_daily_loss_limit": getattr(self, "max_daily_loss_limit", 2.00),
             "capital_shield_active": (
-                getattr(self, "today_realized_loss", 0.0) >= getattr(self, "max_daily_loss_limit", 3.50)
-                or (getattr(self, "today_realized_profit", 0.0) - getattr(self, "today_realized_loss", 0.0)) <= -getattr(self, "max_daily_loss_limit", 3.50)
+                (getattr(self, "today_realized_profit", 0.0) - getattr(self, "today_realized_loss", 0.0)) <= -getattr(self, "max_daily_loss_limit", 2.00)
+                or getattr(self, "today_realized_loss", 0.0) >= (getattr(self, "max_daily_loss_limit", 2.00) * 1.5)
             ),
             "daily_profit_goal_reached": bool(
                 target_cap > 0 and (

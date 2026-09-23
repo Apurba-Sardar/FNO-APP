@@ -261,11 +261,11 @@ async def lifespan(application: FastAPI):
                     await _asyncio.sleep(300)
                     continue
 
-                # ── Capital Risk Shield: Daily Loss Limit Gate ($1.50 Max Loss) ──
+                # ── Capital Risk Shield: Net Daily Loss Limit Gate ($2.00 Max Loss) ──
                 daily_loss = getattr(live_runtime, "today_realized_loss", 0.0) or 0.0
-                max_daily_loss = getattr(live_runtime, "max_daily_loss_limit", 1.50) or 1.50
+                max_daily_loss = getattr(live_runtime, "max_daily_loss_limit", 2.00) or 2.00
                 today_pnl = today_net_pnl
-                if daily_loss >= max_daily_loss or (today_net_pnl <= -max_daily_loss):
+                if today_net_pnl <= -max_daily_loss or daily_loss >= (max_daily_loss * 1.5):
                     log.warning(
                         "AUTO_SCALP_CAPITAL_SHIELD_TRIGGERED",
                         daily_loss=round(daily_loss, 2),

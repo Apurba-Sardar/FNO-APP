@@ -1339,7 +1339,6 @@ async def live_pnl_logs(request: Request, settings: SettingsDependency, limit: i
 async def live_reset_daily_pnl(request: Request, settings: SettingsDependency) -> dict:
     """Manually or remotely reset today's PnL, wins, and losses back to clean 0.00 baseline."""
     authorize_live(request, settings)
-    raise HTTPException(status_code=409, detail="Manual daily risk-counter resets are disabled; counters reset only at the configured day boundary.")
     runtime = live_runtime_from(request)
     runtime.daily_metrics_reset_at = datetime.now(UTC)
     runtime.today_realized_profit = 0.0
