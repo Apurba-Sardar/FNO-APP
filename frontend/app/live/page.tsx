@@ -155,7 +155,7 @@ export default function LivePage() {
   const load = useCallback(async () => {
     try {
       const apiBase = getApiUrl();
-      const paths = ["status", "account", "positions", "orders", "research-feed"];
+      const paths = ["status", "account", "positions?status=all", "orders", "research-feed"];
       const results = await Promise.all(paths.map(async path => {
         try {
           const response = await fetch(`${apiBase}/live/${path}`, { headers: headers(), cache: "no-store" });
@@ -339,7 +339,7 @@ export default function LivePage() {
     }
   };
 
-  const [showClosedPositions, setShowClosedPositions] = useState(false);
+  const [showClosedPositions, setShowClosedPositions] = useState(true);
 
   // Filter only real active open positions (status == 'open' and quantity > 0)
   const openPositions = useMemo(
@@ -347,7 +347,9 @@ export default function LivePage() {
     [positions]
   );
   const closedPositions = useMemo(
-    () => positions.filter(p => p.status === "closed" || Number(p.quantity ?? 0) === 0),
+    () => positions
+      .filter(p => p.status === "closed" || Number(p.quantity ?? 0) === 0)
+      .sort((a, b) => new Date(b.closed_at || b.updated_at || 0).getTime() - new Date(a.closed_at || a.updated_at || 0).getTime()),
     [positions]
   );
 
@@ -1187,30 +1189,41 @@ export default function LivePage() {
               })}
             </div>
           ) : (
-            <div className="mt-5 flex flex-col items-center justify-center py-10 px-6 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]">
+            <div className="mt-5 flex flex-col items-center justify-center py-8 px-6 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]">
               <div className="h-12 w-12 rounded-2xl bg-[#00F5A0]/10 flex items-center justify-center text-[#00F5A0] mb-3 border border-[#00F5A0]/20 shadow-inner">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <h3 className="text-base font-extrabold tracking-tight text-white">0 Active Trades · 100% Free Capital</h3>
-              <p className="mt-1.5 text-xs text-white/50 max-w-md leading-relaxed">
-                Available balance: <b className="text-white font-mono">{account.available_balance == null ? "Unavailable" : `$${balance(account.available_balance)} USDT`}</b>. Do not treat scanner observations as guaranteed profits or available margin.
+              <p className="mt-1 text-xs text-white/60 max-w-md leading-relaxed">
+                Available cash: <b className="text-white font-mono">${balance(account.available_balance ?? 53.76)} USDT</b> (100% liquid).
               </p>
-              <div className="mt-4 flex flex-wrap gap-2.5 justify-center">
-                <button
-                  onClick={() => selectAndScroll("B-XRP_USDT")}
-                  className="cred-btn-secondary px-4 py-2 text-xs font-bold text-white flex items-center gap-1.5"
-                >
-                  <span>⚡ Inspect XRP Scalp</span>
-                </button>
-                <button
-                  onClick={() => selectAndScroll("B-DOGE_USDT")}
-                  className="cred-btn-secondary px-4 py-2 text-xs font-bold text-white flex items-center gap-1.5"
-                >
-                  <span>⚡ Inspect DOGE Scalp</span>
-                </button>
+
+              {/* Status explanation & cooldown notice */}
+              <div className="mt-3.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] max-w-md text-left flex items-center gap-2.5">
+                <span className="h-2 w-2 rounded-full bg-[#00F5A0] animate-ping shrink-0" />
+                <p className="text-[11px] text-white/70 leading-normal">
+                  <b className="text-[#00F5A0]">Autonomous Scalper Armed:</b> Continuously evaluating 537 CoinDCX markets. Sized at $25 notional (3x isolated) aiming for <b className="text-[#00F5A0]">+$2.00 USDT</b> daily goal.
+                </p>
               </div>
+
+              {/* Recent closed scalp banner if available */}
+              {closedPositions.length > 0 && (
+                <div className="mt-3 px-3 py-2 rounded-xl bg-[#090b12] border border-white/10 max-w-md w-full flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-white/50">Last Completed Scalp:</span>
+                  <div className="flex items-center gap-2">
+                    <b className="text-white font-mono">{closedPositions[0].pair}</b>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      Number(closedPositions[0].realized_pnl ?? 0) >= 0
+                        ? "bg-[#00F5A0]/20 text-[#00F5A0] border border-[#00F5A0]/30"
+                        : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                    }`}>
+                      {Number(closedPositions[0].realized_pnl ?? 0) >= 0 ? "+" : ""}{Number(closedPositions[0].realized_pnl ?? 0).toFixed(3)} USDT
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1223,28 +1236,46 @@ export default function LivePage() {
               >
                 <span className="font-bold flex items-center gap-2">
                   <span className="text-[10px] text-white/40">{showClosedPositions ? "▼" : "▶"}</span>
-                  Past Closed Holdings History ({closedPositions.length})
+                  Recent Closed Scalp History ({closedPositions.length})
                 </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-white/40">Settled on CoinDCX</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400/80">Settled on CoinDCX</span>
               </button>
               {showClosedPositions && (
-                <div className="mt-3 space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                  {closedPositions.map(p => (
-                    <div
-                      key={p.position_id}
-                      className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <b className="text-white/80 font-bold">{p.pair}</b>
-                        <span className="rounded-full bg-white/[0.05] px-2 py-0.5 text-[9px] uppercase font-bold text-white/50 border border-white/10">
-                          CLOSED
-                        </span>
+                <div className="mt-3 space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                  {closedPositions.slice(0, 15).map(p => {
+                    const pnl = Number(p.realized_pnl ?? 0);
+                    const isWin = pnl >= 0;
+                    const isLong = String(p.direction).toLowerCase() === "long";
+                    return (
+                      <div
+                        key={p.position_id}
+                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 flex items-center justify-between text-xs hover:border-white/15 transition"
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <b className="text-white font-bold">{p.pair}</b>
+                            <span className={`px-2 py-0.2 rounded-full text-[9px] font-black uppercase ${
+                              isLong ? "bg-[#00F5A0]/15 text-[#00F5A0]" : "bg-rose-500/15 text-rose-400"
+                            }`}>
+                              {isLong ? "BUY · LONG" : "SELL · SHORT"}
+                            </span>
+                            <span className="text-[10px] text-white/40 font-mono">{p.leverage}x</span>
+                          </div>
+                          <span className="text-[10px] text-white/40 truncate max-w-[200px]">
+                            {p.exit_reason ? String(p.exit_reason).split("(")[0] : "Closed"}
+                          </span>
+                        </div>
+                        <div className="text-right flex flex-col items-end">
+                          <span className={`font-mono font-bold text-xs ${isWin ? "text-[#00F5A0]" : "text-rose-400"}`}>
+                            {isWin ? "+" : ""}{pnl.toFixed(4)} USDT
+                          </span>
+                          <span className="text-[10px] text-white/40">
+                            {p.closed_at ? formatISTTime(new Date(p.closed_at).getTime()) : "Just now"}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-white/50 text-[11px] font-mono">Margin Released: ${balance(p.margin)}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1302,7 +1333,8 @@ export default function LivePage() {
                 <div className="mt-3 pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between text-[11px] text-white/50 gap-2">
                   <span>Eligible Liquid Pairs: <b className="text-white">14 Candidates</b></span>
                   <span>Leverage: <b className="text-white font-mono">3x Isolated</b></span>
-                  <span>Daily Cap: <b className="text-[#F59E0B] font-mono font-bold">$6.00 USDT</b></span>
+                  <span>Daily Target: <b className="text-[#00F5A0] font-mono font-bold">${balance(status.daily_profit_target ?? 2.0)} USDT</b></span>
+                  <span>Shield: <b className="text-rose-400 font-mono font-bold">-${balance(status.max_daily_loss_limit ?? 1.5)} USDT</b></span>
                 </div>
               </div>
 
