@@ -44,7 +44,9 @@ class PaperTradingRuntime:
         self.risk_state = risk_state
         self.config: PaperTradingConfig = config
         self.risk_config = risk_config
-        self.executor = PaperTradeExecutor(config, risk_config.taker_fee_percent)
+        self.executor = PaperTradeExecutor(config, risk_config.taker_fee_percent, risk_config=risk_config)
+        self.last_monitor_at = None
+        self.monitor_error = None
         self.state = repository.new_state()
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
@@ -126,7 +128,16 @@ class PaperTradingRuntime:
         return None
 
     async def process_risk_results(self, _stats=None) -> None:
+        async with self._lock:
+            await self._process_risk_results(_stats)
+
+    async def _process_risk_results(self, _stats=None) -> None:
         if self.state.engine_status != EngineStatus.RUNNING:
+            return
+        if self._task is None or self._task.done() or self.monitor_error:
+            self.state.trading_blocked = True
+            self.state.block_reason = "paper monitor unavailable"
+            await self.repository.save(self.state)
             return
         now = datetime.now(UTC)
         duration_lock_reason = self._run_duration_lock_reason(now)
@@ -187,6 +198,7 @@ class PaperTradingRuntime:
                 await self.market_runtime.websocket.subscribe_orderbook(symbol)
                 try:
                     quote = await self.quote(symbol)
+                    now = datetime.now(UTC)
                     candidate = self.scanner_state.candidates.get(symbol)
                     position = self.executor.execute_entry(
                         self.state, setup, decision, quote, now, setup_id,
@@ -222,7 +234,7 @@ class PaperTradingRuntime:
                     )
                     await self._notify_entry(position)
                     status, reason = PaperSetupStatus.ENTERED, None
-                except PaperExecutionRejected as exc:
+                except Exception as exc:
                     status, reason = PaperSetupStatus.ARMED, str(exc)
                 self.state.setups[setup_id] = PaperSetupState(
                     setup_id=setup_id, symbol=symbol, strategy=strategy, status=status,
@@ -231,19 +243,31 @@ class PaperTradingRuntime:
         await self.repository.save(self.state)
 
     async def quote(self, symbol: str) -> MarketQuote:
+        """Use actual book prices and the book's own exchange timestamp."""
+        from app.market_data.normalization import normalize_websocket_orderbook
+        from app.services.coindcx.public_client import CoinDCXPublicClient
+
         book = await self.market_runtime.store.get_orderbook(symbol)
-        trade = await self.market_runtime.store.get_latest_trade(symbol)
-        ticker = await self.market_runtime.store.get_ticker(symbol)
-        timestamps = [item.timestamp for item in (book, trade, ticker) if item is not None]
-        if not timestamps:
-            raise PaperExecutionRejected("live public market quote unavailable")
-        return MarketQuote(
-            symbol=symbol,
-            bid=book.bids[0][0] if book and book.bids else None,
-            ask=book.asks[0][0] if book and book.asks else None,
-            last=trade.price if trade else ticker.last_price if ticker else None,
-            timestamp=max(timestamps),
-        )
+        now = datetime.now(UTC)
+        if book is None or not -5.0 <= (now - book.timestamp).total_seconds() <= self.config.max_stale_seconds:
+            if getattr(self, "_pub_client", None) is None:
+                settings = self.market_runtime.settings
+                self._pub_client = CoinDCXPublicClient(
+                    settings.coindcx_api_base_url, settings.coindcx_public_base_url,
+                    settings.request_timeout_seconds,
+                )
+            raw = await self._pub_client.orderbook(symbol, depth=20)
+            book = normalize_websocket_orderbook(symbol, raw.model_dump())
+            await self.market_runtime.store.set_orderbook(book)
+        if not book.bids or not book.asks:
+            raise PaperExecutionRejected("live bid/ask unavailable")
+        bid, ask = book.bids[0][0], book.asks[0][0]
+        if bid > ask:
+            raise PaperExecutionRejected("crossed order book")
+        quote = MarketQuote(symbol=symbol, bid=bid, ask=ask, last=None, timestamp=book.timestamp)
+        self.executor.validate_quote(quote, datetime.now(UTC))
+        self.state.last_market_update = book.timestamp
+        return quote
 
     async def monitor_once(self, now: datetime | None = None) -> None:
         now = now or datetime.now(UTC)
@@ -252,22 +276,22 @@ class PaperTradingRuntime:
             for position in [p for p in self.state.positions if p.status == PaperPositionStatus.OPEN]:
                 try:
                     quote = await self.quote(position.symbol)
-                    self.executor.validate_quote(quote, now)
+                    quote_now = datetime.now(UTC) if quote.timestamp > now else now
+                    self.executor.validate_quote(quote, quote_now)
                     reason = self.executor.trigger_reason(
-                        position, quote, now, self.risk_config.max_trade_duration_minutes
+                        position, quote, quote_now, self.risk_config.max_trade_duration_minutes
                     )
                     if reason:
-                        await self._exit(position, quote, reason, now)
-                except PaperExecutionRejected as exc:
+                        await self._exit(position, quote, reason, quote_now)
+                except Exception as exc:
                     had_stale = True
                     self.state.block_reason = str(exc)
             refresh_account(self.state, now)
-            self.state.last_market_update = self.market_runtime.websocket.last_message_at
+            self.last_monitor_at = datetime.now(UTC)
             risk_blocked = (
                 self.risk_state.risk_state.trading_lock.value == "blocked"
-                and "account data unavailable" not in (self.risk_state.risk_state.block_reasons or [])
             )
-            daily_lock_reason = self._daily_lock_reason()
+            daily_lock_reason = self._run_duration_lock_reason(now) or self._daily_lock_reason()
             self.state.trading_blocked = had_stale or risk_blocked or bool(daily_lock_reason)
             if daily_lock_reason:
                 self.state.block_reason = daily_lock_reason
@@ -382,9 +406,18 @@ class PaperTradingRuntime:
                 pass
 
     async def _monitor_loop(self):
-        while self.state.engine_status in {EngineStatus.RUNNING, EngineStatus.DATA_STALE}:
+        while True:
             await asyncio.sleep(self.config.monitor_interval_seconds)
-            await self.monitor_once()
+            try:
+                await asyncio.wait_for(self.monitor_once(), timeout=45)
+                self.monitor_error = None
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.monitor_error = type(exc).__name__
+                self.state.trading_blocked = True
+                self.state.block_reason = "paper monitor error: " + self.monitor_error
+                self.log.exception("PAPER_MONITOR_ERROR")
 
     async def reset(self, confirmation: str) -> None:
         async with self._lock:

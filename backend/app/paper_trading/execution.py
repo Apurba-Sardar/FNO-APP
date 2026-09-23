@@ -5,6 +5,7 @@ import structlog
 
 from app.execution.interface import TradeExecutor
 from app.risk.models import RiskDecision
+from app.risk.config import RiskConfig
 from app.strategy.models import StrategyDirection, StrategyResult, StrategyStatus
 
 from .config import PaperExecutionModel, PaperMarkPrice, PaperTradingConfig
@@ -29,10 +30,11 @@ from .slippage import paper_slippage_model
 class PaperTradeExecutor(TradeExecutor):
     """Pure simulator. It intentionally cannot receive an exchange/private client."""
 
-    def __init__(self, config: PaperTradingConfig, taker_fee_percent: float, *, mode="paper"):
+    def __init__(self, config: PaperTradingConfig, taker_fee_percent: float, *, mode="paper", risk_config=None):
         if mode != ExecutionMode.PAPER and mode != "paper":
             raise PaperConfigurationError("PaperTradeExecutor only supports PAPER mode")
         self.config = config
+        self.risk_config = risk_config or RiskConfig()
         self.mode = ExecutionMode.PAPER
         self.fees = paper_fee_model(taker_fee_percent)
         self.slippage = paper_slippage_model(
@@ -56,7 +58,7 @@ class PaperTradeExecutor(TradeExecutor):
 
     def validate_quote(self, quote: MarketQuote, now: datetime) -> None:
         age = (now - quote.timestamp).total_seconds()
-        if age < 0 or age > self.config.max_stale_seconds:
+        if age < -5.0 or age > self.config.max_stale_seconds:
             raise StaleMarketData(f"market quote is stale ({age:.1f}s)")
 
     def execute_entry(
@@ -99,6 +101,32 @@ class PaperTradeExecutor(TradeExecutor):
         quantity = decision.position_quantity
         fee = self.fees.estimate(executed, quantity)
         slippage = abs(executed - requested) * quantity
+        refresh_account(state, now)
+        limits = self.risk_config
+        opened = [p for p in state.positions if p.status == PaperPositionStatus.OPEN]
+        if len(opened) >= limits.max_open_positions:
+            raise PaperExecutionRejected("open position limit reached at fill")
+        notional = executed * quantity
+        leverage = max(decision.estimated_leverage, 1)
+        if leverage > limits.max_leverage:
+            raise PaperExecutionRejected("leverage exceeds configured limit")
+        if notional > limits.max_position_notional or state.account.total_exposure + notional > state.account.equity * limits.max_total_exposure_percent / 100:
+            raise PaperExecutionRejected("portfolio exposure limit reached at fill")
+        if notional / leverage + fee > state.account.available_balance * (1 - limits.margin_safety_buffer_percent / 100):
+            raise PaperExecutionRejected("insufficient available margin at fill")
+        long = setup.direction == StrategyDirection.LONG
+        if not (setup.hypothetical_stop < executed < setup.hypothetical_target if long else setup.hypothetical_target < executed < setup.hypothetical_stop):
+            raise PaperExecutionRejected("fill is outside valid stop/target protection")
+        stop_fill = self.slippage.price(setup.hypothetical_stop, setup.direction, entry=False)
+        maximum_loss = abs(executed - stop_fill) * quantity + fee + self.fees.estimate(stop_fill, quantity)
+        budget = min(decision.risk_amount, state.account.equity * limits.risk_per_trade_percent / 100)
+        reserved = sum(p.initial_trade_risk for p in opened)
+        if maximum_loss > budget + 1e-8:
+            raise PaperExecutionRejected("actual fill stop risk exceeds allowed risk")
+        if self.config.daily_loss_limit and maximum_loss + reserved > self.config.daily_loss_limit + min(state.account.daily_pnl, 0):
+            raise PaperExecutionRejected("remaining daily loss budget insufficient")
+        if self.config.daily_profit_ceiling and state.account.daily_pnl >= self.config.daily_profit_ceiling:
+            raise PaperExecutionRejected("daily paper profit ceiling reached")
         order = PaperOrder(
             symbol=setup.symbol,
             direction=setup.direction,
@@ -132,7 +160,7 @@ class PaperTradeExecutor(TradeExecutor):
             entry_fee=fee,
             slippage=slippage,
             funding_status=self.funding.status,
-            initial_trade_risk=max(decision.maximum_loss, 0.00000001),
+            initial_trade_risk=max(maximum_loss, 0.00000001),
             leverage=max(decision.estimated_leverage, 1),
             opportunity_score=setup.opportunity_score,
             setup_score=setup.setup_quality_score,
