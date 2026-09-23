@@ -256,4 +256,19 @@ html, body {
   min-width: 44px;
 }
 
+/* Momentum scrolling for horizontal lists on mobile */
+.momentum-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Tactile mobile tap feedback */
+.active-press {
+  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.active-press:active {
+  transform: scale(0.96);
+}
+
+
 

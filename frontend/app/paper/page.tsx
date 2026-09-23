@@ -21,6 +21,7 @@ export default function PaperPage() {
   const [health, setHealth] = useState<AnyRow>({});
   const [message, setMessage] = useState("");
   const [resetArmed, setResetArmed] = useState(false);
+  const [showAllKpis, setShowAllKpis] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -127,33 +128,40 @@ export default function PaperPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => action("start")}
-              className="cred-btn-primary rounded-xl px-5 py-2 text-xs font-black"
+              className="cred-btn-primary rounded-xl px-4 sm:px-5 py-2.5 text-xs font-black active:scale-95 transition"
             >
-              Start Paper Session
+              Start Session
             </button>
             <button
               onClick={() => action("stop")}
-              className="cred-btn-secondary rounded-xl px-4 py-2 text-xs font-bold"
+              className="cred-btn-secondary rounded-xl px-3.5 sm:px-4 py-2.5 text-xs font-bold active:scale-95 transition"
             >
-              Stop Session
+              Stop
+            </button>
+            <button
+              onClick={() => action("clear-losses")}
+              className="rounded-xl border border-[#00F5A0]/40 bg-[#00F5A0]/10 hover:bg-[#00F5A0]/20 text-[#00F5A0] px-3.5 py-2.5 text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
+              title="Clear consecutive loss lockout and resume paper trading"
+            >
+              <span>⚡</span> Unblock / Clear
             </button>
             {!resetArmed ? (
               <button
                 onClick={() => setResetArmed(true)}
-                className="rounded-xl border border-rose-500/30 bg-rose-950/20 hover:bg-rose-950/40 text-rose-300 px-4 py-2 text-xs font-bold transition"
+                className="rounded-xl border border-rose-500/30 bg-rose-950/20 hover:bg-rose-950/40 text-rose-300 px-3.5 py-2.5 text-xs font-bold transition active:scale-95"
               >
                 Reset Account
               </button>
             ) : (
-              <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-950/30 p-1.5 text-xs">
-                <span className="text-slate-300 font-mono px-2">
-                  Equity ${money(account.equity)} · {positions.length} open
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-950/30 p-1.5 text-xs">
+                <span className="text-slate-300 font-mono px-2 text-[11px]">
+                  ${money(account.equity)} · {positions.length} open
                 </span>
                 <button
                   onClick={() => action("reset?confirmation=RESET%20PAPER%20TRADING")}
                   className="rounded-lg bg-rose-500 hover:bg-rose-400 px-3 py-1 font-bold text-black transition"
                 >
-                  Confirm Reset
+                  Confirm
                 </button>
                 <button
                   onClick={() => setResetArmed(false)}
@@ -166,7 +174,7 @@ export default function PaperPage() {
           </div>
 
           {message && (
-            <p className="text-xs font-mono text-[#00D9F5] bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-1.5">
+            <p className="text-xs font-mono text-[#00D9F5] bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-1.5 w-full sm:w-auto text-center sm:text-left">
               {message}
             </p>
           )}
@@ -174,13 +182,89 @@ export default function PaperPage() {
       </header>
 
       {(status.trading_blocked || health.trading_blocked) && (
-        <div className="rounded-2xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs font-bold text-rose-300 shadow-lg">
-          ⚠️ PAPER TRADING BLOCKED: {status.block_reason || health.block_reason || "Phase 7 risk lock active"}
+        <div className="rounded-2xl border border-rose-500/40 bg-rose-950/30 p-4 text-xs font-bold text-rose-300 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span>⚠️</span>
+            <span>PAPER TRADING BLOCKED: {status.block_reason || health.block_reason || "Risk circuit active"}</span>
+          </div>
+          <button
+            onClick={() => action("clear-losses")}
+            className="rounded-xl bg-[#00F5A0] hover:bg-[#00D9F5] text-slate-950 px-4 py-2 font-black text-xs transition active:scale-95 shrink-0 shadow-lg text-center"
+          >
+            Clear Circuit &amp; Unblock
+          </button>
         </div>
       )}
 
-      {/* Primary KPI Grid */}
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
+      {/* Primary KPI Section */}
+      {/* Mobile-First Hero Financial Card (<640px) */}
+      <div className="sm:hidden cred-surface rounded-2xl p-5 border border-white/[0.08] shadow-2xl space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Current Equity</p>
+            <p className="mt-1 text-3xl font-black text-white font-mono tracking-tight">
+              ${money(account.equity)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Today P&amp;L</p>
+            <p className={`mt-1 text-xl font-black font-mono ${Number(account.daily_pnl ?? 0) >= 0 ? "text-[#00F5A0]" : "text-[#FF3366]"}`}>
+              {Number(account.daily_pnl ?? 0) >= 0 ? "+" : ""}${money(account.daily_pnl)}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/[0.06] text-xs">
+          <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+            <span className="text-slate-500 text-[10px] uppercase font-bold">Total Net PnL</span>
+            <p className={`font-mono font-black text-sm mt-0.5 ${Number(metrics.net_pnl ?? 0) >= 0 ? "text-[#00F5A0]" : "text-[#FF3366]"}`}>
+              {Number(metrics.net_pnl ?? 0) >= 0 ? "+" : ""}${money(metrics.net_pnl)}
+            </p>
+          </div>
+          <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+            <span className="text-slate-500 text-[10px] uppercase font-bold">Win Rate</span>
+            <p className="font-mono font-black text-sm text-white mt-0.5">
+              {metrics.win_rate != null ? `${money(metrics.win_rate)}%` : "—"}
+            </p>
+          </div>
+          <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+            <span className="text-slate-500 text-[10px] uppercase font-bold">Open Positions</span>
+            <p className="font-mono font-black text-sm text-[#00D9F5] mt-0.5">
+              {positions.length} Active
+            </p>
+          </div>
+          <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+            <span className="text-slate-500 text-[10px] uppercase font-bold">Max Drawdown</span>
+            <p className="font-mono font-black text-sm text-rose-400 mt-0.5">
+              ${money(account.drawdown ?? metrics.maximum_drawdown)}
+            </p>
+          </div>
+        </div>
+
+        {/* Expandable toggle for remaining metrics */}
+        <button
+          onClick={() => setShowAllKpis(!showAllKpis)}
+          className="w-full text-center text-[11px] font-bold text-slate-400 hover:text-white py-1.5 transition active:scale-95"
+        >
+          {showAllKpis ? "▲ Hide Secondary Metrics" : "▼ Show All 11 Performance Metrics"}
+        </button>
+
+        {showAllKpis && (
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.06]">
+            {cards.slice(4).map(([label, value]) => (
+              <div key={String(label)} className="bg-white/[0.02] p-2 rounded-xl border border-white/[0.04]">
+                <p className="text-[9px] uppercase font-bold text-slate-500 truncate">{label}</p>
+                <p className="text-xs font-mono font-bold text-slate-200 mt-0.5">
+                  {typeof value === "number" ? money(value) : String(value ?? "—")}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop/Tablet Grid (>=640px) */}
+      <section className="hidden sm:grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
         {cards.map(([label, value]) => (
           <Card key={String(label)} className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{label}</p>
@@ -192,18 +276,18 @@ export default function PaperPage() {
       </section>
 
       {/* Stream Feed Telemetry Cards */}
-      <section className="grid gap-4 md:grid-cols-3">
-        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Live Opportunities</p>
-          <p className="mt-2 text-3xl font-black text-[#FFB800] font-mono">{status.live_feed?.current_opportunities ?? 0}</p>
+      <section className="grid grid-cols-3 gap-2 sm:gap-4">
+        <Card className="p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl text-center sm:text-left">
+          <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-500 truncate">Opportunities</p>
+          <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-black text-[#FFB800] font-mono">{status.live_feed?.current_opportunities ?? 0}</p>
         </Card>
-        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Actionable Setups</p>
-          <p className="mt-2 text-3xl font-black text-[#00F5A0] font-mono">{status.live_feed?.current_setups ?? 0}</p>
+        <Card className="p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl text-center sm:text-left">
+          <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-500 truncate">Setups</p>
+          <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-black text-[#00F5A0] font-mono">{status.live_feed?.current_setups ?? 0}</p>
         </Card>
-        <Card className="p-5 rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Risk Decisions</p>
-          <p className="mt-2 text-3xl font-black text-[#00D9F5] font-mono">{status.live_feed?.risk_decisions ?? 0}</p>
+        <Card className="p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white/[0.07] bg-[#0a0a0d] shadow-xl text-center sm:text-left">
+          <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-500 truncate">Decisions</p>
+          <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-black text-[#00D9F5] font-mono">{status.live_feed?.risk_decisions ?? 0}</p>
         </Card>
       </section>
 
@@ -309,14 +393,60 @@ export default function PaperPage() {
         </div>
       </section>
 
-      {/* Trade Log Table */}
+      {/* Trade Log */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-black text-white tracking-tight">Simulated Execution Log</h2>
-          <span className="text-xs text-slate-500 font-mono">{trades.length} Completed Trades</span>
+          <h2 className="text-base sm:text-lg font-black text-white tracking-tight">Simulated Execution Log</h2>
+          <span className="text-xs text-slate-500 font-mono">{trades.length} Completed</span>
         </div>
 
-        <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl overflow-hidden">
+        {/* Mobile View: High-Density Tactile Cards */}
+        <div className="md:hidden space-y-3">
+          {trades.map((t) => {
+            const net = Number(t.net_pnl);
+            const isLong = String(t.direction).toUpperCase() === "LONG";
+            return (
+              <div
+                key={t.trade_id}
+                className="cred-surface rounded-2xl p-4 border border-white/[0.07] space-y-2.5 shadow-lg"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-sm">{t.symbol}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                      isLong
+                        ? "bg-[#00F5A0]/15 text-[#00F5A0] border border-[#00F5A0]/30"
+                        : "bg-[#FF3366]/15 text-[#FF3366] border border-[#FF3366]/30"
+                    }`}>
+                      {String(t.direction).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className={`font-mono font-black text-base ${net >= 0 ? "text-[#00F5A0]" : "text-[#FF3366]"}`}>
+                      {net >= 0 ? "+" : ""}${money(net)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-2 border-t border-white/[0.04]">
+                  <span>{new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {t.exit_reason || "exit"}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#00D9F5] font-bold">{money(t.r_multiple)}R</span>
+                    <span className="text-slate-500">fee ${money(t.fees)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {!trades.length && (
+            <Card className="p-8 text-center text-sm text-slate-500 rounded-2xl border border-white/[0.07]">
+              No paper activity recorded yet.
+            </Card>
+          )}
+        </div>
+
+        {/* Desktop View: Full Table */}
+        <Card className="hidden md:block p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-xs">
               <thead>
@@ -326,7 +456,7 @@ export default function PaperPage() {
                   <th className="pb-3 px-3">Strategy</th>
                   <th className="pb-3 px-3">Direction</th>
                   <th className="pb-3 px-3">Exit Reason</th>
-                  <th className="pb-3 px-3 text-right">Net P&L</th>
+                  <th className="pb-3 px-3 text-right">Net P&amp;L</th>
                   <th className="pb-3 px-3 text-right">R Multiple</th>
                   <th className="pb-3 px-3 text-right">Fees</th>
                 </tr>
@@ -367,15 +497,40 @@ export default function PaperPage() {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">
-        <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl overflow-hidden">
+        <Card className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl overflow-hidden">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-lg font-black text-white tracking-tight">Daily Paper P&amp;L</h2>
-              <p className="mt-1 text-xs text-slate-500">UTC trading day · journal-derived closed-trade totals</p>
+              <h2 className="text-base sm:text-lg font-black text-white tracking-tight">Daily Paper P&amp;L</h2>
+              <p className="mt-0.5 text-xs text-slate-500">UTC trading day · journal-derived closed-trade totals</p>
             </div>
             <span className="text-xs text-slate-500 font-mono">{dailyReport.length} days</span>
           </div>
-          <div className="overflow-x-auto">
+
+          {/* Mobile View: High-Density Day Chips */}
+          <div className="md:hidden space-y-2.5">
+            {dailyReport.map((row) => {
+              const pnl = Number(row.net_pnl ?? 0);
+              return (
+                <div key={row.date} className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between">
+                  <div>
+                    <span className="font-mono text-white text-xs font-bold">{row.date}{row.is_current_utc_day ? " · today" : ""}</span>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                      {row.trade_count} trades · {row.wins}W / {row.losses}L · fee ${money(row.fees)}
+                    </p>
+                  </div>
+                  <span className={`font-mono font-black text-sm ${pnl >= 0 ? "text-[#00F5A0]" : "text-[#FF3366]"}`}>
+                    {pnl >= 0 ? "+" : ""}${money(pnl)}
+                  </span>
+                </div>
+              );
+            })}
+            {!dailyReport.length && (
+              <p className="py-6 text-center text-xs text-slate-500">No daily records yet.</p>
+            )}
+          </div>
+
+          {/* Desktop View: Full Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-xs">
               <thead><tr className="border-b border-white/[0.07] text-[10px] font-black uppercase tracking-[0.15em] text-slate-500"><th className="pb-3 px-2">Day</th><th className="pb-3 px-2 text-right">Trades</th><th className="pb-3 px-2 text-right">W / L</th><th className="pb-3 px-2 text-right">Fees</th><th className="pb-3 px-2 text-right">Net P&amp;L</th></tr></thead>
               <tbody className="divide-y divide-white/[0.04]">{dailyReport.map((row) => { const pnl = Number(row.net_pnl ?? 0); return <tr key={row.date}><td className="py-3 px-2 font-mono text-slate-300">{row.date}{row.is_current_utc_day ? " · today" : ""}</td><td className="py-3 px-2 text-right font-mono text-white">{row.trade_count}</td><td className="py-3 px-2 text-right font-mono text-slate-300">{row.wins} / {row.losses}</td><td className="py-3 px-2 text-right font-mono text-slate-400">${money(row.fees)}</td><td className={`py-3 px-2 text-right font-mono font-black ${pnl >= 0 ? "text-[#00F5A0]" : "text-[#FF3366]"}`}>{pnl >= 0 ? "+" : ""}${money(pnl)}</td></tr>; })}</tbody>
@@ -383,12 +538,37 @@ export default function PaperPage() {
           </div>
         </Card>
 
-        <Card className="p-6 rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl overflow-hidden">
+        <Card className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/[0.07] bg-[#0a0a0d] shadow-2xl overflow-hidden">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <div><h2 className="text-lg font-black text-white tracking-tight">Paper Orders &amp; Protection</h2><p className="mt-1 text-xs text-slate-500">Entry fills plus simulated stop-loss and take-profit orders</p></div>
+            <div><h2 className="text-base sm:text-lg font-black text-white tracking-tight">Paper Orders &amp; Protection</h2><p className="mt-0.5 text-xs text-slate-500">Entry fills plus simulated stop-loss and take-profit orders</p></div>
             <span className="text-xs text-slate-500 font-mono">{orders.length} orders</span>
           </div>
-          <div className="max-h-[330px] overflow-auto rounded-xl border border-white/[0.05]">
+
+          {/* Mobile View: High-Density Order Chips */}
+          <div className="md:hidden space-y-2.5 max-h-[330px] overflow-y-auto">
+            {orders.map((order) => (
+              <div key={order.order_id} className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-white text-xs">{order.symbol}</span>
+                    <span className="text-[10px] text-slate-400 capitalize font-mono">({String(order.order_type).replaceAll("_", " ")})</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                    Qty {money(order.quantity)} · ${money(order.executed_price ?? order.requested_price)}
+                  </p>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold text-[#00D9F5] bg-[#00D9F5]/10 border border-[#00D9F5]/20">
+                  {order.status}
+                </span>
+              </div>
+            ))}
+            {!orders.length && (
+              <p className="py-6 text-center text-xs text-slate-500">No paper orders yet.</p>
+            )}
+          </div>
+
+          {/* Desktop View: Full Table */}
+          <div className="hidden md:block max-h-[330px] overflow-auto rounded-xl border border-white/[0.05]">
             <table className="w-full min-w-[620px] text-left text-xs"><thead className="sticky top-0 bg-[#0e0e12]"><tr className="border-b border-white/[0.07] text-[10px] font-black uppercase tracking-[0.15em] text-slate-500"><th className="p-3">Symbol</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3 text-right">Price</th><th className="p-3 text-right">Qty</th><th className="p-3 text-right">Fees</th></tr></thead><tbody className="divide-y divide-white/[0.04]">{orders.map((order) => <tr key={order.order_id}><td className="p-3 font-bold text-white">{order.symbol}</td><td className="p-3 capitalize text-slate-300">{String(order.order_type).replaceAll("_", " ")}</td><td className="p-3 uppercase text-[#00D9F5]">{order.status}</td><td className="p-3 text-right font-mono text-slate-300">${money(order.executed_price ?? order.requested_price)}</td><td className="p-3 text-right font-mono text-slate-300">{money(order.quantity)}</td><td className="p-3 text-right font-mono text-slate-400">${money(order.fees)}</td></tr>)}</tbody></table>
             {!orders.length && <p className="py-8 text-center text-sm text-slate-500">No paper orders yet. Approved strategy setups will appear here.</p>}
           </div>
